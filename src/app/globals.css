@@ -107,3 +107,32 @@
     color: var(--on-accent);
   }
 }
+
+/* Movimiento (§7): shake de penalización y confeti plano del resultado.
+   Ambos quedan deshabilitados por `motion-reduce:` en los componentes. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-12vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(540deg);
+    opacity: 0;
+  }
+}

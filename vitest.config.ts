@@ -8,6 +8,8 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  // Next usa el runtime automático de JSX; Vitest debe compilar igual.
+  esbuild: { jsx: "automatic" },
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
