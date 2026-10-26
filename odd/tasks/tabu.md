@@ -109,6 +109,8 @@ Cada fase termina en código ejecutable y con sus gates en verde. `~L` = líneas
 | T1.7 | Suite de dominio: VO, policies, ciclo de carta, state machine, reloj inyectado | S32 | inline |
 | T1.8 | Gate de fase | S32 | inline |
 
+**Estado Fase 1: completada.** Dominio completo con 66 tests: value objects, entidades, policies, mazo, máquina de estados y eventos. `lint`, `typecheck`, `test` y `build` en exit 0. Cobertura numérica no medible en este entorno (D28).
+
 ### Fase 2 — Persistencia (gate: `pnpm seed` + repos contra Mongo real, ~1.500L)
 
 | ID | Tarea | Specs | Ruta |
@@ -193,6 +195,11 @@ Van al README, sección *Decisiones asumidas*. Las marcadas ✔ están verificad
 - **D25 ✔ Scripts de build de pnpm 11.** `pnpm install` falla con `ERR_PNPM_IGNORED_BUILDS` si un paquete necesita postinstall. Se aprueban solo `esbuild` y `unrs-resolver` con `allowBuilds` en `pnpm-workspace.yaml` (en pnpm 11 `onlyBuiltDependencies` del `package.json` ya no alcanza).
 - **D26 ✔ Host y entrada del server.** `HOST` default `0.0.0.0`: en Windows `localhost` resuelve a `::1` y el juego se prueba desde celulares en la LAN. `NODE_ENV` se fija antes del import dinámico de Next y el entry es CJS (sin top-level await) para no cambiar el módulo del proyecto.
 - **D27 ✔ Ruta del seed.** El script de la spec apunta a `infrastructure/seed/seed.ts`, inconsistente con el árbol de §4.1. Se corrige a `src/infrastructure/seed/seed.ts`.
+- **D28 ✔ Cobertura no medible acá.** Con Vitest 3.2.7 y 5.0.5, providers v8 e istanbul, `pnpm test:coverage` devuelve **0/0** incluso para un test trivial (`cn.ts`), y v8 deja statements en 0 con branch data inconsistente. Se verificó que `NODE_V8_COVERAGE` nativo sí produce datos: el problema es la recolección de Vitest en este entorno, no el código. Se mantiene la configuración de la spec (v8, `include` sobre `src/domain`, umbral 80 % branches); la suite fija cada regla y el número debe confirmarse con `pnpm test:coverage` en una terminal normal.
+- **D29 MVP por actor.** El punto del acierto se acredita al jugador que toca *¡Adiviné!* (`actorId` en `TurnOutcome`), porque cualquier miembro del equipo activo puede tocar. Empate de puntos → gana el primero en orden de equipos.
+- **D30 Módulos de dominio.** Los cinco ids branded viven en `value-objects/PlayerId.ts` (misma validación, evita cinco archivos idénticos) y los eventos en `events/events.ts` como unión discriminada, en vez de seis archivos sueltos. Permite `switch` exhaustivo y menos ceremonia.
+- **D31 Carta pasada y fin de mazo.** El equipo rival consume la carta pasada al iniciar su turno (no queda en cola); por eso `passedCards` vuelve a 0 en la misma transición. La partida termina cuando el mazo está vacío **y** no quedan cartas pasadas pendientes.
+- **D32 Puntaje mínimo.** `Score.minus` satura en 0: no existen puntajes negativos, y una penalización sobre 0 deja el equipo en 0.
 
 ---
 
@@ -233,3 +240,4 @@ Van al README, sección *Decisiones asumidas*. Las marcadas ✔ están verificad
 - **L5 (2026-10-26, decisión).** Plan creado. Estimación: ~8.500 líneas autoradas, ~22 unidades de trabajo, 6 slices de delivery. Próximo paso: Fase 0 (bootstrap).
 - **L6 (2026-10-26, evidencia Fase 0).** Bootstrap completo: Next 15.5.28 + React 19.3.1 + Tailwind 4.3.3 + `@base-ui/react` 1.9.0 + TypeScript 5.9.3. `pnpm lint`, `pnpm typecheck`, `pnpm test` (4 tests de `cn`) y `pnpm build` pasan con exit 0 y sin warnings. Smoke de `pnpm dev`: HTTP 200 en `127.0.0.1:3000`, `lang="es"`, CSS con `#ff6b2c`, `clamp(48px…` y `--font-outfit` presentes; puerto liberado al terminar. Hallazgos que corrigieron la spec: D21–D27. `git init -b feat/tabu`.
 - **L7 (2026-10-26, cierre Fase 0).** Commit `51fcc19` (`feat/tabu`, árbol limpio): scaffold, tokens, tooling, server, compose y plan. Siguiente: Fase 1 (dominio).
+- **L8 (2026-10-26, evidencia Fase 1).** Dominio implementado test-first en cuatro ciclos RED→GREEN: value objects (20), mazo/barajado (9), policies (14), máquina de estados/eventos (19) = 66 tests. `lint`, `typecheck`, `test` y `build` en exit 0. Un test propio estaba mal (asumía que la carta pasada quedaba en cola); se corrigió la expectativa contra el comportamiento real de D31, no el código. Cobertura no medible (D28). Decisiones nuevas: D28–D32.

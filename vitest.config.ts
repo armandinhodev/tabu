@@ -3,9 +3,6 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  esbuild: {
-    jsx: "automatic",
-  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
@@ -19,7 +16,11 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       include: ["src/domain/**/*.ts"],
-      exclude: ["src/domain/**/*.{test,spec}.ts", "src/domain/**/index.ts"],
+      exclude: [
+        "src/domain/**/*.{test,spec}.ts",
+        "src/domain/__fixtures__/**",
+        "src/domain/**/index.ts",
+      ],
       thresholds: {
         branches: 80,
       },
