@@ -26,6 +26,7 @@ import type { DomainEvent } from "../events/events";
 import {
   beginTurn,
   isTurnExpired,
+  reassignDescriptor,
   resolveTurn,
   startGame,
   type TransitionContext,
@@ -107,6 +108,30 @@ describe("startGame", () => {
     });
 
     expect(() => startGame(game, makeContext())).toThrow(InvalidStateError);
+  });
+
+  it("rechaza arrancar con jugadores sin equipo cuando el reparto es manual", () => {
+    const game = makeGame({ players: [makePlayer("p5", null)] });
+
+    expect(() => startGame(game, makeContext())).toThrow(InvalidStateError);
+  });
+
+  it("reparte los jugadores sin equipo cuando randomTeams está activo", () => {
+    const game = makeGame({
+      settings: makeSettings({ randomTeams: true }),
+      players: [makePlayer("p5", null), makePlayer("p6", null)],
+    });
+
+    const result = startGame(game, makeContext());
+    const assigned = result.game.teams.flatMap((team) => team.players.map((player) => player.id));
+
+    expect(result.game.players).toEqual([]);
+    expect(assigned).toContain("p5");
+    expect(assigned).toContain("p6");
+    expect(result.game.teams.map((team) => team.players.length)).toEqual([3, 3]);
+    expect(
+      result.game.teams.every((team) => team.players.every((player) => player.teamId === team.id)),
+    ).toBe(true);
   });
 });
 
@@ -329,6 +354,36 @@ describe("beginTurn", () => {
     const game = startGame(makeGame(), ctx).game;
 
     expect(() => beginTurn(game, ctx)).toThrow(InvalidStateError);
+  });
+});
+
+describe("reassignDescriptor", () => {
+  it("pasa el turno al siguiente descriptor conectado del mismo equipo sin cambiar la carta", () => {
+    const started = startGame(makeGame(), makeContext());
+    const withDisconnected = {
+      ...started.game,
+      teams: started.game.teams.map((team) =>
+        team.id !== "t1"
+          ? team
+          : {
+              ...team,
+              players: team.players.map((player) =>
+                player.id === "p1" ? { ...player, connected: false } : player,
+              ),
+            },
+      ),
+    };
+
+    const next = reassignDescriptor(withDisconnected);
+
+    expect(next.currentTurn?.descriptorId).toBe("p2");
+    expect(next.currentTurn?.teamId).toBe("t1");
+    expect(next.currentTurn?.card.word).toBe(started.game.currentTurn?.card.word);
+    expect(next.currentTurn?.deadlineAt).toEqual(started.game.currentTurn?.deadlineAt);
+  });
+
+  it("rechaza reasignar sin turno activo", () => {
+    expect(() => reassignDescriptor(makeGame())).toThrow(TurnNotActiveError);
   });
 });
 

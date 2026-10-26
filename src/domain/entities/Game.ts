@@ -2,6 +2,7 @@ import type { Card } from "./Card";
 import type { CardDeck } from "../services/CardDeck";
 import type { PlayerId, TeamId } from "../value-objects/PlayerId";
 import type { RoomCode } from "../value-objects/RoomCode";
+import type { Player } from "./Player";
 import type { Turn, TurnOutcomeKind } from "./Turn";
 import type { GameSettings } from "./GameSettings";
 import type { Team } from "./Team";
@@ -37,6 +38,8 @@ export interface Game {
   readonly deck: DeckSnapshot;
   readonly settings: GameSettings;
   readonly teams: readonly Team[];
+  /** Jugadores que todavía no eligieron equipo (lobby, §6.3). */
+  readonly players: readonly Player[];
   readonly turnOrder: readonly PlayerId[];
   readonly currentTurn: Turn | null;
   readonly discardedCardIds: readonly CardId[];

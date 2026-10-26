@@ -110,4 +110,18 @@ describe("game mapper", () => {
     expect(document.winnerTeamId).toBe("t2");
     expect(document.finishedAt).toBe(LATER);
   });
+
+  it("round-trips players without a team and their last contact (D35)", () => {
+    const game = makeGame({
+      players: [
+        makePlayer("p9", null, { isReady: false, lastSeenAt: LATER }),
+        makePlayer("p10", null, { lastSeenAt: null }),
+      ],
+    });
+
+    const restored = toGameDomain({ ...toGameDocument(game), updatedAt: LATER });
+
+    expect(restored.players).toEqual(game.players);
+    expect(restored.teams).toEqual(game.teams);
+  });
 });

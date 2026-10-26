@@ -49,7 +49,9 @@ function deckRepositoryContract(name: string, create: () => Promise<Fixture>): v
     });
 
     afterEach(async () => {
-      await fixture.cleanup?.();
+      if (fixture !== undefined) {
+        await fixture.cleanup?.();
+      }
     });
 
     it("starts empty", async () => {
@@ -101,7 +103,9 @@ function deckRepositoryContract(name: string, create: () => Promise<Fixture>): v
     });
 
     afterEach(async () => {
-      await fixture.cleanup?.();
+      if (fixture !== undefined) {
+        await fixture.cleanup?.();
+      }
     });
 
     it("saves a snapshot and finds it by room code", async () => {

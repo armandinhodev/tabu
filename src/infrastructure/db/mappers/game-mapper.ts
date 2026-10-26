@@ -36,6 +36,7 @@ export function toGameDocument(game: Game): GameDocumentInput {
       minPlayersPerTeam: game.settings.minPlayersPerTeam,
     },
     teams: game.teams.map(toTeamDocument),
+    players: game.players.map(toPlayerDocument),
     turnOrder: [...game.turnOrder],
     currentTurn: game.currentTurn === null ? null : toTurnDocument(game.currentTurn),
     discardedCardIds: [...game.discardedCardIds],
@@ -78,6 +79,7 @@ export function toGameDomain(document: GameDocument): Game {
       minPlayersPerTeam: document.settings.minPlayersPerTeam,
     },
     teams: document.teams.map(toTeamDomain),
+    players: document.players.map((player) => toUnassignedPlayer(player)),
     turnOrder: document.turnOrder.map(PlayerId.from),
     currentTurn: document.currentTurn === null ? null : toTurnDomain(document.currentTurn),
     discardedCardIds: document.discardedCardIds.map(CardId.from),
@@ -120,7 +122,20 @@ function toPlayerDocument(player: Player): GamePlayerDocument {
     isReady: player.isReady,
     connected: player.connected,
     points: player.points,
-    lastSeenAt: null,
+    lastSeenAt: player.lastSeenAt,
+  };
+}
+
+function toUnassignedPlayer(player: GamePlayerDocument): Player {
+  return {
+    id: PlayerId.from(player.id),
+    name: player.name,
+    teamId: null,
+    isHost: player.isHost,
+    isReady: player.isReady,
+    connected: player.connected,
+    points: player.points,
+    lastSeenAt: player.lastSeenAt,
   };
 }
 
@@ -155,6 +170,7 @@ function toTeamDomain(team: GameTeamDocument): Team {
       isReady: player.isReady,
       connected: player.connected,
       points: player.points,
+      lastSeenAt: player.lastSeenAt,
     })),
   };
 }

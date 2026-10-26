@@ -58,7 +58,17 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     throw new DeckEmptyError();
   }
 
-  for (const team of game.teams) {
+  const distribution = game.settings.randomTeams
+    ? distributeUnassigned(game.teams, game.players)
+    : { teams: game.teams, players: game.players };
+
+  if (distribution.players.length > 0) {
+    throw new InvalidStateError("Every player must be assigned to a team before starting");
+  }
+
+  const sourceTeams = distribution.teams;
+
+  for (const team of sourceTeams) {
     if (team.players.length < game.settings.minPlayersPerTeam) {
       throw new TooFewPlayersError(team.name, game.settings.minPlayersPerTeam);
     }
@@ -70,7 +80,7 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     }
   }
 
-  const teams: readonly Team[] = game.teams.map((team) => ({
+  const teams: readonly Team[] = sourceTeams.map((team) => ({
     ...team,
     players: team.players.map((player) => ({ ...player })),
   }));
@@ -79,6 +89,7 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     ...game,
     status: "playing",
     teams,
+    players: [],
     deck: { ...game.deck, cards: shuffleDeck(game.deck.cards, ctx.rng) },
     turnOrder: teams.flatMap((team) => team.players.map((player) => player.id)),
     currentTurn: null,
@@ -355,6 +366,68 @@ export function finishGame(game: Game, ctx: { readonly now: Date }): TransitionR
 /** El deadline es absoluto: el scheduler compara contra `now`, sin acumular ticks. */
 export function isTurnExpired(turn: Turn, now: Date): boolean {
   return turn.status === "active" && now.getTime() >= turn.deadlineAt.getTime();
+}
+
+/**
+ * Pasa el turno al siguiente descriptor conectado del mismo equipo, sin tocar
+ * carta ni deadline: es la salida de S9 cuando el descriptor se desconecta.
+ */
+export function reassignDescriptor(game: Game): Game {
+  const turn = game.currentTurn;
+
+  if (turn === null || turn.status !== "active") {
+    throw new TurnNotActiveError();
+  }
+
+  const team = game.teams.find((candidate) => candidate.id === turn.teamId);
+
+  if (team === undefined) {
+    throw new InvalidStateError(`Unknown team ${turn.teamId}`);
+  }
+
+  const selection = nextDescriptor(team);
+
+  return {
+    ...game,
+    teams: game.teams.map((candidate) =>
+      candidate.id === team.id ? selection.team : candidate,
+    ),
+    currentTurn: { ...turn, descriptorId: selection.descriptorId },
+  };
+}
+
+/**
+ * Reparte los jugadores sin equipo en el equipo con menos jugadores (empate al
+ * primero), en orden de ingreso (D13). Es la misma regla para `game:autoTeams`
+ * y para arrancar con `randomTeams`.
+ */
+export function distributeUnassigned(
+  teams: readonly Team[],
+  players: readonly Player[],
+): { readonly teams: readonly Team[]; readonly players: readonly Player[] } {
+  if (players.length === 0 || teams.length === 0) {
+    return { teams, players };
+  }
+
+  const working: Team[] = teams.map((team) => ({ ...team, players: [...team.players] }));
+
+  for (const player of players) {
+    let target = working[0] as Team;
+
+    for (const candidate of working) {
+      if (candidate.players.length < target.players.length) {
+        target = candidate;
+      }
+    }
+
+    const index = working.indexOf(target);
+    working[index] = {
+      ...target,
+      players: [...target.players, { ...player, teamId: target.id }],
+    };
+  }
+
+  return { teams: working, players: [] };
 }
 
 function standingsOf(teams: readonly Team[]): readonly Standing[] {

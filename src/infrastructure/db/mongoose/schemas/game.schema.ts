@@ -30,7 +30,7 @@ export interface GamePlayerDocument {
   connected: boolean;
   /** Puntos individuales para el MVP (D4). */
   points: number;
-  /** Se persiste para el traspaso de host; el dominio lo modela en fase 3 (D34). */
+  /** Último contacto conocido; lo usa el traspaso de host (D8). */
   lastSeenAt: Date | null;
 }
 
@@ -81,6 +81,8 @@ export interface GameDocument {
   deckSnapshot: GameDeckSnapshotDocument;
   settings: GameSettingsDocument;
   teams: GameTeamDocument[];
+  /** Jugadores sin equipo durante el lobby (§6.3, D35). */
+  players: GamePlayerDocument[];
   turnOrder: string[];
   currentTurn: GameTurnDocument | null;
   discardedCardIds: string[];
@@ -207,6 +209,7 @@ export const gameSchema = new Schema<GameDocument>(
     deckSnapshot: { type: deckSnapshotSchema, required: true },
     settings: { type: settingsSchema, required: true },
     teams: { type: [teamSchema], required: true },
+    players: { type: [playerSchema], required: true, default: [] },
     turnOrder: { type: [String], required: true },
     currentTurn: { type: turnSchema, default: null },
     discardedCardIds: { type: [String], required: true, default: [] },

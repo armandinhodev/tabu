@@ -17,7 +17,13 @@ export type DomainErrorCode =
   | "GAME_ALREADY_STARTED"
   | "TOO_FEW_PLAYERS"
   | "NO_ELIGIBLE_DESCRIPTOR"
-  | "DECK_EMPTY";
+  | "DECK_EMPTY"
+  | "GAME_NOT_FOUND"
+  | "DECK_NOT_FOUND"
+  | "GAME_FULL"
+  | "TEAM_FULL"
+  | "PLAYER_NOT_IN_GAME"
+  | "NOT_HOST";
 
 export class DomainError extends Error {
   constructor(
@@ -116,5 +122,41 @@ export class NoEligibleDescriptorError extends DomainError {
 export class DeckEmptyError extends DomainError {
   constructor() {
     super("DECK_EMPTY", "Deck has no cards left");
+  }
+}
+
+export class GameNotFoundError extends DomainError {
+  constructor(code: string) {
+    super("GAME_NOT_FOUND", `No game with code "${code}"`);
+  }
+}
+
+export class DeckNotFoundError extends DomainError {
+  constructor(id: string) {
+    super("DECK_NOT_FOUND", `No active deck with id "${id}"`);
+  }
+}
+
+export class GameFullError extends DomainError {
+  constructor() {
+    super("GAME_FULL", "The game has no free player slots");
+  }
+}
+
+export class TeamFullError extends DomainError {
+  constructor(teamName: string) {
+    super("TEAM_FULL", `Team ${teamName} is full`);
+  }
+}
+
+export class PlayerNotInGameError extends DomainError {
+  constructor(playerId: string) {
+    super("PLAYER_NOT_IN_GAME", `Player ${playerId} is not in this game`);
+  }
+}
+
+export class NotHostError extends DomainError {
+  constructor() {
+    super("NOT_HOST", "Only the host can perform this action");
   }
 }

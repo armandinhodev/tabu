@@ -40,6 +40,7 @@ export function makePlayer(
     isReady: true,
     connected: true,
     points: 0,
+    lastSeenAt: NOW,
     ...overrides,
   };
 }
@@ -112,6 +113,7 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     deck: makeDeck(),
     settings: makeSettings(),
     teams,
+    players: [],
     turnOrder: teams.flatMap((team) => team.players.map((player) => player.id)),
     currentTurn: null,
     discardedCardIds: [],
