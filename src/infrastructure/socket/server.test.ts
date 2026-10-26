@@ -47,15 +47,10 @@ describe("socket server", () => {
     }
 
     await emitAck(host, "game:autoTeams");
-    const turnStarted = nextEvent<{ turnId: string; descriptorId: string; word: string }>(
-      host,
-      "turn:started",
-    );
+    const turnStarted = nextEvent<{ turnId: string; descriptorId: string }>(host, "turn:started");
     await emitAck(host, "game:start");
 
     const turn = await turnStarted;
-
-    expect(turn.word).not.toBe("");
 
     const descriptor = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER"),
@@ -65,22 +60,92 @@ describe("socket server", () => {
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "RIVAL"),
       "rival",
     );
+    const guesser = await waitFor(
+      () => players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE"),
+      "adivinador",
+    );
 
-    await expect(emitAck(rival.client, "turn:guess")).resolves.toMatchObject({
+    // S4: la palabra y las prohibidas solo viajan al descriptor y a los rivales.
+    const descriptorTurn = states.get(descriptor.playerId)?.turn;
+    const guesserTurn = states.get(guesser.playerId)?.turn;
+
+    expect(descriptorTurn?.word).toBeTruthy();
+    expect(descriptorTurn?.taboo.length).toBeGreaterThan(0);
+    expect(states.get(rival.playerId)?.turn?.word).toBeTruthy();
+    expect(guesserTurn?.word).toBeUndefined();
+    expect(guesserTurn?.taboo).toEqual([]);
+
+    // S3: ni el rival ni el descriptor pueden adivinar.
+    await expect(
+      emitAck(rival.client, "turn:guess", { guess: "fuego" }),
+    ).resolves.toMatchObject({
+      error: { code: "NOT_ALLOWED" },
+    });
+
+    await expect(
+      emitAck(descriptor.client, "turn:guess", { guess: "fuego" }),
+    ).resolves.toMatchObject({
       error: { code: "NOT_ALLOWED" },
     });
 
     const turnEnded = nextEvent<{ reason: string; pointsDelta: number }>(host, "turn:ended");
     const nextTurn = nextEvent<{ turnId: string }>(host, "turn:started");
-    const guessed = await emitAck<{ pointsAwarded: number; teamScore: number }>(
-      descriptor.client,
+    const guessed = await emitAck<{ correct: boolean; pointsAwarded: number; teamScore: number }>(
+      guesser.client,
       "turn:guess",
+      { guess: descriptorTurn?.word ?? "" },
     );
 
+    expect(guessed.correct).toBe(true);
     expect(guessed.pointsAwarded).toBe(1);
     expect(guessed.teamScore).toBe(1);
     await expect(turnEnded).resolves.toMatchObject({ reason: "CORRECT", pointsDelta: 1 });
     expect((await nextTurn).turnId).not.toBe(turn.turnId);
+  });
+
+  it("una respuesta equivocada no da puntos ni cierra el turno", async () => {
+    const host = await harness.connect();
+    const created = await emitAck<{ code: string; gameId: string; playerId: string }>(
+      host,
+      "game:create",
+      { playerName: "Host", deckId: harness.deckId },
+    );
+    const players = [{ client: host, playerId: created.playerId }];
+
+    for (const name of ["Ana", "Beto", "Caro"]) {
+      const client = await harness.connect();
+      const joined = await emitAck<{ playerId: string }>(client, "game:join", {
+        code: created.code,
+        playerName: name,
+      });
+      players.push({ client, playerId: joined.playerId });
+    }
+
+    const states = new Map<string, GameStateView>();
+
+    for (const { client, playerId } of players) {
+      client.on("game:state", (state) => states.set(playerId, state));
+    }
+
+    await emitAck(host, "game:autoTeams");
+    await emitAck(host, "game:start");
+
+    const guesser = await waitFor(
+      () => players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE"),
+      "adivinador",
+    );
+    const turnBefore = states.get(guesser.playerId)?.turn?.turnId;
+
+    const guessed = await emitAck<{ correct: boolean; pointsAwarded: number; teamScore: number }>(
+      guesser.client,
+      "turn:guess",
+      { guess: "respuesta incorrecta" },
+    );
+
+    expect(guessed.correct).toBe(false);
+    expect(guessed.pointsAwarded).toBe(0);
+    expect(guessed.teamScore).toBe(0);
+    expect(states.get(guesser.playerId)?.turn?.turnId).toBe(turnBefore);
   });
 
   it("un reporte inválido no penaliza ni cierra el turno", async () => {

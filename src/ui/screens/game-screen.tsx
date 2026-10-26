@@ -11,15 +11,18 @@ import { TeamPanel } from "@/ui/components/game/team-panel";
 import { useGame } from "@/ui/providers/game-provider";
 import { ResultScreen } from "@/ui/screens/result-screen";
 import { DescribingView } from "./game/describing-view";
+import { GuessChat } from "./game/guess-chat";
 import { RivalView } from "./game/rival-view";
 import type { RoleViewProps } from "./game/role-view-props";
 
 /**
- * 05/06/07 — Partida en vivo. La misma información para todos (S3); cambia la
- * vista según `me.role`. En ≥1280 se suman los dos rails (§10).
+ * 05/06/07 — Partida en vivo. Cada rol ve lo que le corresponde (S3, S4): el
+ * descriptor y los rivales la palabra, el equipo que adivina solo su chat
+ * privado de respuestas. En ≥1280 se suman los dos rails (§10).
  */
 export function GameScreen() {
-  const { state, busy, guess, passTurn, skipTurn, reportViolation, penalty, leaveGame } = useGame();
+  const { state, busy, guess, guessMessages, passTurn, skipTurn, reportViolation, penalty, leaveGame } =
+    useGame();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   if (state === null) {
@@ -49,13 +52,13 @@ export function GameScreen() {
     turn,
     busy,
     reportedWord: penalty?.tabooWord ?? null,
-    onGuess: guess,
     onPass: passTurn,
     onSkipCard: skipTurn,
     onReport: reportViolation,
   };
 
   const isRival = role === "RIVAL";
+  const isGuesser = role === "ACTIVE";
   const activeTeam = state.teams.find((team) => team.id === turn.teamId) ?? null;
 
   return (
@@ -90,6 +93,15 @@ export function GameScreen() {
 
       <div className="flex flex-col gap-4">
         {isRival ? <RivalView {...props} /> : <DescribingView {...props} />}
+
+        {isGuesser || guessMessages.length > 0 ? (
+          <GuessChat
+            active={isGuesser}
+            disabled={busy}
+            messages={guessMessages}
+            onGuess={guess}
+          />
+        ) : null}
       </div>
 
       <aside className="hidden xl:flex xl:flex-col xl:gap-3">

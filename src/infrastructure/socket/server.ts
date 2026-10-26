@@ -27,6 +27,7 @@ import {
   InvalidPayloadError,
   assignTeamPayload,
   createGamePayload,
+  guessPayload,
   joinGamePayload,
   parsePayload,
   reconnectPayload,
@@ -211,14 +212,17 @@ export function attachSocketServer(
       });
     });
 
-    socket.on(CLIENT_EVENTS.turnGuess, (ack) => {
-      void run(socket, ack, () => {
-        const { gameId, playerId } = requireBinding(socket);
-        const result = guessWord(deps, gameId, playerId);
+     socket.on(CLIENT_EVENTS.turnGuess, (payload, ack) => {
+       void run(socket, ack, () => {
+         const input = parsePayload(guessPayload, payload);
+         const { gameId, playerId } = requireBinding(socket);
+         const result = guessWord(deps, gameId, playerId, input);
 
-        afterTurn(result.game, result.events);
+         if (result.correct) {
+           afterTurn(result.game, result.events);
+         }
 
-        return { pointsAwarded: result.pointsDelta, teamScore: result.teamScore };
+         return { correct: result.correct, pointsAwarded: result.pointsDelta, teamScore: result.teamScore };
       });
     });
 

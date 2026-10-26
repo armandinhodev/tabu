@@ -75,8 +75,6 @@ export class Broadcaster {
           turnId: event.turnId,
           teamId: event.teamId,
           descriptorId: event.descriptorId,
-          word: event.word,
-          taboo: event.taboo,
           deadlineAt: event.deadlineAt.getTime(),
           turnSeconds: event.turnSeconds,
         });

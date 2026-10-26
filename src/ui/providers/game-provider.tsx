@@ -16,9 +16,11 @@ import type { ViolationReason } from "@/domain/entities/Violation";
 import type {
   ErrorAck,
   GameFinishedView,
+  GuessAck,
   PenaltyAppliedView,
   RoundEndedView,
 } from "@/infrastructure/socket/events";
+import type { GuessMessage, GuessMessageKind } from "@/ui/lib/guess-messages";
 import { getSocket } from "@/ui/lib/socket";
 import { playSound } from "@/ui/lib/sound";
 import {
@@ -60,7 +62,9 @@ interface GameContextValue {
   readonly toggleReady: () => void;
   readonly startGame: () => void;
   readonly leaveGame: () => void;
-  readonly guess: () => void;
+  /** Chat privado de adivinación: respuesta escrita y confirmación del servidor. */
+  readonly guessMessages: readonly GuessMessage[];
+  readonly guess: (answer: string) => void;
   readonly reportViolation: (reason: ViolationReason, tabooWord?: string) => void;
   readonly skipTurn: () => void;
   readonly passTurn: () => void;
@@ -81,8 +85,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [penalty, setPenalty] = useState<PenaltyAppliedView | null>(null);
   const [roundSummary, setRoundSummary] = useState<RoundEndedView | null>(null);
   const [finish, setFinish] = useState<GameFinishedView | null>(null);
+  const [guessMessages, setGuessMessages] = useState<readonly GuessMessage[]>([]);
   const stateRef = useRef<GameStateView | null>(null);
   const lastTick = useRef<number>(0);
+  const guessMessageId = useRef<number>(0);
+
+  const appendGuessMessage = useCallback((text: string, kind: GuessMessageKind): void => {
+    guessMessageId.current += 1;
+    const message: GuessMessage = { id: guessMessageId.current, text, kind };
+
+    setGuessMessages((current) => [...current, message]);
+  }, []);
 
   const applyState = useCallback((next: GameStateView) => {
     stateRef.current = next;
@@ -184,6 +197,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
 
     const onTurnEnded = (payload: { reason: string }): void => {
+      // El chat es por turno: se limpia al cerrar el turno. El aviso de
+      // penalización viaja después de `turn:ended` y queda como última línea (S5).
+      setGuessMessages([]);
+
       if (payload.reason === "CORRECT") {
         playSound("correct.guess");
         return;
@@ -197,6 +214,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const onPenalty = (payload: PenaltyAppliedView): void => {
       setPenalty(payload);
       playSound("taboo.hit");
+
+      const turn = stateRef.current?.turn;
+
+      if (turn !== undefined && payload.teamId === turn.teamId) {
+        appendGuessMessage(
+          "Carta pasada: el otro equipo apretó una palabra prohibida y tu equipo pierde 1 punto.",
+          "notice",
+        );
+      }
     };
 
     const onScore = (): void => {
@@ -255,7 +281,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off("game:finished", onFinished);
       socket.off("game:error", onError);
     };
-  }, [applyState]);
+  }, [applyState, appendGuessMessage]);
 
   const setPlayerName = useCallback((name: string) => {
     setPlayerNameState(name);
@@ -394,13 +420,40 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setPenalty(null);
       setRoundSummary(null);
       setFinish(null);
+      setGuessMessages([]);
       setView("home");
     });
   }, []);
 
-  const guess = useCallback(() => {
-    void run((done) => getSocket().emit("turn:guess", done));
-  }, [run]);
+  /**
+   * Respuesta escrita del equipo que adivina (S3): el servidor la verifica
+   * contra la carta activa y devuelve si acertó. Un acierto cierra el turno;
+   * una respuesta equivocada no cambia nada.
+   */
+  const guess = useCallback(
+    (answer: string) => {
+      const trimmed = answer.trim();
+
+      if (trimmed === "") {
+        return;
+      }
+
+      void run<GuessAck>((done) =>
+        getSocket().emit("turn:guess", { guess: trimmed }, done),
+      ).then((ack) => {
+        if (ack === null) {
+          return;
+        }
+
+        appendGuessMessage(trimmed, "guess");
+        appendGuessMessage(
+          ack.correct ? "¡Acertaste!" : "No es esa. Probá de nuevo.",
+          "feedback",
+        );
+      });
+    },
+    [appendGuessMessage, run],
+  );
 
   const reportViolation = useCallback(
     (reason: ViolationReason, tabooWord?: string) => {
@@ -448,6 +501,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       toggleReady,
       startGame: startGameAction,
       leaveGame,
+      guessMessages,
       guess,
       reportViolation,
       skipTurn,
@@ -470,6 +524,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       toggleReady,
       startGameAction,
       leaveGame,
+      guessMessages,
       guess,
       reportViolation,
       skipTurn,

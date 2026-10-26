@@ -5,9 +5,8 @@ import type { Turn } from "../../domain/entities/Turn";
 import type { PlayerId } from "../../domain/value-objects/PlayerId";
 
 /**
- * DTO de estado público (S3, §8.2): la palabra y las palabras prohibidas viajan
- * siempre. Lo que cambia por jugador es `role`, que la UI usa para decidir qué
- * acciones mostrar; la autorización real vive en los casos de uso (S10, D10).
+ * Per-viewer state: the active guessing teammates never receive the answer or
+ * taboo clues. Authorization still lives in the use cases.
  * Las fechas viajan como epoch ms (D18).
  */
 
@@ -43,7 +42,7 @@ export interface TurnView {
   readonly turnId: string;
   readonly teamId: string;
   readonly descriptorId: string;
-  readonly word: string;
+  readonly word?: string;
   readonly taboo: readonly string[];
   readonly startedAt: number;
   readonly deadlineAt: number;
@@ -92,13 +91,13 @@ export function toTeamViews(teams: readonly Team[]): readonly TeamView[] {
   }));
 }
 
-export function toTurnView(turn: Turn, turnSeconds: number): TurnView {
+export function toTurnView(turn: Turn, turnSeconds: number, role: PlayerRole): TurnView {
   return {
     turnId: turn.id,
     teamId: turn.teamId,
     descriptorId: turn.descriptorId,
-    word: turn.card.word,
-    taboo: turn.card.taboo.words,
+    ...(role === "DESCRIBER" || role === "RIVAL" ? { word: turn.card.word } : {}),
+    taboo: role === "DESCRIBER" || role === "RIVAL" ? turn.card.taboo.words : [],
     startedAt: turn.startedAt.getTime(),
     deadlineAt: turn.deadlineAt.getTime(),
     turnSeconds,
@@ -108,15 +107,16 @@ export function toTurnView(turn: Turn, turnSeconds: number): TurnView {
 /** Estado completo para un jugador; `me` es lo único que cambia entre sockets. */
 export function toGameState(game: Game, viewerId: PlayerId): GameStateView {
   const turn = game.currentTurn;
+  const me = toMeView(game, viewerId);
   const base: GameStateView = {
     status: game.status,
     code: game.code.value,
     settings: toSettingsView(game),
     teams: toTeamViews(game.teams),
     waitingPlayers: game.players.map(toPlayerView),
-    me: toMeView(game, viewerId),
+    me,
     round: game.round,
-    ...(turn === null ? {} : { turn: toTurnView(turn, game.settings.turnSeconds.seconds) }),
+    ...(turn === null ? {} : { turn: toTurnView(turn, game.settings.turnSeconds.seconds, me.role) }),
   };
 
   return base;

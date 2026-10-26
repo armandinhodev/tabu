@@ -37,15 +37,17 @@ describe("contrato cliente-servidor", () => {
     }
 
     const states = new Map<string, GameStateView>();
+    const startedEvents = new Map<string, unknown>();
 
     for (const { client, playerId } of players) {
       client.on("game:state", (state) => states.set(playerId, state));
+      client.on("turn:started", (event) => startedEvents.set(playerId, event));
     }
 
     await emitAck(host, "game:autoTeams");
     await emitAck(host, "game:start");
 
-    return { host, players, states };
+    return { host, players, states, startedEvents };
   }
 
   it("el equipo activo puede pasar el turno y el rival no (S4, D42)", async () => {
@@ -82,8 +84,8 @@ describe("contrato cliente-servidor", () => {
     });
   });
 
-  it("todos los roles ven la misma palabra y las mismas prohibidas (S3)", async () => {
-    const { players, states } = await playingGame();
+  it("redacts the active guesser's word and taboo words on every room event", async () => {
+    const { players, states, startedEvents } = await playingGame();
     const all = await waitFor(() => {
       const current = players.map(({ playerId }) => states.get(playerId));
 
@@ -92,12 +94,18 @@ describe("contrato cliente-servidor", () => {
         : undefined;
     }, "estados con turno");
 
-    const words = new Set(all.map((state) => state.turn?.word ?? ""));
-    const taboos = new Set(all.map((state) => JSON.stringify(state.turn?.taboo ?? null)));
-
-    expect(words.size).toBe(1);
-    expect(taboos.size).toBe(1);
-    expect([...words][0]).not.toBe("");
+    const active = all.find((state) => state.me.role === "ACTIVE");
+    const descriptor = all.find((state) => state.me.role === "DESCRIBER");
+    const rival = all.find((state) => state.me.role === "RIVAL");
+    expect(descriptor?.turn?.word).toBeTruthy();
+    expect(rival?.turn?.word).toBe(descriptor?.turn?.word);
+    expect(rival?.turn?.taboo).toEqual(descriptor?.turn?.taboo);
+    expect(active?.turn?.word).toBeUndefined();
+    expect(active?.turn?.taboo).toEqual([]);
+    expect(startedEvents.size).toBe(players.length);
+    for (const event of startedEvents.values()) {
+      expect(JSON.stringify(event)).not.toContain(descriptor?.turn?.word);
+    }
   });
 
   it("con un jugador sin equipo el arranque se rechaza: el lobby no debe habilitarlo (S19)", async () => {
@@ -105,7 +113,7 @@ describe("contrato cliente-servidor", () => {
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
       playerName: "Host",
       deckId: harness.deckId,
-      options: { teamCount: 2, turnSeconds: 45, randomTeams: false },
+      options: { teamCount: 2, turnSeconds: 60, randomTeams: false },
     });
 
     const hostState = new Promise<GameStateView>((resolve) => {
@@ -154,7 +162,7 @@ describe("contrato cliente-servidor", () => {
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
       playerName: "Host",
       deckId: harness.deckId,
-      options: { teamCount: 2, turnSeconds: 45, randomTeams: true },
+      options: { teamCount: 2, turnSeconds: 60, randomTeams: true },
     });
 
     for (const name of ["Ana", "Beto", "Caro"]) {

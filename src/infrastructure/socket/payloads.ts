@@ -92,8 +92,13 @@ export const reportViolationPayload = z
     }
   });
 
+export const guessPayload = z.object({
+  guess: z.string().trim().min(1, "guess cannot be empty").max(80, "guess is too long"),
+});
+
 export type CreateGameInput = z.infer<typeof createGamePayload>;
 export type JoinGameInput = z.infer<typeof joinGamePayload>;
 export type ReconnectInput = z.infer<typeof reconnectPayload>;
 export type AssignTeamInput = z.infer<typeof assignTeamPayload>;
 export type ReportViolationRequest = z.infer<typeof reportViolationPayload>;
+export type GuessRequest = z.infer<typeof guessPayload>;

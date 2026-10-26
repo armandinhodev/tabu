@@ -22,7 +22,10 @@ describe("partida completa por socket", () => {
 
   beforeEach(async () => {
     harness = await makeSocketHarness({
-      cards: [makeCard("corta-001", "fuego", ["llama"]), makeCard("corta-002", "playa", ["arena"])],
+      cards: [
+        makeCard("corta-001", "fuego", ["llama", "humo", "brasa", "calor", "ceniza", "quemar"]),
+        makeCard("corta-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
+      ],
     });
   });
 
@@ -35,7 +38,7 @@ describe("partida completa por socket", () => {
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
       playerName: "Host",
       deckId: harness.deckId,
-      options: { teamCount: 2, turnSeconds: 45, randomTeams: false },
+      options: { teamCount: 2, turnSeconds: 60, randomTeams: false },
     });
 
     const players = [{ client: host, playerId: created.playerId, name: "Host" }];
@@ -73,9 +76,6 @@ describe("partida completa por socket", () => {
 
     const firstTurn = (await started) as TurnStartedView;
 
-    expect(firstTurn.word).not.toBe("");
-    expect(firstTurn.taboo.length).toBeGreaterThan(0);
-
     const descriptor = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER"),
       "descriptor",
@@ -84,15 +84,30 @@ describe("partida completa por socket", () => {
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "RIVAL"),
       "rival",
     );
-
-    // Turno 1: acierto del descriptor.
-    const firstEnded = nextEvent<TurnEndedView>(host, "turn:ended");
-    const guessed = await emitAck<{ pointsAwarded: number; teamScore: number }>(
-      descriptor.client,
-      "turn:guess",
+    const guesser = await waitFor(
+      () => players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE"),
+      "adivinador",
     );
 
-    expect(guessed).toEqual({ pointsAwarded: 1, teamScore: 1 });
+    // S4: la palabra y las prohibidas salen hacia el descriptor y el rival,
+    // nunca hacia el equipo que adivina.
+    const firstWord = states.get(descriptor.playerId)?.turn?.word ?? "";
+
+    expect(firstWord).not.toBe("");
+    expect(states.get(descriptor.playerId)?.turn?.taboo.length).toBeGreaterThan(0);
+    expect(states.get(rival.playerId)?.turn?.word).toBe(firstWord);
+    expect(states.get(guesser.playerId)?.turn?.word).toBeUndefined();
+    expect(states.get(guesser.playerId)?.turn?.taboo).toEqual([]);
+
+    // Turno 1: acierto del equipo que adivina.
+    const firstEnded = nextEvent<TurnEndedView>(host, "turn:ended");
+    const guessed = await emitAck<{ pointsAwarded: number; teamScore: number }>(
+      guesser.client,
+      "turn:guess",
+      { guess: firstWord },
+    );
+
+    expect(guessed).toMatchObject({ correct: true, pointsAwarded: 1, teamScore: 1 });
     await expect(firstEnded).resolves.toMatchObject({ reason: "CORRECT", pointsDelta: 1 });
 
     // Turno 2: el rival penaliza una palabra prohibida de la carta nueva.
@@ -109,7 +124,7 @@ describe("partida completa por socket", () => {
     const secondDescriptorId = secondState.turn?.descriptorId ?? "";
 
     expect(secondDescriptorId).not.toBe(firstTurn.descriptorId);
-    expect(secondTurnWord).not.toBe(firstTurn.word);
+    expect(secondTurnWord).not.toBe(firstWord);
 
     const penalty = nextEvent<PenaltyAppliedView>(rival.client, "penalty:applied");
     const finished = nextEvent<GameFinishedView>(host, "game:finished");

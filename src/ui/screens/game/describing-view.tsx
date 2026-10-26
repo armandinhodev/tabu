@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Hand, Volume2 } from "lucide-react";
+import { AlertTriangle, Hand, Volume2 } from "lucide-react";
 
 import { Button } from "@/ui/components/ui/button";
 import { StickyFooter } from "@/ui/components/ui/screen";
@@ -13,9 +13,9 @@ import type { RoleViewProps } from "./role-view-props";
 /**
  * 05/06 — Juego, equipo que describe (activo) y quien describe (§6.1, §6.2, §11).
  *
- * Los dos roles ven la misma información (S3): palabra objetivo y lista completa
- * de palabras prohibidas en modo informativo. Lo que cambia son los controles:
- * el descriptor además puede aceptar la carta y reportar gesto o sonido.
+ * La palabra objetivo y la lista de palabras prohibidas solo se muestran al
+ * descriptor y a los rivales (S4). El resto del equipo activo adivina: ve el
+ * chat privado de respuestas, sin palabra ni prohibidas.
  *
  * Los chips nunca son reportables acá: el rojo queda reservado a las palabras
  * prohibidas (§3, S22) y el aviso del descriptor es ámbar.
@@ -24,7 +24,6 @@ export function DescribingView({
   state,
   turn,
   busy,
-  onGuess,
   onPass,
   onSkipCard,
   onReport,
@@ -47,20 +46,29 @@ export function DescribingView({
         <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
       </section>
 
-      <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface-2 p-5">
-        <p className="font-display text-word font-extrabold break-words text-fg uppercase">
-          {turn.word}
-        </p>
+      {isDescriptor ? (
+        <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface-2 p-5">
+          <p className="font-display text-word font-extrabold break-words text-fg uppercase">
+            {turn.word}
+          </p>
 
-        {isDescriptor ? (
           <p className="flex items-center gap-2 rounded-md border border-warning bg-warning-soft px-3 py-2 text-body-sm text-warning">
             <AlertTriangle aria-hidden="true" className="size-4 shrink-0" />
             Si decís una de estas, tu equipo pierde 1 punto
           </p>
-        ) : null}
 
-        <TabooWords words={turn.taboo} variant="informative" />
-      </section>
+          <TabooWords words={turn.taboo} variant="informative" />
+        </section>
+      ) : (
+        <section className="flex flex-col gap-2 rounded-lg border border-line bg-surface-2 p-5">
+          <p className="text-body-sm text-fg-muted">
+            Escuchá a quien describe y escribí la respuesta en el chat de abajo.
+          </p>
+          <p className="text-body-sm text-fg-subtle">
+            Ni tu equipo ni el rival ven la palabra que estás adivinando.
+          </p>
+        </section>
+      )}
 
       <section className="flex flex-col items-center gap-3">
         <TimerRing deadlineAt={turn.deadlineAt} turnSeconds={turn.turnSeconds} />
@@ -70,11 +78,6 @@ export function DescribingView({
       </section>
 
       <StickyFooter>
-        <Button block disabled={busy} onClick={onGuess}>
-          <Check aria-hidden="true" className="size-4" />
-          ¡Adiviné!
-        </Button>
-
         <Button variant="ghost" block disabled={busy} onClick={onPass}>
           Pasar turno
         </Button>
@@ -116,7 +119,9 @@ export function DescribingView({
 
         <div className="flex items-center justify-center gap-2">
           <MuteButton />
-          <p className="text-micro text-fg-subtle uppercase">Todos ven la misma información</p>
+          <p className="text-micro text-fg-subtle uppercase">
+            {isDescriptor ? "Solo vos y el rival ven la palabra" : "Tu equipo no ve la palabra"}
+          </p>
         </div>
       </StickyFooter>
     </div>

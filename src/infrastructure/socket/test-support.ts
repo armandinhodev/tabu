@@ -54,14 +54,14 @@ export async function makeSocketHarness(
     language: "es",
     active: true,
     cards: options.cards ?? [
-      makeCard("general-001", "fuego", ["llama", "calor"]),
-      makeCard("general-002", "playa", ["arena"]),
-      makeCard("general-003", "nube", ["cielo"]),
-      makeCard("general-004", "reloj", ["hora"]),
-      makeCard("general-005", "silla", ["mueble"]),
-      makeCard("general-006", "ventana", ["vidrio"]),
-      makeCard("general-007", "luna", ["noche"]),
-      makeCard("general-008", "sol", ["dia"]),
+       makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
+       makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
+       makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
+       makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
+       makeCard("general-005", "silla", ["mueble", "asiento", "patas", "respaldo", "sentar", "mesa"]),
+       makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
+       makeCard("general-007", "luna", ["noche", "cielo", "satelite", "brillar", "fase", "astronauta"]),
+       makeCard("general-008", "sol", ["dia", "estrella", "calor", "luz", "brillar", "amanecer"]),
     ],
   });
 
@@ -82,7 +82,7 @@ export async function makeSocketHarness(
       maxTeams: 4,
       minPlayersPerTeam: 2,
       maxPlayersPerTeam: 8,
-      turnSecondsDefault: 45,
+      turnSecondsDefault: 60,
       rounds: 1,
     },
   };

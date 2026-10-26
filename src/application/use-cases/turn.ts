@@ -1,10 +1,11 @@
 import type { Game } from "../../domain/entities/Game";
 import { GameNotFoundError, NotAllowedError, TurnNotActiveError } from "../../domain/errors/DomainError";
 import type { DomainEvent } from "../../domain/events/events";
-import type { ReportViolationRequest } from "../../infrastructure/socket/payloads";
+import type { GuessRequest, ReportViolationRequest } from "../../infrastructure/socket/payloads";
 import { validateReport } from "../../domain/policies/PenaltyPolicy";
 import { resolveTurn, type TurnOutcome } from "../../domain/services/GameStateMachine";
 import type { PlayerId, TeamId } from "../../domain/value-objects/PlayerId";
+import { normalizeWord } from "../../domain/value-objects/TabooWords";
 import { requirePlayer, requirePlaying, type GameDeps } from "./common";
 
 export interface TurnActionData {
@@ -12,6 +13,10 @@ export interface TurnActionData {
   readonly pointsDelta: number;
   readonly teamScore: number;
   readonly events: readonly DomainEvent[];
+}
+
+export interface GuessActionData extends TurnActionData {
+  readonly correct: boolean;
 }
 
 function requireGame(deps: GameDeps, gameId: string): Game {
@@ -54,19 +59,30 @@ function apply(deps: GameDeps, game: Game, outcome: TurnOutcome, teamId: TeamId)
   };
 }
 
-/** Cualquier miembro del equipo activo puede cantar el acierto (S4, §6.5). */
-export function guessWord(deps: GameDeps, gameId: string, playerId: PlayerId): TurnActionData {
+/** Only non-describing teammates may submit a typed answer. */
+export function guessWord(
+  deps: GameDeps,
+  gameId: string,
+  playerId: PlayerId,
+  input: GuessRequest,
+): GuessActionData {
   const game = requireGame(deps, gameId);
   requirePlaying(game);
 
   const turn = activeTurn(game);
   const { player } = requirePlayer(game, playerId);
 
-  if (player.teamId === null || player.teamId !== turn.teamId) {
-    throw new NotAllowedError("Only the describing team can guess");
+  if (player.teamId === null || player.teamId !== turn.teamId || turn.descriptorId === playerId) {
+    throw new NotAllowedError("Only a guessing teammate can submit an answer");
   }
 
-  return apply(deps, game, { kind: "CORRECT", actorId: playerId }, turn.teamId);
+  if (normalizeWord(input.guess) !== normalizeWord(turn.card.word)) {
+    const team = game.teams.find((candidate) => candidate.id === turn.teamId);
+
+    return { game, correct: false, pointsDelta: 0, teamScore: team?.score.value ?? 0, events: [] };
+  }
+
+  return { ...apply(deps, game, { kind: "CORRECT", actorId: playerId }, turn.teamId), correct: true };
 }
 
 /**

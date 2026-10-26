@@ -15,7 +15,12 @@ const socket = vi.hoisted(() => ({
   off: vi.fn(),
   io: { on: vi.fn(), off: vi.fn() },
   emit: vi.fn(),
+  handlers: new Map<string, (payload: unknown) => void>(),
 }));
+
+socket.on.mockImplementation((event: string, handler: (payload: unknown) => void) => {
+  socket.handlers.set(event, handler);
+});
 
 vi.mock("@/ui/lib/socket", () => ({ getSocket: () => socket }));
 vi.mock("@/ui/lib/storage", () => ({
@@ -28,7 +33,8 @@ vi.mock("@/ui/lib/storage", () => ({
 
 afterEach(() => {
   cleanup();
-  socket.emit.mockClear();
+  socket.emit.mockReset();
+  socket.handlers.clear();
 });
 
 describe("GameProvider joinGame", () => {
@@ -63,26 +69,95 @@ describe("GameProvider joinGame", () => {
   });
 });
 
-describe("GameProvider createGame", () => {
-  it("sends the room rules chosen by the host", async () => {
+describe("GameProvider adivinación escrita", () => {
+  function ackGuess(response: { correct: boolean; pointsAwarded: number; teamScore: number }): void {
+    socket.emit.mockImplementation(
+      (event: string, _payload: unknown, ack?: (value: unknown) => void) => {
+        if (event === "turn:guess") {
+          ack?.(response);
+        }
+      },
+    );
+  }
+
+  it("envía la respuesta escrita y confirma el acierto", async () => {
+    ackGuess({ correct: true, pointsAwarded: 1, teamScore: 1 });
+
     const { result } = renderHook(useGame, { wrapper: GameProvider });
 
     await act(async () => {
-      void result.current.createGame({
-        deckId: "deck-1",
-        teamCount: 2,
-        turnSeconds: 90,
-        tabooWordCount: 6,
-        randomTeams: false,
-      });
+      result.current.guess("  Fuego  ");
     });
 
     expect(socket.emit).toHaveBeenCalledWith(
-      "game:create",
-      expect.objectContaining({
-        options: expect.objectContaining({ turnSeconds: 90, tabooWordCount: 6 }),
-      }),
+      "turn:guess",
+      { guess: "Fuego" },
       expect.any(Function),
     );
+    expect(result.current.guessMessages.map((message) => message.text)).toEqual([
+      "Fuego",
+      "¡Acertaste!",
+    ]);
+  });
+
+  it("una respuesta incorrecta se confirma sin puntos", async () => {
+    ackGuess({ correct: false, pointsAwarded: 0, teamScore: 0 });
+
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+
+    await act(async () => {
+      result.current.guess("Agua");
+    });
+
+    expect(result.current.guessMessages.map((message) => message.text)).toEqual([
+      "Agua",
+      "No es esa. Probá de nuevo.",
+    ]);
+  });
+
+  it("avisa al equipo activo cuando el rival penaliza una palabra", async () => {
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+
+    act(() => {
+      socket.handlers.get("game:state")?.({
+        status: "playing",
+        me: { role: "ACTIVE" },
+        turn: { teamId: "team-1" },
+      });
+    });
+
+    act(() => {
+      socket.handlers.get("penalty:applied")?.({
+        reason: "TABOO_WORD",
+        tabooWord: "llama",
+        teamId: "team-1",
+        pointsDelta: -1,
+        reportedBy: "rival-1",
+        cardDiscarded: true,
+      });
+    });
+
+    const notices = result.current.guessMessages.filter((message) => message.kind === "notice");
+
+    expect(notices).toHaveLength(1);
+    expect(notices[0]?.text).toContain("palabra prohibida");
+  });
+
+  it("limpia el chat cuando termina el turno", async () => {
+    ackGuess({ correct: false, pointsAwarded: 0, teamScore: 0 });
+
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+
+    await act(async () => {
+      result.current.guess("Agua");
+    });
+
+    expect(result.current.guessMessages).toHaveLength(2);
+
+    act(() => {
+      socket.handlers.get("turn:ended")?.({ reason: "TIME" });
+    });
+
+    expect(result.current.guessMessages).toEqual([]);
   });
 });

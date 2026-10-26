@@ -125,7 +125,7 @@ export function HomeScreen() {
       <InfoDialog open={helpOpen} onOpenChange={setHelpOpen} title="¿Cómo se juega?">
         <p>
           Un jugador describe la palabra grande sin decir ninguna de las prohibidas. Su equipo
-          adivina y toca <strong className="text-fg">Adiviné</strong>.
+          adivina escribiendo la respuesta en el chat privado.
         </p>
         <p>
           El equipo rival vigila: si decís una palabra prohibida, toca el chip y el equipo pierde un

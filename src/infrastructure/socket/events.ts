@@ -71,6 +71,7 @@ export interface ReconnectAck {
 }
 
 export interface GuessAck {
+  readonly correct: boolean;
   readonly pointsAwarded: number;
   readonly teamScore: number;
 }
@@ -102,8 +103,6 @@ export interface TurnStartedView {
   readonly turnId: string;
   readonly teamId: string;
   readonly descriptorId: string;
-  readonly word: string;
-  readonly taboo: readonly string[];
   readonly deadlineAt: number;
   readonly turnSeconds: number;
 }
@@ -162,7 +161,7 @@ export interface ClientToServerEvents {
   "game:ready": (ack: Ack<void>) => void;
   "game:start": (ack: Ack<void>) => void;
   "game:leave": (ack: Ack<void>) => void;
-  "turn:guess": (ack: Ack<GuessAck>) => void;
+  "turn:guess": (payload: unknown, ack: Ack<GuessAck>) => void;
   "turn:reportViolation": (payload: unknown, ack: Ack<ReportViolationAck>) => void;
   "turn:skip": (ack: Ack<void>) => void;
   "turn:pass": (ack: Ack<void>) => void;

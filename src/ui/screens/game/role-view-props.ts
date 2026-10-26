@@ -12,7 +12,6 @@ export interface RoleViewProps {
   readonly busy: boolean;
   /** Palabra ya reportada en este turno, para pintar el chip en rojo sólido. */
   readonly reportedWord: string | null;
-  readonly onGuess: () => void;
   readonly onPass: () => void;
   readonly onSkipCard: () => void;
   readonly onReport: (reason: ViolationReason, tabooWord?: string) => void;

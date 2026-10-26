@@ -13,9 +13,9 @@ import type { RoleViewProps } from "./role-view-props";
 /**
  * 07 — Juego, equipo rival (vigilante) (§6.2, §11).
  *
- * El rival ve exactamente la misma información que el resto (palabra objetivo y
- * lista completa de palabras prohibidas); lo que cambia son los controles:
- * los chips son reportables y además puede reportar gesto o sonido.
+ * El rival ve la palabra objetivo y la lista completa de palabras prohibidas
+ * (S4); lo que cambia son los controles: los chips son reportables y además
+ * puede reportar gesto o sonido.
  */
 export function RivalView({ state, turn, busy, reportedWord, onReport }: RoleViewProps) {
   const activeTeamName = teamNameOf(state.teams, turn.teamId);
@@ -80,7 +80,7 @@ export function RivalView({ state, turn, busy, reportedWord, onReport }: RoleVie
 
         <div className="flex items-center justify-center gap-2">
           <MuteButton />
-          <p className="text-micro text-fg-subtle uppercase">Todos ven la misma información</p>
+          <p className="text-micro text-fg-subtle uppercase">Vos ves la palabra y las prohibidas</p>
         </div>
       </StickyFooter>
     </div>
