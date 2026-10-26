@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // En dev el server escucha en 0.0.0.0 y se entra por localhost/127.0.0.1 o por
+  // la IP de la LAN: Next 15 avisa si el origen no está listado.
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
 };
 
 export default nextConfig;
