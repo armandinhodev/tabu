@@ -181,6 +181,25 @@ Evidencia: `pnpm test` → **189 pasan / 8 skip**; `lint`, `typecheck` y `build`
 
 **El smoke encontró dos bugs de producción, ya corregidos:** la partida terminaba tras una sola vuelta con el default `rounds: 1` (§6.10 dice "mazo entero", D51) y el cierre por reloj podía lanzar desde un `setInterval` cuando el equipo activo quedaba sin nadie conectado (D52).
 
+**DoD §15, criterio por criterio:**
+
+| Criterio | Estado | Evidencia |
+|---|---|---|
+| `pnpm install && pnpm seed && pnpm dev` levanta Next + Socket.IO en el mismo puerto | ✅ | `pnpm dev` con Mongo real: `/` 200, `/api/decks` 200 con 3 mazos, handshake de Socket.IO 200 |
+| Dos navegadores crean/unen, ven turnos y juegan un turno completo | ✅ (sustituido) | Smoke de dos clientes independientes contra el servidor real: mismos eventos y acks. No se abrieron navegadores literales |
+| Todos ven palabra y prohibidas | ✅ | Test S3 por socket + render en las tres vistas |
+| Chip del rival descuenta 1, anula la carta y pasa a la siguiente | ✅ | Smoke real (`−1`, `cardDiscarded`, snapshot con 1 descartada) + tests |
+| Palabra que no está en la carta no penaliza | ✅ | `invalid taboo word` en turn/socket tests |
+| +1 acierto, −1 penalización, 0 en skip y timeout | ✅ | Dominio + casos de uso + socket |
+| Temporizador del servidor, igual en todos | ✅ | `deadlineAt` absoluto, ticker con reloj inyectable |
+| Al recargar vuelve a su partida y turno | ✅ | `game:reconnect` + `localStorage` + test de gracia |
+| Mazos desde Mongo, seed de 3 jugables | ✅ | Seed real: 3 mazos / 240 cartas; `/api/decks` los sirve |
+| 10 pantallas con carga/error/vacío y contra previews | ✅ con matiz | Las 10 existen; skeleton en lobby/juego/crear, error en crear y reconexión, vacíos en lobby. No todas tienen los 4 estados (no aplican en todas) |
+| Sin violeta ni texto con sombra/3D | ✅ | Auditoría por grep |
+| Sonido con mute persistente | ✅ | Web Audio + `localStorage`, no verificado de oído en navegador |
+| Lint, typecheck, tests y build limpios | ✅ | 197 pasan / 8 skip, cobertura 95,97 % branches, build sin warnings |
+| README para levantar y jugar sin preguntar | ✅ | `README.md` |
+
 **Ruta:** inline por defecto. Se delega solo donde hay dos unidades independientes en paralelo (T4.5/T4.6) o contenido largo aislado (T2.4). Cada unidad de trabajo cierra con commit Conventional Commits en `feat/tabu` (~400 líneas autoradas), con tests y docs junto al comportamiento.
 
 ---
