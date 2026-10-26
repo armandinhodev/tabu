@@ -1,12 +1,14 @@
 # Tabú
 
 Juego de Tabú multijugador en tiempo real. 2–4 equipos, cada jugador en su propio dispositivo, sin
-registro: solo un nombre. Todos ven la palabra objetivo y la lista completa de palabras prohibidas;
-lo que cambia por rol son las **acciones**.
+registro: solo un nombre. La palabra objetivo y la lista de palabras prohibidas **no** se muestran a
+todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo adivina.
 
-- **Equipo que describe**: ve los chips en modo informativo, tiene *¡Adiviné!* y *Pasar turno*; el
-  descriptor además *Aceptar y pasar carta* y *Reportar gesto* / *Reportar sonido*.
-- **Equipo rival**: ve los mismos chips, pero **reportables** al toque; reporta gesto y sonido.
+- **Equipo que describe**: el descriptor ve la palabra y los chips en modo informativo, y además
+  *Pasar turno*, *Aceptar y pasar carta* y *Reportar gesto* / *Reportar sonido*.
+- **Equipo que adivina**: ve la carta en blanco y escribe la respuesta en un **chat privado**; el
+  servidor la verifica contra la carta activa y le confirma el acierto.
+- **Equipo rival**: ve la palabra y los chips, pero **reportables** al toque; reporta gesto y sonido.
 
 Stack: Next.js 15 (App Router) + TypeScript estricto, Socket.IO 4.8 sobre un servidor HTTP propio,
 MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI y Vitest.
@@ -45,8 +47,9 @@ Regla práctica: **no alternes `dev` y `build` sobre el mismo `.next` sin limpia
 modo, recargá el navegador con caché deshabilitada (Ctrl+Shift+R).
 
 Jugar: abrí la app en el teléfono o el navegador, poné tu nombre, **Crear partida** (elegís mazo,
-equipos y tiempo por turno) y compartí el código de 6 caracteres. Los demás entran con **Unirse con
-código**. Cuando cada equipo tenga el mínimo de jugadores, el host toca **Comenzar partida**.
+equipos, tiempo por turno de 30/60/90/120 s y cuántas palabras prohibidas tiene cada carta, de 1 a 6)
+y compartí el código de 6 caracteres. Los demás entran con **Unirse con código**. Cuando cada equipo
+tenga el mínimo de jugadores, el host toca **Comenzar partida**.
 
 ### Variables de entorno
 
@@ -57,7 +60,7 @@ código**. Cuando cada equipo tenga el mínimo de jugadores, el host toca **Come
 | `PORT` | `3000` | Puerto HTTP y de Socket.IO (comparten) |
 | `HOST` | `0.0.0.0` | Interfaz de escucha (la LAN necesita `0.0.0.0`) |
 | `SOCKET_CORS_ORIGIN` | `http://localhost:3000` | Origen permitido por Socket.IO |
-| `TURN_SECONDS_DEFAULT` | `45` | Duración cuando el host no elige |
+| `TURN_SECONDS_DEFAULT` | `60` | Duración cuando el host no elige (30, 60, 90 o 120) |
 | `MAX_TEAMS` | `4` | Tope de equipos |
 | `MIN_PLAYERS_PER_TEAM` | `2` | Mínimo por equipo para arrancar |
 | `GAME_TTL_HOURS` | `24` | TTL de las partidas terminadas |
@@ -99,14 +102,19 @@ Cliente → servidor:
 | `game:autoTeams` / `game:ready` | — | — | en la sala |
 | `game:start` | — | — | solo el host |
 | `game:leave` | — | — | cualquiera |
-| `turn:guess` | — | `{ pointsAwarded, teamScore }` | equipo que describe |
+| `turn:guess` | `{ guess }` | `{ correct, pointsAwarded, teamScore }` | equipo que adivina |
 | `turn:reportViolation` | `{ reason, tabooWord? }` | `{ pointsDelta, teamScore }` | rival o descriptor |
 | `turn:skip` | — | — | solo el descriptor |
 | `turn:pass` | — | — | equipo que describe |
 
-Servidor → cliente: `game:state` (por socket, con `me`), `game:playersUpdated`, `game:started`,
+Servidor → cliente: `game:state` (por socket, con `me` y la palabra filtrada por rol), `game:playersUpdated`, `game:started`,
 `turn:started`, `turn:tick`, `turn:ended`, `penalty:applied`, `score:updated`, `round:ended`,
 `game:finished`, `game:error`.
+
+`turn:guess` solo lo puede enviar un teammate del equipo que describe: el servidor compara la
+respuesta con la carta activa, sin distinguir mayúsculas, y devuelve `correct`. Un acierto suma el
+punto y cierra el turno; una respuesta equivocada no cambia nada. La palabra objetivo viaja solo en
+el `game:state` de quien tiene rol `DESCRIBER` o `RIVAL`.
 
 Todo error de acción viaja en el ack (`{ error: { code, message } }`) **y** como `game:error` al
 mismo socket. Los códigos son estables (`INVALID_TABOO_WORD`, `NOT_ALLOWED`, `INVALID_STATE`,
@@ -120,9 +128,8 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 
 Sin errores ni warnings. La suite cubre dominio, casos de uso, repositorios (contra Mongo real si
 `MONGODB_URI_TEST` está definido y se saltean si no), el servidor de socket, la partida completa por
-socket y el contrato que consume la UI. Cobertura de `src/domain` con `pnpm test:coverage`:
-**95,1 % statements y 95,97 % branches** (umbral 80 %). Los tests de componentes con Testing Library
-no corren en este entorno (D47).
+socket, el contrato que consume la UI y los componentes con Testing Library. Cobertura de
+`src/domain` con `pnpm test:coverage`: **95,1 % statements y 95,97 % branches** (umbral 80 %).
 
 ## Decisiones asumidas
 
@@ -149,9 +156,10 @@ que más afectan el uso:
 - **Sonido sintetizado.** Web Audio, sin archivos, mute persistido y desbloqueo con el primer gesto
   (§8).
 - **Cobertura.** `pnpm test:coverage` mide `src/domain`: 95,1 % statements / 95,97 % branches, por
-  encima del umbral de 80 % (la nota vieja D28 quedó obsoleta). **Tests de componentes** con React 19
-  + Vitest no ejecutables en esta máquina (D47): la UI se cubre con tests de contrato y auditoría del
-  checklist.
+  encima del umbral de 80 % (la nota vieja D28 quedó obsoleta). Los tests de componentes con React 19
+  + Vitest **sí** corren (jsdom): la UI se cubre con Testing Library (D47 quedó obsoleto).
+- **La palabra objetivo es del descriptor y del rival.** El equipo que adivina no la ve en ningún
+  evento, ni al reconectar; escribe la respuesta y el servidor la verifica (S4).
 - **Códigos de sala y nombres.** 6 caracteres sin `I`, `O`, `0` ni `1`; nombres repetidos se
   desambiguan con sufijo (`Luz`, `Luz (2)`).
 - **Partida en memoria.** Un reinicio del servidor descarta las partidas en curso; recargar la página

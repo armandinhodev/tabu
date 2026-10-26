@@ -5,6 +5,12 @@
 **Runner:** `pnpm test` (Vitest + jsdom). **Gates:** `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
 **Fuentes normativas (no se reescriben acá):** `doc/prompt.md` (funcional), `doc/directivas-diseno.md` (visual), `doc/previews/` (layout). La UI real sigue las previews; ante conflicto visual gana `directivas-diseno.md`.
 
+> **Actualización (2026-10-26):** las reglas de visibilidad y de adivinación de este documento (S3
+> "Todos ven la palabra objetivo", S4 con el botón *¡Adiviné!*, D29) quedaron **superadas** por
+> [`odd/tasks/room-rules-and-guesses.md`](room-rules-and-guesses.md): la palabra objetivo solo la ven
+> el descriptor y el rival, y el equipo que adivina escribe la respuesta en un chat privado que el
+> servidor verifica. Este documento se conserva como registro histórico del plan original.
+
 ---
 
 ## Specs
