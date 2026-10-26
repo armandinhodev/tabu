@@ -1,6 +1,6 @@
 import { CardDeck } from "../../domain/services/CardDeck";
 import type { Game } from "../../domain/entities/Game";
-import type { GameSettings } from "../../domain/entities/GameSettings";
+import { DEFAULT_TABOO_WORD_COUNT, type GameSettings } from "../../domain/entities/GameSettings";
 import type { Player } from "../../domain/entities/Player";
 import type { Team } from "../../domain/entities/Team";
 import {
@@ -54,11 +54,18 @@ export async function createGame(
     throw new InvalidSettingsError(`teamCount cannot exceed ${deps.config.maxTeams}`);
   }
 
+  const tabooWordCount = input.options?.tabooWordCount ?? DEFAULT_TABOO_WORD_COUNT;
+
+  if (deck.cards.some((card) => card.taboo.words.length < tabooWordCount)) {
+    throw new InvalidSettingsError(`deck cards must have at least ${tabooWordCount} taboo words`);
+  }
+
   const settings: GameSettings = {
     teamCount,
     turnSeconds: Duration.fromSeconds(
       input.options?.turnSeconds ?? deps.config.turnSecondsDefault,
     ),
+    tabooWordCount,
     rounds: deps.config.rounds,
     randomTeams: input.options?.randomTeams ?? false,
     minPlayersPerTeam: deps.config.minPlayersPerTeam,

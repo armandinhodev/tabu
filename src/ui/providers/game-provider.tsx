@@ -36,6 +36,7 @@ export interface CreateGameOptions {
   readonly deckId: string;
   readonly teamCount: number;
   readonly turnSeconds: number;
+  readonly tabooWordCount: number;
   readonly randomTeams: boolean;
 }
 
@@ -300,6 +301,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             options: {
               teamCount: options.teamCount,
               turnSeconds: options.turnSeconds,
+              tabooWordCount: options.tabooWordCount,
               randomTeams: options.randomTeams,
             },
           },

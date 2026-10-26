@@ -27,14 +27,36 @@ describe("createGamePayload", () => {
     expect(parsed.options).toEqual({ teamCount: 3 });
   });
 
-  it("rejects a turn duration outside 30/45/60", () => {
+  it("accepts only 30, 60, 90 or 120 seconds and 1..6 taboo words", () => {
+    for (const turnSeconds of [30, 60, 90, 120]) {
+      expect(
+        parsePayload(createGamePayload, {
+          playerName: "Luz",
+          deckId: "deck-1",
+          options: { turnSeconds, tabooWordCount: 6 },
+        }).options,
+      ).toEqual({ turnSeconds, tabooWordCount: 6 });
+    }
+
+    for (const tabooWordCount of [0, 7, 1.5]) {
+      expect(() =>
+        parsePayload(createGamePayload, {
+          playerName: "Luz",
+          deckId: "deck-1",
+          options: { tabooWordCount },
+        }),
+      ).toThrowError(/tabooWordCount/);
+    }
+
+    for (const turnSeconds of [20, 45, 121]) {
     expect(() =>
       parsePayload(createGamePayload, {
         playerName: "Luz",
         deckId: "deck-1",
-        options: { turnSeconds: 20 },
+        options: { turnSeconds },
       }),
     ).toThrowError(/turnSeconds/);
+    }
   });
 
   it("rejects a team count outside 2..4", () => {

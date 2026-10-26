@@ -1,4 +1,5 @@
 import type { Game } from "../../../domain/entities/Game";
+import { DEFAULT_TABOO_WORD_COUNT } from "../../../domain/entities/GameSettings";
 import type { Player } from "../../../domain/entities/Player";
 import { TEAM_COLORS, type Team, type TeamColor } from "../../../domain/entities/Team";
 import type { Turn } from "../../../domain/entities/Turn";
@@ -31,6 +32,7 @@ export function toGameDocument(game: Game): GameDocumentInput {
     settings: {
       teamCount: game.settings.teamCount,
       turnSeconds: game.settings.turnSeconds.seconds,
+      tabooWordCount: game.settings.tabooWordCount,
       rounds: game.settings.rounds,
       randomTeams: game.settings.randomTeams,
       minPlayersPerTeam: game.settings.minPlayersPerTeam,
@@ -74,6 +76,7 @@ export function toGameDomain(document: GameDocument): Game {
     settings: {
       teamCount: document.settings.teamCount,
       turnSeconds: Duration.fromSeconds(document.settings.turnSeconds),
+      tabooWordCount: document.settings.tabooWordCount ?? DEFAULT_TABOO_WORD_COUNT,
       rounds: document.settings.rounds,
       randomTeams: document.settings.randomTeams,
       minPlayersPerTeam: document.settings.minPlayersPerTeam,

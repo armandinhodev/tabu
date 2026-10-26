@@ -30,8 +30,18 @@ const TEAM_OPTIONS = [
 
 const TIME_OPTIONS = [
   { value: "30", label: "30 s" },
-  { value: "45", label: "45 s" },
   { value: "60", label: "60 s" },
+  { value: "90", label: "90 s" },
+  { value: "120", label: "120 s" },
+] as const;
+
+const TABOO_COUNT_OPTIONS = [
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
+  { value: "5", label: "5" },
+  { value: "6", label: "6" },
 ] as const;
 
 /** 02 — Crear partida: mazo, equipos y tiempo por turno (§6.1, §12). */
@@ -41,7 +51,8 @@ export function CreateScreen() {
   const [decks, setDecks] = useState<readonly DeckOption[]>([]);
   const [deckId, setDeckId] = useState<string | null>(null);
   const [teamCount, setTeamCount] = useState<"2" | "3" | "4">("2");
-  const [turnSeconds, setTurnSeconds] = useState<"30" | "45" | "60">("45");
+  const [turnSeconds, setTurnSeconds] = useState<"30" | "60" | "90" | "120">("60");
+  const [tabooWordCount, setTabooWordCount] = useState<"1" | "2" | "3" | "4" | "5" | "6">("4");
   const [randomTeams, setRandomTeams] = useState(false);
 
   const loadDecks = (): void => {
@@ -151,6 +162,16 @@ export function CreateScreen() {
         />
       </div>
 
+      <div className="flex flex-col gap-2">
+        <span className="text-caption uppercase text-fg-muted">Palabras prohibidas por carta</span>
+        <SegmentedControl
+          label="Cantidad de palabras prohibidas"
+          value={tabooWordCount}
+          options={TABOO_COUNT_OPTIONS}
+          onValueChange={setTabooWordCount}
+        />
+      </div>
+
       <div className="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface p-4">
         <div className="flex flex-col">
           <span className="text-body text-fg">Equipos balanceados</span>
@@ -178,6 +199,7 @@ export function CreateScreen() {
               deckId,
               teamCount: Number(teamCount),
               turnSeconds: Number(turnSeconds),
+              tabooWordCount: Number(tabooWordCount),
               randomTeams,
             });
           }}

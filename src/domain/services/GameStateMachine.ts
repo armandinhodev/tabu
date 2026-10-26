@@ -18,6 +18,7 @@ import { pointsForOutcome, scoreAfterOutcome } from "../policies/ScoringPolicy";
 import { nextDescriptor, nextTeam } from "../policies/TurnOrderPolicy";
 import type { Rng } from "../rng";
 import type { CardId, PlayerId, TurnId } from "../value-objects/PlayerId";
+import { TabooWords } from "../value-objects/TabooWords";
 import { shuffleDeck } from "./DeckShuffler";
 
 export interface TransitionContext {
@@ -162,11 +163,16 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     );
   }
 
+  const activeCard: Card = {
+    ...card,
+    taboo: TabooWords.create(card.taboo.words.slice(0, game.settings.tabooWordCount)),
+  };
+
   const turn: Turn = {
     id: ctx.newTurnId(),
     teamId: team.id,
     descriptorId: selection.descriptorId,
-    card,
+    card: activeCard,
     startedAt: ctx.now,
     deadlineAt: new Date(ctx.now.getTime() + game.settings.turnSeconds.toMilliseconds()),
     status: "active",

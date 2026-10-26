@@ -8,7 +8,7 @@ import { z } from "zod";
 
 export const ROOM_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
 
-export const TURN_SECONDS_OPTIONS = [30, 45, 60] as const;
+export const TURN_SECONDS_OPTIONS = [30, 60, 90, 120] as const;
 
 export class InvalidPayloadError extends Error {
   constructor(readonly issues: readonly string[]) {
@@ -43,8 +43,8 @@ const roomCode = z
     message: "must be 6 characters from ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
   });
 
-const turnSeconds = z.union([z.literal(30), z.literal(45), z.literal(60)], {
-  error: "must be 30, 45 or 60",
+const turnSeconds = z.union([z.literal(30), z.literal(60), z.literal(90), z.literal(120)], {
+  error: "must be 30, 60, 90 or 120",
 });
 
 export const createGamePayload = z.object({
@@ -54,6 +54,7 @@ export const createGamePayload = z.object({
     .object({
       teamCount: z.number().int().min(2, "teamCount must be 2..4").max(4, "teamCount must be 2..4"),
       turnSeconds,
+      tabooWordCount: z.number().int().min(1).max(6),
       randomTeams: z.boolean(),
     })
     .partial()

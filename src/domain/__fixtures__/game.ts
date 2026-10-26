@@ -86,7 +86,8 @@ export function makeTurn(params: {
 export function makeSettings(overrides: Partial<GameSettings> = {}): GameSettings {
   return {
     teamCount: 2,
-    turnSeconds: Duration.fromSeconds(45),
+    turnSeconds: Duration.fromSeconds(60),
+    tabooWordCount: 4,
     rounds: 1,
     randomTeams: false,
     minPlayersPerTeam: 2,

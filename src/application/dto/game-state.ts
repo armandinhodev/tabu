@@ -33,6 +33,7 @@ export interface TeamView {
 export interface SettingsView {
   readonly teamCount: number;
   readonly turnSeconds: number;
+  readonly tabooWordCount: number;
   readonly rounds: number;
   readonly randomTeams: boolean;
   readonly minPlayersPerTeam: number;
@@ -74,6 +75,7 @@ export function toSettingsView(game: Game): SettingsView {
   return {
     teamCount: game.settings.teamCount,
     turnSeconds: game.settings.turnSeconds.seconds,
+    tabooWordCount: game.settings.tabooWordCount,
     rounds: game.settings.rounds,
     randomTeams: game.settings.randomTeams,
     minPlayersPerTeam: game.settings.minPlayersPerTeam,

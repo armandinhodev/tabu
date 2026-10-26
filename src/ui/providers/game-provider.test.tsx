@@ -62,3 +62,27 @@ describe("GameProvider joinGame", () => {
     );
   });
 });
+
+describe("GameProvider createGame", () => {
+  it("sends the room rules chosen by the host", async () => {
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+
+    await act(async () => {
+      void result.current.createGame({
+        deckId: "deck-1",
+        teamCount: 2,
+        turnSeconds: 90,
+        tabooWordCount: 6,
+        randomTeams: false,
+      });
+    });
+
+    expect(socket.emit).toHaveBeenCalledWith(
+      "game:create",
+      expect.objectContaining({
+        options: expect.objectContaining({ turnSeconds: 90, tabooWordCount: 6 }),
+      }),
+      expect.any(Function),
+    );
+  });
+});

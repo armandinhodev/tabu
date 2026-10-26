@@ -13,7 +13,7 @@ describe("parseEnv", () => {
     expect(env.MONGODB_DB).toBe("tabu");
     expect(env.PORT).toBe(3000);
     expect(env.SOCKET_CORS_ORIGIN).toBe("http://localhost:3000");
-    expect(env.TURN_SECONDS_DEFAULT).toBe(45);
+    expect(env.TURN_SECONDS_DEFAULT).toBe(60);
     expect(env.MAX_TEAMS).toBe(4);
     expect(env.MIN_PLAYERS_PER_TEAM).toBe(2);
     expect(env.GAME_TTL_HOURS).toBe(24);

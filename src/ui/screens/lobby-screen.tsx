@@ -46,7 +46,7 @@ export function LobbyScreen() {
       <ScreenHeader
         eyebrow="Antes de empezar"
         title="Sala de espera"
-        subtitle={`${state.settings.teamCount} equipos · ${state.settings.turnSeconds} s por turno · ${totalPlayers} de ${minimum} jugadores`}
+        subtitle={`${state.settings.teamCount} equipos · ${state.settings.turnSeconds} s por turno · ${state.settings.tabooWordCount} prohibidas por carta · ${totalPlayers} de ${minimum} jugadores`}
         action={<MuteButton />}
       />
 

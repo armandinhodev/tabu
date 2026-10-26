@@ -15,6 +15,7 @@ import {
 } from "../../../domain/__fixtures__/game";
 import { toDeckDocument, toDeckDomain } from "./deck-mapper";
 import { toGameDocument, toGameDomain } from "./game-mapper";
+import type { GameDocument } from "../mongoose/schemas/game.schema";
 
 describe("deck mapper", () => {
   const deck: Deck = {
@@ -44,6 +45,18 @@ describe("deck mapper", () => {
 });
 
 describe("game mapper", () => {
+  it("loads an older snapshot without a taboo count using four", () => {
+    const game = makeGame();
+    const document = toGameDocument(game);
+    const legacy = { ...document.settings } as Partial<typeof document.settings>;
+    delete legacy.tabooWordCount;
+
+    expect(
+      toGameDomain({ ...document, settings: legacy, updatedAt: LATER } as GameDocument).settings
+        .tabooWordCount,
+    ).toBe(4);
+  });
+
   it("round-trips the whole aggregate", () => {
     const game = makeGame({
       status: "playing",

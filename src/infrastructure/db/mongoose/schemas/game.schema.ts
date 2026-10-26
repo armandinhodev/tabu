@@ -1,4 +1,6 @@
 import { Schema } from "mongoose";
+import { MAX_TABOO_WORDS } from "../../../../domain/value-objects/TabooWords";
+import { DEFAULT_TABOO_WORD_COUNT } from "../../../../domain/entities/GameSettings";
 
 export type GameStatusDocument = "waiting" | "playing" | "finished";
 export type TurnOutcomeDocument = "CORRECT" | "VIOLATION" | "SKIPPED" | "TIME";
@@ -17,6 +19,7 @@ export interface GameDeckSnapshotDocument {
 export interface GameSettingsDocument {
   teamCount: number;
   turnSeconds: number;
+  tabooWordCount: number;
   rounds: number;
   randomTeams: boolean;
   minPlayersPerTeam: number;
@@ -95,8 +98,6 @@ export interface GameDocument {
   finishedAt: Date | null;
 }
 
-const MAX_TABOO_WORDS = 4;
-
 /** Campos que el mapper entrega; `updatedAt` lo administra Mongoose. */
 export type GameDocumentInput = Omit<GameDocument, "updatedAt">;
 
@@ -130,6 +131,7 @@ const settingsSchema = new Schema<GameSettingsDocument>(
   {
     teamCount: { type: Number, required: true, min: 2, max: 4 },
     turnSeconds: { type: Number, required: true, min: 1 },
+    tabooWordCount: { type: Number, required: true, min: 1, max: 6, default: DEFAULT_TABOO_WORD_COUNT },
     rounds: { type: Number, required: true, min: 1 },
     randomTeams: { type: Boolean, required: true },
     minPlayersPerTeam: { type: Number, required: true, min: 1 },

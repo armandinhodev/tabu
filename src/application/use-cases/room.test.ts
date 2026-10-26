@@ -52,12 +52,12 @@ async function makeHarness(): Promise<Harness> {
     language: "es",
     active: true,
     cards: [
-      makeCard("general-001", "fuego", ["llama", "calor"]),
-      makeCard("general-002", "playa", ["arena"]),
-      makeCard("general-003", "nube", ["cielo"]),
-      makeCard("general-004", "reloj", ["hora"]),
-      makeCard("general-005", "silla", ["mueble"]),
-      makeCard("general-006", "ventana", ["vidrio"]),
+       makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
+       makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
+       makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
+       makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
+       makeCard("general-005", "silla", ["mueble", "asiento", "patas", "respaldo", "sentar", "mesa"]),
+       makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
     ],
   });
 
@@ -77,7 +77,7 @@ async function makeHarness(): Promise<Harness> {
         maxTeams: 4,
         minPlayersPerTeam: 2,
         maxPlayersPerTeam: 8,
-        turnSecondsDefault: 45,
+        turnSecondsDefault: 60,
         rounds: 1,
       },
     },
@@ -101,6 +101,7 @@ describe("createGame", () => {
     expect(game.status).toBe("waiting");
     expect(game.code.value).toMatch(/^[A-Z2-9]{6}$/);
     expect(game.teams).toHaveLength(2);
+    expect(game.settings.tabooWordCount).toBe(4);
     expect(game.teams.every((team) => team.players.length === 0)).toBe(true);
     expect(game.players).toHaveLength(1);
     expect(game.players[0]?.isHost).toBe(true);
@@ -113,11 +114,12 @@ describe("createGame", () => {
     const { game } = await createGame(harness.deps, {
       playerName: "Luz",
       deckId: harness.deckId,
-      options: { teamCount: 4, turnSeconds: 60, randomTeams: true },
+      options: { teamCount: 4, turnSeconds: 120, tabooWordCount: 6, randomTeams: true },
     });
 
     expect(game.teams).toHaveLength(4);
-    expect(game.settings.turnSeconds.seconds).toBe(60);
+    expect(game.settings.turnSeconds.seconds).toBe(120);
+    expect(game.settings.tabooWordCount).toBe(6);
     expect(game.settings.randomTeams).toBe(true);
     expect(game.teams.map((team) => team.name)).toEqual([
       "Equipo Naranja",
@@ -131,6 +133,25 @@ describe("createGame", () => {
     await expect(
       createGame(harness.deps, { playerName: "Luz", deckId: "missing" }),
     ).rejects.toThrow(DeckNotFoundError);
+  });
+
+  it("rejects a count that exceeds the actual words on a deck card", async () => {
+    const decks = harness.deps.decks;
+    const shortDeck = await decks.upsertByName({
+      name: "Short",
+      category: "General",
+      language: "es",
+      active: true,
+      cards: [makeCard("short-1", "fuego", ["llama", "calor", "humo"])],
+    });
+
+    await expect(
+      createGame(harness.deps, {
+        playerName: "Luz",
+        deckId: shortDeck.id,
+        options: { tabooWordCount: 6 },
+      }),
+    ).rejects.toThrow(/at least 6 taboo words/);
   });
 
   it("rechaza más equipos que el máximo configurado", async () => {

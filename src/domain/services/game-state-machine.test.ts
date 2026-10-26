@@ -50,6 +50,17 @@ function eventTypes(events: readonly DomainEvent[]): readonly string[] {
 }
 
 describe("startGame", () => {
+  it.each([1, 4, 6])("uses %i taboo words from a six-word card", (tabooWordCount) => {
+    const words = ["llama", "calor", "humo", "brasa", "ceniza", "quemar"];
+    const game = makeGame({
+      settings: makeSettings({ tabooWordCount }),
+      deck: makeDeck([makeCard("c1", "fuego", words)]),
+    });
+
+    const result = startGame(game, makeContext());
+    expect(result.game.currentTurn?.card.taboo.words).toEqual(words.slice(0, tabooWordCount));
+  });
+
   it("pasa a playing, baraja el mazo y arranca el primer turno", () => {
     const ctx = makeContext();
     const result = startGame(makeGame(), ctx);
