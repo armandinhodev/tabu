@@ -1,6 +1,6 @@
 import { InvalidTabooWordsError } from "../errors/DomainError";
 
-export const MAX_TABOO_WORDS = 4;
+export const MAX_TABOO_WORDS = 6;
 
 /**
  * Normaliza una palabra para comparar: minúsculas, sin acentos, sin espacios
@@ -15,7 +15,7 @@ export function normalizeWord(raw: string): string {
     .replace(/\s+/g, " ");
 }
 
-/** Palabras prohibidas de una carta: 1 a 4 términos normalizados, sin duplicados. */
+/** Palabras prohibidas de una carta: 1 a 6 términos normalizados, sin duplicados. */
 export class TabooWords {
   static readonly MAX = MAX_TABOO_WORDS;
 

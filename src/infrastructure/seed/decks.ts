@@ -5,7 +5,7 @@
  * Los ids son estables y van con cero a la izquierda (D14) para que
  * `discardedCardIds` sea legible y testeable.
  *
- * Reglas de contenido: de 1 a 4 palabras prohibidas por carta, siempre en
+ * Reglas de contenido: seis palabras prohibidas por carta, siempre en
  * minúsculas y sin acentos, nunca repetidas entre sí ni iguales a la palabra
  * objetivo, y con la palabra objetivo única dentro de su mazo.
  */
@@ -22,7 +22,9 @@ export interface SeedDeck {
   readonly cards: readonly SeedCard[];
 }
 
-export const SEED_DECKS: readonly SeedDeck[] = [
+import { EXTRA_TABOO } from "./extra-taboo";
+
+const BASE_SEED_DECKS: readonly SeedDeck[] = [
   {
     name: "General",
     category: "General",
@@ -179,7 +181,11 @@ export const SEED_DECKS: readonly SeedDeck[] = [
       { id: "cine-024", word: "thanos", taboo: ["gigante", "guante", "piedra"] },
       { id: "cine-025", word: "doctor strange", taboo: ["magia", "capa", "hechicero"] },
       { id: "cine-026", word: "doctor who", taboo: ["tardis", "viaje en el tiempo", "galileo"] },
-      { id: "cine-027", word: "back to the future", taboo: ["delorean", "viaje en el tiempo", "auto"] },
+      {
+        id: "cine-027",
+        word: "back to the future",
+        taboo: ["delorean", "viaje en el tiempo", "auto"],
+      },
       { id: "cine-028", word: "el padrino", taboo: ["mafia", "oferta", "familia"] },
       { id: "cine-029", word: "pulp fiction", taboo: ["director", "maletin", "premio"] },
       { id: "cine-030", word: "the shining", taboo: ["hotel", "llaves", "nieve"] },
@@ -193,14 +199,22 @@ export const SEED_DECKS: readonly SeedDeck[] = [
       { id: "cine-038", word: "gravity", taboo: ["espacio", "flotar", "nave"] },
       { id: "cine-039", word: "the martian", taboo: ["marte", "nave", "suelo"] },
       { id: "cine-040", word: "sherlock holmes", taboo: ["deduccion", "londres", "detective"] },
-      { id: "cine-041", word: "murder on the orient express", taboo: ["tren", "detective", "misterio"] },
+      {
+        id: "cine-041",
+        word: "murder on the orient express",
+        taboo: ["tren", "detective", "misterio"],
+      },
       { id: "cine-042", word: "saw", taboo: ["trampa", "taller", "tuberia"] },
       { id: "cine-043", word: "resident evil", taboo: ["virus", "laboratorio", "zombi"] },
       { id: "cine-044", word: "alien", taboo: ["nave", "criatura", "espacio"] },
       { id: "cine-045", word: "predator", taboo: ["cazador", "selva", "disparo"] },
       { id: "cine-046", word: "terminator", taboo: ["robot", "futuro", "arqueologia"] },
       { id: "cine-047", word: "willy wonka", taboo: ["chocolate", "fabrica", "gominola"] },
-      { id: "cine-048", word: "el precio de la traicion", taboo: ["investigacion", "serie", "policia"] },
+      {
+        id: "cine-048",
+        word: "el precio de la traicion",
+        taboo: ["investigacion", "serie", "policia"],
+      },
       { id: "cine-049", word: "better call saul", taboo: ["abogado", "corrupcion", "serie"] },
       { id: "cine-050", word: "the office", taboo: ["oficina", "jefe", "humor"] },
       { id: "cine-051", word: "breaking bad", taboo: ["cocina", "quimica", "polvo"] },
@@ -282,3 +296,16 @@ export const SEED_DECKS: readonly SeedDeck[] = [
     ],
   },
 ];
+
+export const SEED_DECKS: readonly SeedDeck[] = BASE_SEED_DECKS.map((deck) => ({
+  ...deck,
+  cards: deck.cards.map((card) => {
+    const extra = EXTRA_TABOO[card.id];
+
+    if (extra === undefined) {
+      throw new Error(`Missing extra taboo words for ${card.id}`);
+    }
+
+    return { ...card, taboo: [...card.taboo, ...extra] };
+  }),
+}));

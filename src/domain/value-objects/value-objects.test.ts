@@ -84,10 +84,13 @@ describe("TabooWords", () => {
     expect(normalizeWord("ÁRBOL")).toBe("arbol");
   });
 
-  it("exige entre 1 y 4 palabras normalizadas sin duplicados", () => {
+  it("exige entre 1 y 6 palabras normalizadas sin duplicados", () => {
     expect(TabooWords.create(["Fuego", "Calor"]).words).toEqual(["fuego", "calor"]);
     expect(() => TabooWords.create([])).toThrow(InvalidTabooWordsError);
-    expect(() => TabooWords.create(["a", "b", "c", "d", "e"])).toThrow(InvalidTabooWordsError);
+    expect(TabooWords.create(["a", "b", "c", "d", "e", "f"]).words).toHaveLength(6);
+    expect(() => TabooWords.create(["a", "b", "c", "d", "e", "f", "g"])).toThrow(
+      InvalidTabooWordsError,
+    );
     expect(() => TabooWords.create(["Fuego", "  fuego "])).toThrow(InvalidTabooWordsError);
     expect(() => TabooWords.create(["   "])).toThrow(InvalidTabooWordsError);
   });

@@ -13,7 +13,7 @@ export interface SeedSummary {
 }
 
 const MIN_TABOO_WORDS = 1;
-const MAX_TABOO_WORDS = 4;
+const MAX_TABOO_WORDS = TabooWords.MAX;
 
 const seedCardSchema = z.object({
   id: z.string().trim().min(1, "card id cannot be empty"),

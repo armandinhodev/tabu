@@ -1,4 +1,5 @@
 import { Schema } from "mongoose";
+import { MAX_TABOO_WORDS } from "../../../../domain/value-objects/TabooWords";
 
 /** Una carta dentro de un mazo. El id es estable (`general-001`) para que `discardedCardIds` sea legible (D14). */
 export interface DeckCardDocument {
@@ -15,8 +16,6 @@ export interface DeckDocument {
   cards: DeckCardDocument[];
   createdAt: Date;
 }
-
-const MAX_TABOO_WORDS = 4;
 
 const deckCardSchema = new Schema<DeckCardDocument>(
   {

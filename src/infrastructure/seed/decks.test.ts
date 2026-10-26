@@ -91,10 +91,9 @@ describe("SEED_DECKS content", () => {
     }
   });
 
-  it("keeps one to four taboo words per card, normalized and without duplicates", () => {
+  it("provides six normalized taboo words per seeded card", () => {
     for (const card of allCards(SEED_DECKS)) {
-      expect(card.taboo.length).toBeGreaterThanOrEqual(1);
-      expect(card.taboo.length).toBeLessThanOrEqual(4);
+      expect(card.taboo).toHaveLength(6);
 
       for (const taboo of card.taboo) {
         expect(taboo).toBe(normalizeWord(taboo));
@@ -137,9 +136,12 @@ describe("validateDecks", () => {
     expect(() => validateDecks([deck({ cards: [card({ taboo: [] })] })])).toThrow();
   });
 
-  it("rejects a card with more than four taboo words", () => {
+  it("accepts six taboo words and rejects seven", () => {
     expect(() =>
-      validateDecks([deck({ cards: [card({ taboo: ["a", "b", "c", "d", "e"] })] })]),
+      validateDecks([deck({ cards: [card({ taboo: ["a", "b", "c", "d", "e", "f"] })] })]),
+    ).not.toThrow();
+    expect(() =>
+      validateDecks([deck({ cards: [card({ taboo: ["a", "b", "c", "d", "e", "f", "g"] })] })]),
     ).toThrow();
   });
 
@@ -195,7 +197,10 @@ describe("validateDecks", () => {
     expect(() =>
       validateDecks([
         deck({
-          cards: [card({ id: "general-001", word: "fuego" }), card({ id: "general-002", word: "fuego" })],
+          cards: [
+            card({ id: "general-001", word: "fuego" }),
+            card({ id: "general-002", word: "fuego" }),
+          ],
         }),
       ]),
     ).toThrow();
