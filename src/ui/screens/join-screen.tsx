@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
+import { Field } from "@/ui/components/ui/field";
+import { Input } from "@/ui/components/ui/input";
 import { Screen, ScreenHeader, StickyFooter } from "@/ui/components/ui/screen";
 import { MuteButton } from "@/ui/components/game/mute-button";
 import { useGame } from "@/ui/providers/game-provider";
@@ -13,8 +15,10 @@ const LENGTH = 6;
 
 /** 03 — Unirse con código: 6 cajas, foco en la primera (§12). */
 export function JoinScreen() {
-  const { joinGame, busy, goTo, playerName } = useGame();
+  const { joinGame, busy, goTo, playerName, setPlayerName } = useGame();
   const [digits, setDigits] = useState<string[]>(() => Array.from({ length: LENGTH }, () => ""));
+  const [name, setName] = useState(playerName);
+  const [nameError, setNameError] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -67,12 +71,21 @@ export function JoinScreen() {
   const complete = code.length === LENGTH;
 
   const submit = (): void => {
+    const value = name.trim();
+
+    if (value.length === 0) {
+      setNameError("Necesitamos un nombre para mostrarte en la partida.");
+      return;
+    }
+
     if (!complete) {
       setError("El código tiene 6 caracteres.");
       return;
     }
 
-    void joinGame(code).then((ok) => {
+    setNameError(undefined);
+    setPlayerName(value);
+    void joinGame(code, value).then((ok) => {
       if (!ok) {
         setError("No pudimos unirnos. Revisá el código e intentá de nuevo.");
       }
@@ -84,12 +97,31 @@ export function JoinScreen() {
       <ScreenHeader
         eyebrow="Sala existente"
         title="Unirse con código"
-        subtitle={`Entrás como ${playerName === "" ? "Jugador" : playerName}.`}
+        subtitle="Ingresá tu nombre y el código de la sala."
         action={<MuteButton />}
       />
 
+      <Field label="Tu nombre" htmlFor="player-name" error={nameError}>
+        <Input
+          id="player-name"
+          value={name}
+          maxLength={24}
+          autoComplete="nickname"
+          placeholder="Tu nombre"
+          onChange={(event) => {
+            setName(event.target.value);
+            setNameError(undefined);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              submit();
+            }
+          }}
+        />
+      </Field>
+
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-caption uppercase text-fg-muted">Código de 6 caracteres</legend>
+        <legend className="text-caption text-fg-muted uppercase">Código de 6 caracteres</legend>
         <div className="flex justify-between gap-2">
           {digits.map((digit, index) => (
             <input
@@ -118,7 +150,7 @@ export function JoinScreen() {
                 }
               }}
               className={cn(
-                "h-14 w-full rounded-md border border-line bg-surface text-center font-mono text-h2 font-bold uppercase text-fg",
+                "h-14 w-full rounded-md border border-line bg-surface text-center font-mono text-h2 font-bold text-fg uppercase",
                 "transition-colors duration-[var(--dur-instant)] hover:border-line-strong focus-visible:border-warning",
               )}
             />

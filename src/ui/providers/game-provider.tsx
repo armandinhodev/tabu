@@ -53,7 +53,7 @@ interface GameContextValue {
   readonly dismissPenalty: () => void;
   readonly dismissRoundSummary: () => void;
   readonly createGame: (options: CreateGameOptions) => Promise<boolean>;
-  readonly joinGame: (code: string) => Promise<boolean>;
+  readonly joinGame: (code: string, name?: string) => Promise<boolean>;
   readonly assignTeam: (teamId: string) => void;
   readonly autoTeams: () => void;
   readonly toggleReady: () => void;
@@ -325,7 +325,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   );
 
   const joinGame = useCallback(
-    async (code: string): Promise<boolean> => {
+    async (code: string, name?: string): Promise<boolean> => {
+      const joiningName = (name ?? playerName).trim();
       const socket = getSocket();
       const response = await run<{
         gameId: string;
@@ -337,7 +338,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           "game:join",
           {
             code,
-            playerName: playerName.trim() === "" ? "Jugador" : playerName.trim(),
+            playerName: joiningName === "" ? "Jugador" : joiningName,
           },
           done,
         ),
@@ -360,9 +361,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [playerName, run],
   );
 
-  const assignTeam = useCallback((teamId: string) => {
-    void run((done) => getSocket().emit("game:assignTeam", { teamId }, done));
-  }, [run]);
+  const assignTeam = useCallback(
+    (teamId: string) => {
+      void run((done) => getSocket().emit("game:assignTeam", { teamId }, done));
+    },
+    [run],
+  );
 
   const autoTeams = useCallback(() => {
     void run((done) => getSocket().emit("game:autoTeams", done));
