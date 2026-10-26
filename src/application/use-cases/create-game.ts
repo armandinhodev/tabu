@@ -54,11 +54,14 @@ export async function createGame(
     throw new InvalidSettingsError(`teamCount cannot exceed ${deps.config.maxTeams}`);
   }
 
-  const tabooWordCount = input.options?.tabooWordCount ?? DEFAULT_TABOO_WORD_COUNT;
-
-  if (deck.cards.some((card) => card.taboo.words.length < tabooWordCount)) {
-    throw new InvalidSettingsError(`deck cards must have at least ${tabooWordCount} taboo words`);
-  }
+  const requestedTabooWordCount = input.options?.tabooWordCount ?? DEFAULT_TABOO_WORD_COUNT;
+  const deckMinimum = deck.cards.reduce(
+    (minimum, card) => Math.min(minimum, card.taboo.words.length),
+    requestedTabooWordCount,
+  );
+  // Un mazo guardado antes de esta regla puede tener menos palabras: la sala se
+  // crea igual y el conteo efectivo baja al mínimo real del mazo (S1, S6).
+  const tabooWordCount = Math.min(requestedTabooWordCount, deckMinimum);
 
   const settings: GameSettings = {
     teamCount,

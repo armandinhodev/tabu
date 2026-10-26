@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { GameStateView } from "../../application/dto/game-state";
+import { makeCard } from "../../domain/__fixtures__/game";
 import {
   emitAck,
   makeSocketHarness,
@@ -146,6 +147,25 @@ describe("socket server", () => {
     expect(guessed.pointsAwarded).toBe(0);
     expect(guessed.teamScore).toBe(0);
     expect(states.get(guesser.playerId)?.turn?.turnId).toBe(turnBefore);
+  });
+
+  it("crea la sala contra un mazo guardado con tres palabras prohibidas", async () => {
+    const legacy = await makeSocketHarness({
+      cards: [makeCard("legacy-001", "fuego", ["llama", "calor", "brasa"])],
+    });
+
+    try {
+      const host = await legacy.connect();
+      const created = await emitAck<{ code: string }>(host, "game:create", {
+        playerName: "Host",
+        deckId: legacy.deckId,
+        options: { teamCount: 2, turnSeconds: 60, randomTeams: false },
+      });
+
+      expect(created.code).toMatch(/^[A-Z2-9]{6}$/);
+    } finally {
+      await legacy.close();
+    }
   });
 
   it("un reporte inválido no penaliza ni cierra el turno", async () => {

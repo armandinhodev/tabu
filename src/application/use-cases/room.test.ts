@@ -135,7 +135,7 @@ describe("createGame", () => {
     ).rejects.toThrow(DeckNotFoundError);
   });
 
-  it("rejects a count that exceeds the actual words on a deck card", async () => {
+  it("clamps the count to the words a legacy deck actually has", async () => {
     const decks = harness.deps.decks;
     const shortDeck = await decks.upsertByName({
       name: "Short",
@@ -145,13 +145,13 @@ describe("createGame", () => {
       cards: [makeCard("short-1", "fuego", ["llama", "calor", "humo"])],
     });
 
-    await expect(
-      createGame(harness.deps, {
-        playerName: "Luz",
-        deckId: shortDeck.id,
-        options: { tabooWordCount: 6 },
-      }),
-    ).rejects.toThrow(/at least 6 taboo words/);
+    const { game } = await createGame(harness.deps, {
+      playerName: "Luz",
+      deckId: shortDeck.id,
+      options: { tabooWordCount: 6 },
+    });
+
+    expect(game.settings.tabooWordCount).toBe(3);
   });
 
   it("rechaza más equipos que el máximo configurado", async () => {
