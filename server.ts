@@ -27,7 +27,23 @@ async function main(): Promise<void> {
   }
 
   const { startAppServer } = await import("./src/infrastructure/server/app-server");
-  const appServer = await startAppServer({ dev, hostname, port });
+  const { createGameRuntime } = await import("./src/infrastructure/server/create-runtime");
+  const { attachSocketServer } = await import("./src/infrastructure/socket/server");
+
+  const runtime = await createGameRuntime(env);
+  const appServer = await startAppServer({
+    dev,
+    hostname,
+    port,
+    socket: {
+      attach: (httpServer) =>
+        attachSocketServer(httpServer, {
+          deps: runtime.deps,
+          corsOrigin: env.SOCKET_CORS_ORIGIN,
+          persist: runtime.persist,
+        }),
+    },
+  });
 
   let shuttingDown = false;
 
@@ -40,6 +56,7 @@ async function main(): Promise<void> {
 
     try {
       await appServer.close();
+      await runtime.dispose();
       process.exit(0);
     } catch (error) {
       logger.error("shutdown failed", { error: String(error) });

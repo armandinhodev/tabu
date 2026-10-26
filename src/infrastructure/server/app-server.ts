@@ -1,28 +1,36 @@
-import { createServer } from "node:http";
+import { createServer, type Server as HttpServer } from "node:http";
 
 import next from "next";
 
 import { logger } from "../config/logger";
+import type { SocketServer } from "../socket/server";
 
 export type AppServerOptions = {
   dev: boolean;
   hostname: string;
   port: number;
+  /** Monta Socket.IO sobre la misma instancia HTTP (T3.1). */
+  socket?: {
+    readonly attach: (httpServer: HttpServer) => SocketServer;
+  };
 };
 
 export type AppServer = {
   close: () => Promise<void>;
   url: string;
+  httpServer: HttpServer;
 };
 
 /**
- * Levanta Next sobre un servidor HTTP propio. Fase 3 monta Socket.IO sobre
- * esta misma instancia para compartir puerto.
+ * Levanta Next sobre un servidor HTTP propio para compartir puerto con
+ * Socket.IO. El socket se monta antes de escuchar así no se pierde ningún
+ * handshake en el arranque.
  */
 export async function startAppServer({
   dev,
   hostname,
   port,
+  socket,
 }: AppServerOptions): Promise<AppServer> {
   const app = next({ dev, hostname, port });
   const handle = app.getRequestHandler();
@@ -32,6 +40,8 @@ export async function startAppServer({
   const server = createServer((request, response) => {
     void handle(request, response);
   });
+
+  const socketServer = socket?.attach(server) ?? null;
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -47,7 +57,12 @@ export async function startAppServer({
 
   return {
     url: `http://${displayHost}:${port}`,
+    httpServer: server,
     close: async () => {
+      if (socketServer !== null) {
+        await socketServer.close();
+      }
+
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
