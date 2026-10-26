@@ -31,6 +31,19 @@ pnpm build
 pnpm start
 ```
 
+### Si ves una pantalla en blanco con `invariant expected layout router to be mounted`
+
+Es un `.next` mezclado: `next build` y `next dev` escriben en la misma carpeta y el segundo arranque
+hereda manifests del primero. Se arregla limpiando:
+
+```bash
+pnpm clean      # borra .next
+pnpm dev        # o pnpm build && pnpm start
+```
+
+Regla práctica: **no alternes `dev` y `build` sobre el mismo `.next` sin limpiar**, y si cambiaste de
+modo, recargá el navegador con caché deshabilitada (Ctrl+Shift+R).
+
 Jugar: abrí la app en el teléfono o el navegador, poné tu nombre, **Crear partida** (elegís mazo,
 equipos y tiempo por turno) y compartí el código de 6 caracteres. Los demás entran con **Unirse con
 código**. Cuando cada equipo tenga el mínimo de jugadores, el host toca **Comenzar partida**.

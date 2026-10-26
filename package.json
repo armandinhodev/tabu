@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "seed": "tsx src/infrastructure/seed/seed.ts"
+    "seed": "tsx src/infrastructure/seed/seed.ts",
+    "clean": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true})\""
   },
   "packageManager": "pnpm@11.1.2",
   "dependencies": {
