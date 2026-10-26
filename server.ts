@@ -1,0 +1,55 @@
+import { logger } from "./src/infrastructure/config/logger";
+
+/**
+ * Entrypoint del servidor.
+ *
+ * NODE_ENV se fija ANTES de importar Next (por eso el import dinámico dentro de
+ * main): React elige su build de desarrollo o producción en función de esa
+ * variable. El proyecto se emite como CJS, así que no hay top-level await.
+ */
+
+async function main(): Promise<void> {
+  const dev = process.argv.includes("--dev");
+  const hostname = process.env.HOST ?? "0.0.0.0";
+  const port = Number(process.env.PORT ?? 3000);
+
+  Object.assign(process.env, { NODE_ENV: dev ? "development" : "production" });
+
+  if (!Number.isInteger(port) || port <= 0) {
+    logger.error("invalid PORT", { port: process.env.PORT });
+    process.exit(1);
+  }
+
+  const { startAppServer } = await import("./src/infrastructure/server/app-server");
+  const appServer = await startAppServer({ dev, hostname, port });
+
+  let shuttingDown = false;
+
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    logger.info("shutting down", { signal });
+
+    try {
+      await appServer.close();
+      process.exit(0);
+    } catch (error) {
+      logger.error("shutdown failed", { error: String(error) });
+      process.exit(1);
+    }
+  };
+
+  process.on("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+  process.on("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+}
+
+void main().catch((error: unknown) => {
+  logger.error("server failed to start", { error: String(error) });
+  process.exit(1);
+});

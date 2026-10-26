@@ -1,0 +1,67 @@
+/* Design tokens — fuente de verdad: doc/directivas-diseno.md §2, §5 y §7.
+   Estos valores son los únicos permitidos en la app. Ningún componente
+   escribe colores, espaciados, radios ni tiempos literales.
+   El mapeo a utilidades de Tailwind vive en src/app/globals.css (@theme). */
+
+:root {
+  /* Superficies */
+  --bg-canvas: #0e1116;
+  --bg-surface: #161b22;
+  --bg-surface-2: #1f2630;
+  --bg-surface-3: #29313c;
+  --border-subtle: #2a323d;
+  --border-strong: #3a4452;
+
+  /* Texto */
+  --text-primary: #f2f5f8;
+  --text-secondary: #9aa7b4;
+  --text-tertiary: #6b7684;
+
+  /* Marca / acción */
+  --accent: #ff6b2c;
+  --accent-hover: #ff854e;
+  --accent-press: #e2561b;
+  --accent-soft: #2a1a12;
+  --on-accent: #17110c;
+
+  /* Semánticos */
+  --success: #18b98c;
+  --success-soft: #10241f;
+  --warning: #ffc043;
+  --warning-soft: #2a2113;
+  --danger: #ff3b47;
+  --danger-soft: #2b1216;
+  --gold: #e9b949;
+
+  /* Códigos de equipo (máx. 4) */
+  --team-1: #ff6b2c;
+  --team-2: #18b98c;
+  --team-3: #3b9eff;
+  --team-4: #b4e33d;
+
+  /* Espaciado — grilla base de 8px con paso de 4px */
+  --spacing-unit: 4px;
+
+  /* Radios */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* Elevación (solo superficies, nunca texto) */
+  --elevation-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elevation-float: 0 12px 32px rgba(0, 0, 0, 0.45);
+
+  /* Movimiento */
+  --dur-instant: 120ms;
+  --dur-base: 200ms;
+  --dur-panel: 320ms;
+  --dur-shake: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-panel: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Focus ring (§9) */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}
