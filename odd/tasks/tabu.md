@@ -94,6 +94,8 @@ Cada fase termina en código ejecutable y con sus gates en verde. `~L` = líneas
 | T0.4 | `docker-compose.yml` (MongoDB 7) y verificación de arranque | S33 | inline |
 | T0.5 | `server.ts` mínimo (Next sobre HTTP propio, `dev`/prod por flag, logger JSON) para que `dev`/`start` sean estables desde el día uno; T3.1 solo monta Socket.IO encima | S11, S17 | inline |
 
+**Estado Fase 0: completada** en `51fcc19`. `lint`, `typecheck`, `test` (4) y `build` en exit 0 sin warnings; smoke de `pnpm dev` con HTTP 200 y tokens en el CSS servido.
+
 ### Fase 1 — Dominio (gate: `lint && typecheck && test` con ≥80 % branches en `domain`, ~1.600L)
 
 | ID | Tarea | Specs | Ruta |
@@ -230,3 +232,4 @@ Van al README, sección *Decisiones asumidas*. Las marcadas ✔ están verificad
 - **L4 (2026-10-26, evidencia de entorno).** Node `v22.17.0`, Corepack `0.33.0`, pnpm `11.1.2`, git `2.50.1`. Registro: `next@latest` = 16.4.3, `next@15` = 15.5.28, `@base-ui/react@1.9.0`, `zod@4.6.7`, `tailwindcss@4.3.3`, `vitest@^3` → 3.2.7, `lucide-react@^0.5` → 0.577.0, `@hookform/resolvers@^5` soporta `zod ^4`.
 - **L5 (2026-10-26, decisión).** Plan creado. Estimación: ~8.500 líneas autoradas, ~22 unidades de trabajo, 6 slices de delivery. Próximo paso: Fase 0 (bootstrap).
 - **L6 (2026-10-26, evidencia Fase 0).** Bootstrap completo: Next 15.5.28 + React 19.3.1 + Tailwind 4.3.3 + `@base-ui/react` 1.9.0 + TypeScript 5.9.3. `pnpm lint`, `pnpm typecheck`, `pnpm test` (4 tests de `cn`) y `pnpm build` pasan con exit 0 y sin warnings. Smoke de `pnpm dev`: HTTP 200 en `127.0.0.1:3000`, `lang="es"`, CSS con `#ff6b2c`, `clamp(48px…` y `--font-outfit` presentes; puerto liberado al terminar. Hallazgos que corrigieron la spec: D21–D27. `git init -b feat/tabu`.
+- **L7 (2026-10-26, cierre Fase 0).** Commit `51fcc19` (`feat/tabu`, árbol limpio): scaffold, tokens, tooling, server, compose y plan. Siguiente: Fase 1 (dominio).
