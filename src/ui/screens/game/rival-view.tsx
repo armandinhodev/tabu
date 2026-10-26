@@ -17,14 +17,14 @@ import type { RoleViewProps } from "./role-view-props";
  * lista completa de palabras prohibidas); lo que cambia son los controles:
  * los chips son reportables y además puede reportar gesto o sonido.
  */
-export function RivalView({ state, turn, busy, reportedWord, onPass, onReport }: RoleViewProps) {
+export function RivalView({ state, turn, busy, reportedWord, onReport }: RoleViewProps) {
   const activeTeamName = teamNameOf(state.teams, turn.teamId);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
       <RoleBanner role="RIVAL" />
 
-      <section className="flex flex-col gap-3" aria-label="Puntajes">
+      <section className="flex flex-col gap-3" aria-label="Puntajes" aria-live="polite">
         <div className="flex items-center justify-between gap-3">
           <span className="text-caption text-fg-subtle uppercase">Turno de {activeTeamName}</span>
           <span className="rounded-pill border border-line bg-surface-2 px-3 py-1 text-caption text-fg-muted uppercase">
@@ -32,9 +32,7 @@ export function RivalView({ state, turn, busy, reportedWord, onPass, onReport }:
           </span>
         </div>
 
-        <div aria-live="polite">
-          <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
-        </div>
+        <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
       </section>
 
       <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface-2 p-5">
@@ -52,7 +50,7 @@ export function RivalView({ state, turn, busy, reportedWord, onPass, onReport }:
       </section>
 
       <section className="flex flex-col items-center gap-3">
-        <TimerRing deadlineAt={turn.deadlineAt} turnSeconds={turn.turnSeconds} size="lg" />
+        <TimerRing deadlineAt={turn.deadlineAt} turnSeconds={turn.turnSeconds} />
         <p className="text-body-sm text-fg-muted">Tocá la palabra prohibida si la dice.</p>
       </section>
 
@@ -79,10 +77,6 @@ export function RivalView({ state, turn, busy, reportedWord, onPass, onReport }:
             Reportar sonido
           </Button>
         </div>
-
-        <Button variant="ghost" block disabled={busy} onClick={onPass}>
-          Pasar turno
-        </Button>
 
         <div className="flex items-center justify-center gap-2">
           <MuteButton />

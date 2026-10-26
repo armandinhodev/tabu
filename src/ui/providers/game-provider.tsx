@@ -121,6 +121,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
           if (isError(response)) {
             clearSession();
+            stateRef.current = null;
+            setState(null);
+            setView("home");
             return;
           }
 
@@ -131,6 +134,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
 
     const onDisconnect = (): void => {
+      setBusy(false);
       setConnection("reconnecting");
     };
 

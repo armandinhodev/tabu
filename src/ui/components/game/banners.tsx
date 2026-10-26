@@ -46,25 +46,6 @@ export function ErrorState({
   );
 }
 
-/** Estado vacío: explica qué falta, sin decoración. */
-export function EmptyState({
-  title,
-  message,
-  action,
-}: {
-  readonly title: string;
-  readonly message: string;
-  readonly action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line p-8 text-center">
-      <h2 className="font-display text-h3 font-semibold text-fg">{title}</h2>
-      <p className="text-body-sm text-fg-muted">{message}</p>
-      {action}
-    </div>
-  );
-}
-
 /** Skeleton de pantalla completa para el arranque del cliente. */
 export function ScreenSkeleton() {
   return (

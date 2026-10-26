@@ -34,8 +34,11 @@ export function LobbyScreen() {
   const assigned = state.teams.reduce((total, team) => total + team.players.length, 0);
   const totalPlayers = assigned + state.waitingPlayers.length;
   const minimum = state.settings.teamCount * state.settings.minPlayersPerTeam;
+  // El server exige cero jugadores sin equipo, salvo que randomTeams los reparta al arrancar.
+  const everyoneAssigned = state.waitingPlayers.length === 0 || state.settings.randomTeams;
   const canStart =
     state.me.isHost &&
+    everyoneAssigned &&
     state.teams.every((team) => team.players.length >= state.settings.minPlayersPerTeam);
 
   return (
@@ -106,9 +109,11 @@ export function LobbyScreen() {
           {state.me.isHost
             ? canStart
               ? "Todo listo para arrancar"
-              : "Cada equipo necesita al menos " +
-                state.settings.minPlayersPerTeam +
-                " jugadores"
+              : state.waitingPlayers.length > 0 && !state.settings.randomTeams
+                ? "Todos tienen que elegir equipo antes de arrancar"
+                : "Cada equipo necesita al menos " +
+                  state.settings.minPlayersPerTeam +
+                  " jugadores"
             : "Solo el host puede comenzar la partida"}
         </p>
       </StickyFooter>

@@ -9,7 +9,6 @@ import { cn } from "@/ui/lib/cn";
 interface TimerRingProps {
   readonly deadlineAt: number;
   readonly turnSeconds: number;
-  readonly size?: "md" | "lg";
   readonly className?: string;
 }
 
@@ -20,7 +19,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * Anillo del temporizador (§6, S25): pista y relleno en SVG, 8px de trazo.
  * Bajo 10 s cambia a `--danger` **y** cambia el ícono: nunca solo color.
  */
-export function TimerRing({ deadlineAt, turnSeconds, size = "md", className }: TimerRingProps) {
+export function TimerRing({ deadlineAt, turnSeconds, className }: TimerRingProps) {
   const [remaining, setRemaining] = useState(() => secondsRemaining(deadlineAt));
 
   useEffect(() => {
@@ -38,11 +37,10 @@ export function TimerRing({ deadlineAt, turnSeconds, size = "md", className }: T
   const fraction = remainingFraction(deadlineAt, turnSeconds);
   const urgent = remaining <= 10;
   const Icon = urgent ? AlarmClock : Timer;
-  const dimension = size === "lg" ? "size-[200px]" : "size-[160px] md:size-[200px]";
 
   return (
     <div
-      className={cn("relative grid place-items-center", dimension, className)}
+      className={cn("relative grid place-items-center size-[160px] md:size-[200px]", className)}
       role="timer"
       aria-live="off"
       aria-label={`Quedan ${remaining} segundos`}

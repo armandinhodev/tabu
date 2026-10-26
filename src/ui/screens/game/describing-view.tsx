@@ -36,7 +36,7 @@ export function DescribingView({
     <div className="flex flex-1 flex-col gap-6">
       {isDescriptor ? <RoleBanner role="DESCRIBER" /> : null}
 
-      <section className="flex flex-col gap-3" aria-label="Puntajes">
+      <section className="flex flex-col gap-3" aria-label="Puntajes" aria-live="polite">
         <div className="flex items-center justify-between gap-3">
           <span className="text-caption text-fg-subtle uppercase">Turno de {activeTeamName}</span>
           <span className="rounded-pill border border-line bg-surface-2 px-3 py-1 text-caption text-fg-muted uppercase">
@@ -44,9 +44,7 @@ export function DescribingView({
           </span>
         </div>
 
-        <div aria-live="polite">
-          <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
-        </div>
+        <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
       </section>
 
       <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface-2 p-5">
@@ -65,7 +63,7 @@ export function DescribingView({
       </section>
 
       <section className="flex flex-col items-center gap-3">
-        <TimerRing deadlineAt={turn.deadlineAt} turnSeconds={turn.turnSeconds} size="lg" />
+        <TimerRing deadlineAt={turn.deadlineAt} turnSeconds={turn.turnSeconds} />
         <p className="text-body-sm text-fg-muted">
           {isDescriptor ? "Tu equipo está adivinando." : "Escuchá a tu equipo y adiviná."}
         </p>

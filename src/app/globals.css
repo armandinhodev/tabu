@@ -108,7 +108,7 @@
   }
 }
 
-/* Movimiento (§7): shake de penalización y confeti plano del resultado.
+/* Movimiento (Â§7): shake de penalizaciÃ³n y confeti plano del resultado.
    Ambos quedan deshabilitados por `motion-reduce:` en los componentes. */
 @keyframes shake {
   0%,
