@@ -1,3 +1,5 @@
+import { parseEnv } from "./src/infrastructure/config/env";
+import { loadEnvFileIfPresent } from "./src/infrastructure/config/load-env-file";
 import { logger } from "./src/infrastructure/config/logger";
 
 /**
@@ -11,7 +13,11 @@ import { logger } from "./src/infrastructure/config/logger";
 async function main(): Promise<void> {
   const dev = process.argv.includes("--dev");
   const hostname = process.env.HOST ?? "0.0.0.0";
-  const port = Number(process.env.PORT ?? 3000);
+
+  // `.env` es opcional; si está, se aplica antes de validar (S31).
+  loadEnvFileIfPresent();
+  const env = parseEnv(process.env);
+  const port = env.PORT;
 
   Object.assign(process.env, { NODE_ENV: dev ? "development" : "production" });
 
