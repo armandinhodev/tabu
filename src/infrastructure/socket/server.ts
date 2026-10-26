@@ -14,7 +14,7 @@ import { joinGame } from "../../application/use-cases/join-game";
 import { assignTeam, autoAssignTeams } from "../../application/use-cases/team-assignment";
 import { setReady, startGame } from "../../application/use-cases/lobby";
 import { leaveGame, markDisconnected, reconnectPlayer } from "../../application/use-cases/session";
-import { guessWord, reportViolation, skipTurn } from "../../application/use-cases/turn";
+import { guessWord, passTurn, reportViolation, skipTurn } from "../../application/use-cases/turn";
 import { logger } from "../config/logger";
 import {
   CLIENT_EVENTS,
@@ -238,6 +238,15 @@ export function attachSocketServer(
       void run(socket, ack, () => {
         const { gameId, playerId } = requireBinding(socket);
         const result = skipTurn(deps, gameId, playerId);
+
+        afterTurn(result.game, result.events);
+      });
+    });
+
+    socket.on(CLIENT_EVENTS.turnPass, (ack) => {
+      void run(socket, ack, () => {
+        const { gameId, playerId } = requireBinding(socket);
+        const result = passTurn(deps, gameId, playerId);
 
         afterTurn(result.game, result.events);
       });

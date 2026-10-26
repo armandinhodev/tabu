@@ -121,3 +121,22 @@ export function expireTurn(deps: GameDeps, gameId: string): TurnActionData | nul
 
   return apply(deps, game, { kind: "TIME" }, game.currentTurn.teamId);
 }
+
+/**
+ * *Pasar turno* del equipo activo (S4, §6.4): termina el turno sin puntos y
+ * devuelve la carta al final del mazo. Es distinto de *Aceptar y pasar carta*
+ * (`turn:skip`), que se la entrega al rival (§6.8, D42).
+ */
+export function passTurn(deps: GameDeps, gameId: string, playerId: PlayerId): TurnActionData {
+  const game = requireGame(deps, gameId);
+  requirePlaying(game);
+
+  const turn = activeTurn(game);
+  const { player } = requirePlayer(game, playerId);
+
+  if (player.teamId === null || player.teamId !== turn.teamId) {
+    throw new NotAllowedError("Only the describing team can pass the turn");
+  }
+
+  return apply(deps, game, { kind: "TIME" }, turn.teamId);
+}

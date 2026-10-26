@@ -23,6 +23,7 @@ export const CLIENT_EVENTS = {
   turnGuess: "turn:guess",
   turnReportViolation: "turn:reportViolation",
   turnSkip: "turn:skip",
+  turnPass: "turn:pass",
 } as const;
 
 export const SERVER_EVENTS = {
@@ -164,4 +165,5 @@ export interface ClientToServerEvents {
   "turn:guess": (ack: Ack<GuessAck>) => void;
   "turn:reportViolation": (payload: unknown, ack: Ack<ReportViolationAck>) => void;
   "turn:skip": (ack: Ack<void>) => void;
+  "turn:pass": (ack: Ack<void>) => void;
 }

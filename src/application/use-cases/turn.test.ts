@@ -14,7 +14,7 @@ import {
 import { startGame as startGameTransition } from "../../domain/services/GameStateMachine";
 import { GameId, PlayerId, TeamId, TurnId } from "../../domain/value-objects/PlayerId";
 import type { Game } from "../../domain/entities/Game";
-import { expireTurn, guessWord, reportViolation, skipTurn } from "./turn";
+import { expireTurn, guessWord, passTurn, reportViolation, skipTurn } from "./turn";
 
 interface Harness {
   readonly deps: GameDeps;
@@ -215,6 +215,34 @@ describe("skipTurn", () => {
 
   it("rechaza al rival", () => {
     expect(() => skipTurn(harness.deps, harness.game.id, PlayerId.from("p3"))).toThrow(
+      NotAllowedError,
+    );
+  });
+});
+
+describe("passTurn", () => {
+  let harness: Harness;
+
+  beforeEach(() => {
+    harness = makeHarness();
+  });
+
+  it("termina el turno sin puntos y devuelve la carta al final del mazo", () => {
+    const expiredCardId = harness.game.currentTurn?.card.id;
+    const remainingBefore = harness.game.deck.cards.remaining.length;
+
+    const result = passTurn(harness.deps, harness.game.id, PlayerId.from("p2"));
+    const deck = result.game.deck.cards.remaining;
+
+    expect(result.pointsDelta).toBe(0);
+    expect(result.game.teams[0]?.score.value).toBe(0);
+    expect(result.game.currentTurn?.teamId).toBe("t2");
+    expect(deck.length).toBe(remainingBefore);
+    expect(deck.at(-1)?.id).toBe(expiredCardId);
+  });
+
+  it("lo puede pedir cualquier miembro del equipo activo, no el rival", () => {
+    expect(() => passTurn(harness.deps, harness.game.id, PlayerId.from("p3"))).toThrow(
       NotAllowedError,
     );
   });
