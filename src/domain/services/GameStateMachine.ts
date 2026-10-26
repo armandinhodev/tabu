@@ -317,15 +317,17 @@ export function resolveTurn(
     return { game: finished.game, events: [...events, ...finished.events] };
   }
 
-  if (roundComplete && nextGame.round >= nextGame.settings.rounds) {
+  // §6.10: `rounds = 1` significa "mazo entero"; el tope por vueltas aplica desde 2.
+  const roundsReached =
+    roundComplete && nextGame.settings.rounds > 1 && nextGame.round >= nextGame.settings.rounds;
+
+  if (roundsReached) {
     const finished = finishGame(nextGame, ctx);
     return { game: finished.game, events: [...events, ...finished.events] };
   }
 
   const withRound: Game =
-    roundComplete && nextGame.round < nextGame.settings.rounds
-      ? { ...nextGame, round: nextGame.round + 1 }
-      : nextGame;
+    roundComplete && !roundsReached ? { ...nextGame, round: nextGame.round + 1 } : nextGame;
 
   const nextTurn = beginTurn(withRound, ctx);
 

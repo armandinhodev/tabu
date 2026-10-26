@@ -7,6 +7,7 @@ import { io as createClient, type Socket as ClientSocket } from "socket.io-clien
 
 import { GameRegistry } from "../../application/GameRegistry";
 import type { GameDeps } from "../../application/use-cases/common";
+import type { Card } from "../../domain/entities/Card";
 import { makeCard } from "../../domain/__fixtures__/game";
 import { GameId, PlayerId, TeamId, TurnId } from "../../domain/value-objects/PlayerId";
 import { InMemoryDeckRepository } from "../db/repositories/InMemoryDeckRepository";
@@ -34,6 +35,8 @@ export interface SocketHarnessOptions {
   /** Gracia de desconexión; los tests la achican para no esperar 5 s reales (S9). */
   readonly disconnectGraceMs?: number;
   readonly clock?: () => Date;
+  /** Mazo del test; por defecto 8 cartas, con 2 se llega al final de partida. */
+  readonly cards?: readonly Card[];
 }
 
 export async function makeSocketHarness(
@@ -50,7 +53,7 @@ export async function makeSocketHarness(
     category: "General",
     language: "es",
     active: true,
-    cards: [
+    cards: options.cards ?? [
       makeCard("general-001", "fuego", ["llama", "calor"]),
       makeCard("general-002", "playa", ["arena"]),
       makeCard("general-003", "nube", ["cielo"]),

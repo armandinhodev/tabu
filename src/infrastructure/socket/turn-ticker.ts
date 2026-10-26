@@ -1,6 +1,7 @@
 import type { GameDeps } from "../../application/use-cases/common";
 import { expireTurn } from "../../application/use-cases/turn";
 import { isTurnExpired } from "../../domain/services/GameStateMachine";
+import { logger } from "../config/logger";
 import type { Broadcaster } from "./broadcaster";
 
 const TICK_MS = 1_000;
@@ -49,15 +50,25 @@ export class TurnTicker {
     const turn = game.currentTurn;
 
     if (isTurnExpired(turn, this.deps.clock.now())) {
-      const result = expireTurn(this.deps, gameId);
+      try {
+        const result = expireTurn(this.deps, gameId);
 
-      if (result !== null) {
-        this.broadcaster.emitEvents(result.game, result.events);
-        this.broadcaster.emitState(result.game);
+        if (result !== null) {
+          this.broadcaster.emitEvents(result.game, result.events);
+          this.broadcaster.emitState(result.game);
 
-        if (result.game.status !== "playing") {
-          this.stop(gameId);
+          if (result.game.status !== "playing") {
+            this.stop(gameId);
+          }
         }
+      } catch (error) {
+        // Sin descriptores conectados no se puede cerrar el turno: se pausa esta
+        // partida en vez de tirar desde un intervalo (R3) y seguir emitiendo.
+        logger.warn("turn expiry failed, pausing game ticker", {
+          gameId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        this.stop(gameId);
       }
 
       return;

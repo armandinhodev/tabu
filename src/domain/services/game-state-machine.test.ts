@@ -254,7 +254,7 @@ describe("resolveTurn", () => {
 });
 
 describe("rondas y fin de partida", () => {
-  it("cierra la ronda y termina la partida al completar las rondas configuradas", () => {
+  it("con rounds = 1 juega hasta agotar el mazo (§6.10: 1 = mazo entero)", () => {
     const ctx = makeContext();
     const game = startGame(
       makeGame({
@@ -263,12 +263,50 @@ describe("rondas y fin de partida", () => {
       ctx,
     ).game;
 
-    const afterFirst = resolveTurn(game, { kind: "SKIPPED" }, ctx).game;
-    const afterSecond = resolveTurn(afterFirst, { kind: "SKIPPED" }, ctx).game;
+    const afterFirst = resolveTurn(game, { kind: "CORRECT", actorId: PlayerId.from("p1") }, ctx).game;
+    const afterSecond = resolveTurn(
+      afterFirst,
+      { kind: "CORRECT", actorId: PlayerId.from("p3") },
+      ctx,
+    ).game;
 
-    expect(afterSecond.status).toBe("finished");
-    expect(afterSecond.finishedAt).not.toBeNull();
-    expect(afterSecond.winnerTeamId).toBeNull();
+    expect(afterSecond.status).toBe("playing");
+    expect(afterSecond.round).toBe(2);
+
+    const afterThird = resolveTurn(
+      afterSecond,
+      { kind: "CORRECT", actorId: PlayerId.from("p1") },
+      ctx,
+    ).game;
+    const afterFourth = resolveTurn(
+      afterThird,
+      { kind: "CORRECT", actorId: PlayerId.from("p3") },
+      ctx,
+    ).game;
+
+    expect(afterFourth.status).toBe("finished");
+    expect(afterFourth.finishedAt).not.toBeNull();
+    expect(afterFourth.winnerTeamId).toBeNull();
+  });
+
+  it("con rounds = 2 termina al completar la segunda vuelta aunque queden cartas", () => {
+    const ctx = makeContext();
+    const cards = Array.from({ length: 8 }, (_, index) => makeCard(`c${index + 1}`));
+    const game = startGame(makeGame({ settings: makeSettings({ rounds: 2 }), deck: makeDeck(cards) }), ctx)
+      .game;
+
+    let current = game;
+
+    for (const actorId of ["p1", "p3", "p1"]) {
+      current = resolveTurn(current, { kind: "CORRECT", actorId: PlayerId.from(actorId) }, ctx).game;
+    }
+
+    expect(current.status).toBe("playing");
+
+    current = resolveTurn(current, { kind: "CORRECT", actorId: PlayerId.from("p3") }, ctx).game;
+
+    expect(current.deck.cards.isEmpty).toBe(false);
+    expect(current.status).toBe("finished");
   });
 
   it("avanza de ronda y sigue jugando cuando quedan rondas", () => {
