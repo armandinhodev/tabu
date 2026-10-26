@@ -63,6 +63,8 @@ export interface GameStateView {
   readonly code: string;
   readonly settings: SettingsView;
   readonly teams: readonly TeamView[];
+  /** Jugadores que todavía no eligieron equipo (lobby, S3: información pública). */
+  readonly waitingPlayers: readonly PlayerView[];
   readonly me: MeView;
   readonly turn?: TurnView;
   readonly round: number;
@@ -109,6 +111,7 @@ export function toGameState(game: Game, viewerId: PlayerId): GameStateView {
     code: game.code.value,
     settings: toSettingsView(game),
     teams: toTeamViews(game.teams),
+    waitingPlayers: game.players.map(toPlayerView),
     me: toMeView(game, viewerId),
     round: game.round,
     ...(turn === null ? {} : { turn: toTurnView(turn, game.settings.turnSeconds.seconds) }),
