@@ -1,173 +1,24 @@
 /** @vitest-environment node */
-import { createServer, type Server as HttpServer } from "node:http";
-import { randomUUID } from "node:crypto";
-import type { AddressInfo } from "node:net";
-
-import { io as createClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { GameRegistry } from "../../application/GameRegistry";
-import type { GameDeps } from "../../application/use-cases/common";
 import type { GameStateView } from "../../application/dto/game-state";
-import { makeCard } from "../../domain/__fixtures__/game";
-import { GameId, PlayerId, TeamId, TurnId } from "../../domain/value-objects/PlayerId";
-import { InMemoryDeckRepository } from "../db/repositories/InMemoryDeckRepository";
-import { InMemoryGameRepository } from "../db/repositories/InMemoryGameRepository";
-import type { ClientToServerEvents, ServerToClientEvents } from "./events";
-import { attachSocketServer, type SocketServer } from "./server";
-
-type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
-
-const NOW = new Date("2026-01-01T00:00:00.000Z");
-
-interface Harness {
-  readonly url: string;
-  readonly deckId: string;
-  readonly deps: GameDeps;
-  readonly clients: TestClient[];
-  readonly httpServer: HttpServer;
-  readonly socketServer: SocketServer;
-  connect(): Promise<TestClient>;
-}
-
-async function makeHarness(): Promise<Harness> {
-  const registry = new GameRegistry();
-  const decks = new InMemoryDeckRepository();
-  const games = new InMemoryGameRepository();
-  let sequence = 0;
-
-  const deck = await decks.upsertByName({
-    name: "General",
-    category: "General",
-    language: "es",
-    active: true,
-    cards: [
-      makeCard("general-001", "fuego", ["llama", "calor"]),
-      makeCard("general-002", "playa", ["arena"]),
-      makeCard("general-003", "nube", ["cielo"]),
-      makeCard("general-004", "reloj", ["hora"]),
-      makeCard("general-005", "silla", ["mueble"]),
-      makeCard("general-006", "ventana", ["vidrio"]),
-      makeCard("general-007", "luna", ["noche"]),
-      makeCard("general-008", "sol", ["dia"]),
-    ],
-  });
-
-  const deps: GameDeps = {
-    registry,
-    decks,
-    games,
-    clock: { now: () => NOW },
-    ids: {
-      gameId: () => GameId.from(`game-${(sequence += 1)}`),
-      playerId: () => PlayerId.from(`player-${(sequence += 1)}`),
-      teamId: () => TeamId.from(`team-${(sequence += 1)}`),
-      turnId: () => TurnId.from(`turn-${(sequence += 1)}`),
-      playerToken: () => randomUUID(),
-    },
-    rng: () => 0.1,
-    config: {
-      maxTeams: 4,
-      minPlayersPerTeam: 2,
-      maxPlayersPerTeam: 8,
-      turnSecondsDefault: 45,
-      rounds: 1,
-    },
-  };
-
-  const httpServer = createServer();
-  const socketServer = attachSocketServer(httpServer, {
-    deps,
-    corsOrigin: "*",
-    persist: () => undefined,
-  });
-
-  await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
-
-  const address = httpServer.address() as AddressInfo;
-  const url = `http://127.0.0.1:${address.port}`;
-  const clients: TestClient[] = [];
-
-  return {
-    url,
-    deckId: deck.id,
-    deps,
-    clients,
-    httpServer,
-    socketServer,
-    connect: async () => {
-      const client: TestClient = createClient(url, {
-        transports: ["websocket"],
-        forceNew: true,
-        reconnection: false,
-      });
-      clients.push(client);
-      await new Promise<void>((resolve, reject) => {
-        client.once("connect", () => resolve());
-        client.once("connect_error", reject);
-      });
-      return client;
-    },
-  };
-}
-
-function emitAck<T>(client: TestClient, event: string, payload?: unknown): Promise<T> {
-  return new Promise<T>((resolve) => {
-    const socket = client as unknown as {
-      emit: (name: string, ...args: unknown[]) => void;
-    };
-
-    if (payload === undefined) {
-      socket.emit(event, (response: T) => resolve(response));
-      return;
-    }
-
-    socket.emit(event, payload, (response: T) => resolve(response));
-  });
-}
-
-function nextEvent<T>(client: TestClient, event: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`timeout waiting ${event}`)), 2_000);
-    const socket = client as unknown as {
-      once: (name: string, handler: (payload: T) => void) => void;
-    };
-
-    socket.once(event, (payload: T) => {
-      clearTimeout(timer);
-      resolve(payload);
-    });
-  });
-}
-
-async function waitFor<T>(read: () => T | undefined, label: string): Promise<T> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const value = read();
-
-    if (value !== undefined) {
-      return value;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-
-  throw new Error(`timeout waiting ${label}`);
-}
+import {
+  emitAck,
+  makeSocketHarness,
+  nextEvent,
+  waitFor,
+  type SocketHarness,
+} from "./test-support";
 
 describe("socket server", () => {
-  let harness: Harness;
+  let harness: SocketHarness;
 
   beforeEach(async () => {
-    harness = await makeHarness();
+    harness = await makeSocketHarness();
   });
 
   afterEach(async () => {
-    for (const client of harness.clients) {
-      client.close();
-    }
-
-    await harness.socketServer.close();
-    await new Promise<void>((resolve) => harness.httpServer.close(() => resolve()));
+    await harness.close();
   });
 
   it("juega un turno completo y respeta los roles", async () => {

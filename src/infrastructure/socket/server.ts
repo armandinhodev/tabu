@@ -8,7 +8,7 @@ import type { DomainEvent } from "../../domain/events/events";
 import { reassignDescriptor } from "../../domain/services/GameStateMachine";
 import type { PlayerId } from "../../domain/value-objects/PlayerId";
 import { toGameState } from "../../application/dto/game-state";
-import type { GameDeps } from "../../application/use-cases/common";
+import { locatePlayer, type GameDeps } from "../../application/use-cases/common";
 import { createGame } from "../../application/use-cases/create-game";
 import { joinGame } from "../../application/use-cases/join-game";
 import { assignTeam, autoAssignTeams } from "../../application/use-cases/team-assignment";
@@ -43,6 +43,8 @@ export interface SocketServerOptions {
   readonly corsOrigin: string;
   /** Snapshot fire-and-forget: nunca bloquea el turno (S15). */
   readonly persist: (game: Game) => void;
+  /** Gracia antes de pasar el turno a otro descriptor (S9). */
+  readonly disconnectGraceMs?: number;
 }
 
 export interface SocketServer {
@@ -70,6 +72,7 @@ export function attachSocketServer(
   const broadcaster = new Broadcaster(io, sessions);
   const ticker = new TurnTicker(options.deps, broadcaster);
   const deps = options.deps;
+  const graceMs = options.disconnectGraceMs ?? DISCONNECT_GRACE_MS;
   const pendingTimers = new Set<ReturnType<typeof setTimeout>>();
 
   const snapshot = (game: Game): void => {
@@ -277,7 +280,7 @@ export function attachSocketServer(
     const timer = setTimeout(() => {
       pendingTimers.delete(timer);
       handOverDescriptor(binding.gameId, binding.playerId);
-    }, DISCONNECT_GRACE_MS);
+    }, graceMs);
 
     timer.unref?.();
     pendingTimers.add(timer);
@@ -292,6 +295,13 @@ export function attachSocketServer(
     }
 
     if (game.currentTurn.descriptorId !== playerId) {
+      return;
+    }
+
+    const located = locatePlayer(game, playerId);
+
+    // Volvió dentro de la gracia: conserva el turno (S9).
+    if (located !== null && located.player.connected) {
       return;
     }
 
