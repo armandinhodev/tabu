@@ -98,6 +98,7 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     discardedCardIds: [],
     passedCards: [],
     round: 1,
+    skipsUsed: 0,
     winnerTeamId: null,
     finishedAt: null,
   };
@@ -241,6 +242,7 @@ export function resolveTurn(
   let deck = game.deck.cards;
   let discardedCardIds: readonly CardId[] = game.discardedCardIds;
   let passedCards: readonly PassedCard[] = game.passedCards;
+  let skipsUsed = game.skipsUsed;
 
   if (kind === "VIOLATION") {
     deck = deck.remove(turn.card.id);
@@ -248,6 +250,7 @@ export function resolveTurn(
   } else if (kind === "SKIPPED") {
     const rival = nextTeam(game.teams, turn.teamId);
     passedCards = [...passedCards, { card: turn.card, toTeamId: rival.id }];
+    skipsUsed += 1;
   } else if (kind === "TIME") {
     deck = deck.returnToBottom(turn.card);
   }
@@ -302,6 +305,7 @@ export function resolveTurn(
     passedCards,
     turnHistory: [...game.turnHistory, historyEntry],
     currentTurn: null,
+    skipsUsed,
   };
 
   const firstTeam = teams[0];
@@ -333,7 +337,9 @@ export function resolveTurn(
   }
 
   const withRound: Game =
-    roundComplete && !roundsReached ? { ...nextGame, round: nextGame.round + 1 } : nextGame;
+    roundComplete && !roundsReached
+      ? { ...nextGame, round: nextGame.round + 1, skipsUsed: 0 }
+      : nextGame;
 
   const nextTurn = beginTurn(withRound, ctx);
 

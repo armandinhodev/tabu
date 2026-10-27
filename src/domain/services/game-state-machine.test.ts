@@ -346,8 +346,33 @@ describe("rondas y fin de partida", () => {
     expect(afterSecond.events.some((event) => event.type === "GameFinished")).toBe(false);
   });
 
-  it("termina cuando se agota el mazo y no quedan cartas pasadas", () => {
+  it("reinicia el contador de skips al cambiar de ronda (S4)", () => {
     const ctx = makeContext();
+    const game = startGame(
+      makeGame({
+        settings: makeSettings({ rounds: 2 }),
+        deck: makeDeck([
+          makeCard("c1"),
+          makeCard("c2"),
+          makeCard("c3"),
+          makeCard("c4"),
+          makeCard("c5"),
+          makeCard("c6"),
+        ]),
+      }),
+      ctx,
+    ).game;
+
+    const afterFirst = resolveTurn(game, { kind: "SKIPPED" }, ctx);
+    expect(afterFirst.game.skipsUsed).toBe(1);
+
+    const afterSecond = resolveTurn(afterFirst.game, { kind: "SKIPPED" }, ctx);
+
+    expect(afterSecond.game.round).toBe(2);
+    expect(afterSecond.game.skipsUsed).toBe(0);
+  });
+
+  it("termina cuando se agota el mazo y no quedan cartas pasadas", () => {    const ctx = makeContext();
     const game = startGame(makeGame({ deck: makeDeck([makeCard("c1")]) }), ctx).game;
     const result = resolveTurn(game, { kind: "CORRECT", actorId: PlayerId.from("p1") }, ctx);
 

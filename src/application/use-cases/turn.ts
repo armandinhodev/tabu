@@ -1,8 +1,14 @@
 import type { Game } from "../../domain/entities/Game";
-import { GameNotFoundError, NotAllowedError, TurnNotActiveError } from "../../domain/errors/DomainError";
+import {
+  GameNotFoundError,
+  NotAllowedError,
+  SkipLimitReachedError,
+  TurnNotActiveError,
+} from "../../domain/errors/DomainError";
 import type { DomainEvent } from "../../domain/events/events";
 import type { GuessRequest, ReportViolationRequest } from "../../infrastructure/socket/payloads";
 import { validateReport } from "../../domain/policies/PenaltyPolicy";
+import { effectiveSkipLimit } from "../../domain/policies/SkipLimitPolicy";
 import { resolveTurn, type TurnOutcome } from "../../domain/services/GameStateMachine";
 import type { PlayerId, TeamId } from "../../domain/value-objects/PlayerId";
 import { normalizeWord } from "../../domain/value-objects/TabooWords";
@@ -113,7 +119,16 @@ export function reportViolation(
   return apply(deps, game, { kind: "VIOLATION", violation }, turn.teamId);
 }
 
-/** Solo el descriptor acepta y pasa la carta, según §8.1 (D38). */
+/**
+ * Solo el descriptor acepta y pasa la carta, según §8.1 (D38).
+ *
+ * El skip no penaliza (0 puntos) pero está acotado por ronda (S4): cuando se
+ * agotan los skips permitidos, la acción se rechaza sin cerrar el turno.
+ *
+ * El límite nunca supera la cantidad de equipos: una ronda es un turno por
+ * equipo, así que con 2 equipos el máximo real de skips por ronda es 2 y un
+ * límite de 3 quedaría inalcanzable.
+ */
 export function skipTurn(deps: GameDeps, gameId: string, playerId: PlayerId): TurnActionData {
   const game = requireGame(deps, gameId);
   requirePlaying(game);
@@ -122,6 +137,12 @@ export function skipTurn(deps: GameDeps, gameId: string, playerId: PlayerId): Tu
 
   if (turn.descriptorId !== playerId) {
     throw new NotAllowedError("Only the descriptor can pass the card");
+  }
+
+  const limit = effectiveSkipLimit(game.settings.skipLimit, game.settings.teamCount);
+
+  if (game.skipsUsed >= limit) {
+    throw new SkipLimitReachedError(limit);
   }
 
   return apply(deps, game, { kind: "SKIPPED" }, turn.teamId);

@@ -84,9 +84,20 @@ export function DescribingView({
 
         {isDescriptor ? (
           <>
-            <Button variant="ghost" block disabled={busy} onClick={onSkipCard}>
-              Aceptar y pasar carta
+            <Button
+              variant="ghost"
+              block
+              disabled={busy || state.skipsLeft === 0}
+              onClick={onSkipCard}
+            >
+              {state.skipsLeft === 0 ? "Sin saltos disponibles" : "Aceptar y pasar carta"}
             </Button>
+
+            <p className="text-center text-body-sm text-fg-subtle">
+              {state.skipsLeft === 0
+                ? "Se agotaron los saltos de esta ronda. Hay que adivinar."
+                : `Te quedan ${state.skipsLeft} ${state.skipsLeft === 1 ? "salto" : "saltos"} en esta ronda.`}
+            </p>
 
             <div className="flex gap-2">
               <Button

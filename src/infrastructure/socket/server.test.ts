@@ -212,6 +212,60 @@ describe("socket server", () => {
     expect(states.get(rival.playerId)?.turn?.turnId).toBe(turnBefore);
   });
 
+  it("rechaza el skip cuando se agotaron los saltos de la ronda (S4)", async () => {
+    const host = await harness.connect();
+    const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
+      playerName: "Host",
+      deckId: harness.deckId,
+      options: { teamCount: 2, skipLimit: 1 },
+    });
+    const players = [{ client: host, playerId: created.playerId }];
+
+    for (const name of ["Ana", "Beto", "Caro"]) {
+      const client = await harness.connect();
+      const joined = await emitAck<{ playerId: string }>(client, "game:join", {
+        code: created.code,
+        playerName: name,
+      });
+      players.push({ client, playerId: joined.playerId });
+    }
+
+    const states = new Map<string, GameStateView>();
+
+    for (const { client, playerId } of players) {
+      client.on("game:state", (state) => states.set(playerId, state));
+    }
+
+    await emitAck(host, "game:autoTeams");
+    await emitAck(host, "game:start");
+
+    const first = await waitFor(
+      () => players.find(({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER"),
+      "primer descriptor",
+    );
+    const firstTeamId = states.get(first.playerId)?.turn?.teamId;
+
+    // El primer skip del equipo A se acepta y no resta puntos.
+    // El ack de un skip exitoso es null: el handler no devuelve payload.
+    const accepted = await emitAck<{ error?: { code: string } } | null>(first.client, "turn:skip");
+
+    expect(accepted).toBeNull();
+
+    // Ahora describe el equipo B: su skip agota el límite de la ronda.
+    const second = await waitFor(
+      () =>
+        players.find(({ playerId }) => {
+          const state = states.get(playerId);
+          return state?.me.role === "DESCRIBER" && state?.turn?.teamId !== firstTeamId;
+        }),
+      "segundo descriptor",
+    );
+
+    const rejected = await emitAck<{ error: { code: string } }>(second.client, "turn:skip");
+
+    expect(rejected.error.code).toBe("SKIP_LIMIT_REACHED");
+  });
+
   it("penaliza con una palabra prohibida válida y anula la carta", async () => {
     const host = await harness.connect();
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {

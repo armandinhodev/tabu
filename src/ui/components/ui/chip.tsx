@@ -8,9 +8,14 @@ import { cn } from "@/ui/lib/cn";
 /**
  * Chips de palabras prohibidas (§6.1): informativa 36px sin badge, reportable
  * 44px con badge "!" visible en reposo. También se usa para palabra reportada.
+ *
+ * La lista de palabras prohibidas se muestra en columna (menú desplegado), así
+ * que el chip ocupa el ancho completo de su fila: `flex` en vez de
+ * `inline-flex` y `w-full` para que el texto quede a la izquierda con el badge
+ * "!" a la derecha.
  */
 export const chipVariants = cva(
-  "inline-flex items-center gap-2 rounded-pill border font-sans leading-none",
+  "flex w-full items-center gap-2 rounded-pill border font-sans leading-none",
   {
     variants: {
       tone: {
@@ -42,7 +47,7 @@ export const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(function Chip
       className={cn(chipVariants({ tone }), className)}
       {...props}
     >
-      <span>{children}</span>
+      <span className="min-w-0 flex-1 truncate text-left">{children}</span>
       {badge ? (
         <span
           aria-hidden="true"

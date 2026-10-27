@@ -23,7 +23,8 @@ export type DomainErrorCode =
   | "GAME_FULL"
   | "TEAM_FULL"
   | "PLAYER_NOT_IN_GAME"
-  | "NOT_HOST";
+  | "NOT_HOST"
+  | "SKIP_LIMIT_REACHED";
 
 export class DomainError extends Error {
   constructor(
@@ -158,5 +159,12 @@ export class PlayerNotInGameError extends DomainError {
 export class NotHostError extends DomainError {
   constructor() {
     super("NOT_HOST", "Only the host can perform this action");
+  }
+}
+
+/** Se agotaron los skips permitidos en la ronda (S4). */
+export class SkipLimitReachedError extends DomainError {
+  constructor(limit: number) {
+    super("SKIP_LIMIT_REACHED", `No more than ${limit} skips are allowed per round`);
   }
 }

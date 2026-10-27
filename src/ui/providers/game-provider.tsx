@@ -39,6 +39,8 @@ export interface CreateGameOptions {
   readonly teamCount: number;
   readonly turnSeconds: number;
   readonly tabooWordCount: number;
+  /** Skips por ronda (S4). */
+  readonly skipLimit: number;
   readonly randomTeams: boolean;
 }
 
@@ -328,6 +330,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
               teamCount: options.teamCount,
               turnSeconds: options.turnSeconds,
               tabooWordCount: options.tabooWordCount,
+              skipLimit: options.skipLimit,
               randomTeams: options.randomTeams,
             },
           },

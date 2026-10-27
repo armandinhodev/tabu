@@ -1,6 +1,10 @@
 import { CardDeck } from "../../domain/services/CardDeck";
 import type { Game } from "../../domain/entities/Game";
-import { DEFAULT_TABOO_WORD_COUNT, type GameSettings } from "../../domain/entities/GameSettings";
+import {
+  DEFAULT_SKIP_LIMIT,
+  DEFAULT_TABOO_WORD_COUNT,
+  type GameSettings,
+} from "../../domain/entities/GameSettings";
 import type { Player } from "../../domain/entities/Player";
 import type { Team } from "../../domain/entities/Team";
 import {
@@ -69,6 +73,7 @@ export async function createGame(
       input.options?.turnSeconds ?? deps.config.turnSecondsDefault,
     ),
     tabooWordCount,
+    skipLimit: input.options?.skipLimit ?? DEFAULT_SKIP_LIMIT,
     rounds: deps.config.rounds,
     randomTeams: input.options?.randomTeams ?? false,
     minPlayersPerTeam: deps.config.minPlayersPerTeam,
@@ -116,6 +121,7 @@ export async function createGame(
     passedCards: [],
     turnHistory: [],
     round: 1,
+    skipsUsed: 0,
     createdAt: now,
     finishedAt: null,
     winnerTeamId: null,

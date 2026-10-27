@@ -1,6 +1,7 @@
 import type { Card } from "../entities/Card";
 import type { Game, DeckSnapshot } from "../entities/Game";
 import type { GameSettings } from "../entities/GameSettings";
+import { DEFAULT_SKIP_LIMIT } from "../entities/GameSettings";
 import type { Player } from "../entities/Player";
 import type { Team, TeamColor } from "../entities/Team";
 import type { Turn } from "../entities/Turn";
@@ -88,6 +89,7 @@ export function makeSettings(overrides: Partial<GameSettings> = {}): GameSetting
     teamCount: 2,
     turnSeconds: Duration.fromSeconds(60),
     tabooWordCount: 4,
+    skipLimit: DEFAULT_SKIP_LIMIT,
     rounds: 1,
     randomTeams: false,
     minPlayersPerTeam: 2,
@@ -121,6 +123,7 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     passedCards: [],
     turnHistory: [],
     round: 1,
+    skipsUsed: 0,
     createdAt: NOW,
     finishedAt: null,
     winnerTeamId: null,

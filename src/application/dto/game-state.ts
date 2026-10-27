@@ -3,6 +3,7 @@ import type { Player } from "../../domain/entities/Player";
 import type { Team } from "../../domain/entities/Team";
 import type { Turn } from "../../domain/entities/Turn";
 import type { PlayerId } from "../../domain/value-objects/PlayerId";
+import { effectiveSkipLimit } from "../../domain/policies/SkipLimitPolicy";
 
 /**
  * Per-viewer state: the active guessing teammates never receive the answer or
@@ -33,6 +34,8 @@ export interface SettingsView {
   readonly teamCount: number;
   readonly turnSeconds: number;
   readonly tabooWordCount: number;
+  /** Skips permitidos por ronda (S4). */
+  readonly skipLimit: number;
   readonly rounds: number;
   readonly randomTeams: boolean;
   readonly minPlayersPerTeam: number;
@@ -68,6 +71,8 @@ export interface GameStateView {
   readonly me: MeView;
   readonly turn?: TurnView;
   readonly round: number;
+  /** Skips que quedan en la ronda actual (S4). */
+  readonly skipsLeft: number;
 }
 
 export function toSettingsView(game: Game): SettingsView {
@@ -75,6 +80,7 @@ export function toSettingsView(game: Game): SettingsView {
     teamCount: game.settings.teamCount,
     turnSeconds: game.settings.turnSeconds.seconds,
     tabooWordCount: game.settings.tabooWordCount,
+    skipLimit: game.settings.skipLimit,
     rounds: game.settings.rounds,
     randomTeams: game.settings.randomTeams,
     minPlayersPerTeam: game.settings.minPlayersPerTeam,
@@ -116,6 +122,10 @@ export function toGameState(game: Game, viewerId: PlayerId): GameStateView {
     waitingPlayers: game.players.map(toPlayerView),
     me,
     round: game.round,
+    skipsLeft: Math.max(
+      0,
+      effectiveSkipLimit(game.settings.skipLimit, game.settings.teamCount) - game.skipsUsed,
+    ),
     ...(turn === null ? {} : { turn: toTurnView(turn, game.settings.turnSeconds.seconds, me.role) }),
   };
 

@@ -10,6 +10,7 @@ import {
   makeCard,
   makeGame,
   makePlayer,
+  makeSettings,
   makeTeam,
   makeTurn,
 } from "../../../domain/__fixtures__/game";
@@ -55,6 +56,39 @@ describe("game mapper", () => {
       toGameDomain({ ...document, settings: legacy, updatedAt: LATER } as GameDocument).settings
         .tabooWordCount,
     ).toBe(4);
+  });
+
+  it("loads an older snapshot without a skip limit using three (S4)", () => {
+    const game = makeGame();
+    const document = toGameDocument(game);
+    const legacy = { ...document.settings } as Partial<typeof document.settings>;
+    delete legacy.skipLimit;
+
+    expect(
+      toGameDomain({ ...document, settings: legacy, updatedAt: LATER } as GameDocument).settings
+        .skipLimit,
+    ).toBe(3);
+  });
+
+  it("loads an older snapshot without skips used as zero", () => {
+    const game = makeGame();
+    const document = toGameDocument(game);
+    const legacy = { ...document } as Partial<typeof document>;
+    delete legacy.skipsUsed;
+
+    expect(toGameDomain({ ...legacy, updatedAt: LATER } as GameDocument).skipsUsed).toBe(0);
+  });
+
+  it("round-trips the skip limit and the skips used", () => {
+    const game = makeGame({
+      settings: makeSettings({ skipLimit: 2 }),
+      skipsUsed: 1,
+    });
+
+    const restored = toGameDomain({ ...toGameDocument(game), updatedAt: LATER });
+
+    expect(restored.settings.skipLimit).toBe(2);
+    expect(restored.skipsUsed).toBe(1);
   });
 
   it("round-trips the whole aggregate", () => {

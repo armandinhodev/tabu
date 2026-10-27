@@ -55,6 +55,7 @@ export const createGamePayload = z.object({
       teamCount: z.number().int().min(2, "teamCount must be 2..4").max(4, "teamCount must be 2..4"),
       turnSeconds,
       tabooWordCount: z.number().int().min(1).max(6),
+      skipLimit: z.number().int().min(0).max(10),
       randomTeams: z.boolean(),
     })
     .partial()

@@ -1,5 +1,5 @@
 import type { Game } from "../../../domain/entities/Game";
-import { DEFAULT_TABOO_WORD_COUNT } from "../../../domain/entities/GameSettings";
+import { DEFAULT_SKIP_LIMIT, DEFAULT_TABOO_WORD_COUNT } from "../../../domain/entities/GameSettings";
 import type { Player } from "../../../domain/entities/Player";
 import { TEAM_COLORS, type Team, type TeamColor } from "../../../domain/entities/Team";
 import type { Turn } from "../../../domain/entities/Turn";
@@ -33,6 +33,7 @@ export function toGameDocument(game: Game): GameDocumentInput {
       teamCount: game.settings.teamCount,
       turnSeconds: game.settings.turnSeconds.seconds,
       tabooWordCount: game.settings.tabooWordCount,
+      skipLimit: game.settings.skipLimit,
       rounds: game.settings.rounds,
       randomTeams: game.settings.randomTeams,
       minPlayersPerTeam: game.settings.minPlayersPerTeam,
@@ -58,6 +59,7 @@ export function toGameDocument(game: Game): GameDocumentInput {
       at: entry.at,
     })),
     round: game.round,
+    skipsUsed: game.skipsUsed,
     winnerTeamId: game.winnerTeamId,
     createdAt: game.createdAt,
     finishedAt: game.finishedAt,
@@ -77,6 +79,7 @@ export function toGameDomain(document: GameDocument): Game {
       teamCount: document.settings.teamCount,
       turnSeconds: Duration.fromSeconds(document.settings.turnSeconds),
       tabooWordCount: document.settings.tabooWordCount ?? DEFAULT_TABOO_WORD_COUNT,
+      skipLimit: document.settings.skipLimit ?? DEFAULT_SKIP_LIMIT,
       rounds: document.settings.rounds,
       randomTeams: document.settings.randomTeams,
       minPlayersPerTeam: document.settings.minPlayersPerTeam,
@@ -100,6 +103,7 @@ export function toGameDomain(document: GameDocument): Game {
       at: entry.at,
     })),
     round: document.round,
+    skipsUsed: document.skipsUsed ?? 0,
     createdAt: document.createdAt,
     finishedAt: document.finishedAt,
     winnerTeamId: document.winnerTeamId === null ? null : TeamId.from(document.winnerTeamId),

@@ -44,6 +44,16 @@ const TABOO_COUNT_OPTIONS = [
   { value: "6", label: "6" },
 ] as const;
 
+/** Skips por ronda (S4): el skip no penaliza, solo acota cuántas cartas se pueden pasar. */
+const SKIP_LIMIT_OPTIONS = [
+  { value: "0", label: "0" },
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
+  { value: "5", label: "5" },
+] as const;
+
 /** 02 — Crear partida: mazo, equipos y tiempo por turno (§6.1, §12). */
 export function CreateScreen() {
   const { createGame, busy, goTo, playerName } = useGame();
@@ -53,6 +63,7 @@ export function CreateScreen() {
   const [teamCount, setTeamCount] = useState<"2" | "3" | "4">("2");
   const [turnSeconds, setTurnSeconds] = useState<"30" | "60" | "90" | "120">("60");
   const [tabooWordCount, setTabooWordCount] = useState<"1" | "2" | "3" | "4" | "5" | "6">("4");
+  const [skipLimit, setSkipLimit] = useState<"0" | "1" | "2" | "3" | "4" | "5">("3");
   const [randomTeams, setRandomTeams] = useState(false);
 
   const loadDecks = (): void => {
@@ -172,6 +183,19 @@ export function CreateScreen() {
         />
       </div>
 
+      <div className="flex flex-col gap-2">
+        <span className="text-caption uppercase text-fg-muted">Saltos de carta por ronda</span>
+        <SegmentedControl
+          label="Cantidad de saltos de carta por ronda"
+          value={skipLimit}
+          options={SKIP_LIMIT_OPTIONS}
+          onValueChange={setSkipLimit}
+        />
+        <p className="text-body-sm text-fg-subtle">
+          Skipear no resta puntos: solo acota cuántas cartas se pueden pasar por ronda.
+        </p>
+      </div>
+
       <div className="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface p-4">
         <div className="flex flex-col">
           <span className="text-body text-fg">Equipos balanceados</span>
@@ -200,6 +224,7 @@ export function CreateScreen() {
               teamCount: Number(teamCount),
               turnSeconds: Number(turnSeconds),
               tabooWordCount: Number(tabooWordCount),
+              skipLimit: Number(skipLimit),
               randomTeams,
             });
           }}

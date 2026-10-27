@@ -27,6 +27,28 @@ describe("createGamePayload", () => {
     expect(parsed.options).toEqual({ teamCount: 3 });
   });
 
+  it("accepts a skip limit between 0 and 10 and rejects out-of-range values", () => {
+    for (const skipLimit of [0, 3, 10]) {
+      expect(
+        parsePayload(createGamePayload, {
+          playerName: "Luz",
+          deckId: "deck-1",
+          options: { skipLimit },
+        }).options,
+      ).toEqual({ skipLimit });
+    }
+
+    for (const skipLimit of [-1, 11, 1.5]) {
+      expect(() =>
+        parsePayload(createGamePayload, {
+          playerName: "Luz",
+          deckId: "deck-1",
+          options: { skipLimit },
+        }),
+      ).toThrowError(/skipLimit/);
+    }
+  });
+
   it("accepts only 30, 60, 90 or 120 seconds and 1..6 taboo words", () => {
     for (const turnSeconds of [30, 60, 90, 120]) {
       expect(

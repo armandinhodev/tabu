@@ -5,10 +5,11 @@ import type { IdGenerator } from "../ports/IdGenerator";
 import type { GameDeps } from "./common";
 import { InMemoryDeckRepository } from "../../infrastructure/db/repositories/InMemoryDeckRepository";
 import { InMemoryGameRepository } from "../../infrastructure/db/repositories/InMemoryGameRepository";
-import { LATER, makeGame, makePlayer } from "../../domain/__fixtures__/game";
+import { LATER, makeGame, makePlayer, makeSettings, makeTeam } from "../../domain/__fixtures__/game";
 import {
   InvalidTabooWordError,
   NotAllowedError,
+  SkipLimitReachedError,
   TurnNotActiveError,
 } from "../../domain/errors/DomainError";
 import { startGame as startGameTransition } from "../../domain/services/GameStateMachine";
@@ -134,6 +135,45 @@ describe("guessWord", () => {
   });
 });
 
+describe("un solo descriptor por turno (S2)", () => {
+  it("el descriptor es un único jugador y el resto del equipo adivina", () => {
+    const harness = makeHarness();
+
+    expect(harness.game.currentTurn?.descriptorId).toBe("p1");
+
+    // El resto del equipo (p2) adivina: el descriptor no bloquea al equipo.
+    const result = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {
+      guess: activeWord(harness.game),
+    });
+
+    expect(result.correct).toBe(true);
+  });
+
+  it("el descriptor rota al cambiar de turno dentro del equipo", () => {
+    const harness = makeHarness();
+
+    const first = harness.game.currentTurn?.descriptorId;
+    expect(first).toBe("p1");
+
+    const after = skipTurn(harness.deps, harness.game.id, PlayerId.from("p1"));
+
+    // Cambia de equipo, así que el descriptor es el primero del nuevo equipo.
+    expect(after.game.currentTurn?.teamId).toBe("t2");
+    expect(after.game.currentTurn?.descriptorId).toBe("p3");
+  });
+
+  it("solo el descriptor actual puede pasar la carta", () => {
+    const harness = makeHarness();
+
+    expect(() => skipTurn(harness.deps, harness.game.id, PlayerId.from("p2"))).toThrow(
+      NotAllowedError,
+    );
+    expect(() => skipTurn(harness.deps, harness.game.id, PlayerId.from("p3"))).toThrow(
+      NotAllowedError,
+    );
+  });
+});
+
 describe("reportViolation", () => {
   let harness: Harness;
 
@@ -241,6 +281,111 @@ describe("skipTurn", () => {
   it("rechaza al rival", () => {
     expect(() => skipTurn(harness.deps, harness.game.id, PlayerId.from("p3"))).toThrow(
       NotAllowedError,
+    );
+  });
+});
+
+describe("límite de skips por ronda (S4)", () => {
+  it("el skip no resta puntos ni penaliza: 0 puntos y el turno cierra", () => {
+    const harness = makeHarness();
+
+    const result = skipTurn(harness.deps, harness.game.id, PlayerId.from("p1"));
+
+    expect(result.pointsDelta).toBe(0);
+    expect(result.game.teams[0]?.score.value).toBe(0);
+    expect(result.game.teams[1]?.score.value).toBe(0);
+  });
+
+  it("cuenta el skip en el contador de la ronda", () => {
+    const harness = makeHarness();
+
+    const result = skipTurn(harness.deps, harness.game.id, PlayerId.from("p1"));
+
+    expect(result.game.skipsUsed).toBe(1);
+  });
+
+  it("permite los skips y rechaza el cuarto cuando hay 4 equipos", () => {
+    const harness = makeHarness({
+      settings: makeSettings({ skipLimit: 3, teamCount: 4 }),
+      teams: [
+        makeTeam(0, [makePlayer("p1", "t1", { isHost: true }), makePlayer("p2", "t1")]),
+        makeTeam(1, [makePlayer("p3", "t2"), makePlayer("p4", "t2")]),
+        makeTeam(2, [makePlayer("p5", "t3"), makePlayer("p6", "t3")]),
+        makeTeam(3, [makePlayer("p7", "t4"), makePlayer("p8", "t4")]),
+      ],
+    });
+
+    // Con 4 equipos una ronda son 4 turnos: el límite de 3 sí es alcanzable.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const descriptor = harness.deps.registry.findById(harness.game.id)?.currentTurn?.descriptorId;
+      expect(descriptor).toBeDefined();
+
+      const result = skipTurn(harness.deps, harness.game.id, descriptor as PlayerId);
+      expect(result.game.skipsUsed).toBe(attempt + 1);
+    }
+
+    const descriptor = harness.deps.registry.findById(harness.game.id)?.currentTurn?.descriptorId;
+
+    expect(() => skipTurn(harness.deps, harness.game.id, descriptor as PlayerId)).toThrow(
+      SkipLimitReachedError,
+    );
+  });
+
+  it("el límite no supera la cantidad de equipos: con 2 equipos hay 2 skips por ronda", () => {
+    const harness = makeHarness({ settings: makeSettings({ skipLimit: 3, teamCount: 2 }) });
+
+    const first = harness.deps.registry.findById(harness.game.id)?.currentTurn?.descriptorId;
+    const afterFirst = skipTurn(harness.deps, harness.game.id, first as PlayerId);
+    expect(afterFirst.game.skipsUsed).toBe(1);
+
+    // El segundo turno cierra la ronda (un turno por equipo): el contador se reinicia.
+    expect(afterFirst.game.currentTurn?.teamId).toBe("t2");
+    const second = afterFirst.game.currentTurn?.descriptorId;
+    const afterSecond = skipTurn(harness.deps, harness.game.id, second as PlayerId);
+
+    expect(afterSecond.game.round).toBe(2);
+    expect(afterSecond.game.skipsUsed).toBe(0);
+  });
+
+  it("un skip rechazado no cierra el turno ni cambia el puntaje", () => {
+    const harness = makeHarness({ settings: makeSettings({ skipLimit: 1, teamCount: 2 }) });
+
+    const first = harness.deps.registry.findById(harness.game.id)?.currentTurn?.descriptorId;
+    skipTurn(harness.deps, harness.game.id, first as PlayerId);
+
+    const before = harness.deps.registry.findById(harness.game.id);
+    const turnBefore = before?.currentTurn?.id;
+    const descriptor = before?.currentTurn?.descriptorId;
+
+    expect(() => skipTurn(harness.deps, harness.game.id, descriptor as PlayerId)).toThrow(
+      SkipLimitReachedError,
+    );
+
+    const after = harness.deps.registry.findById(harness.game.id);
+
+    expect(after?.currentTurn?.id).toBe(turnBefore);
+    expect(after?.teams[0]?.score.value).toBe(0);
+    expect(after?.skipsUsed).toBe(1);
+  });
+
+  it("respeta un límite configurado distinto del default", () => {
+    const harness = makeHarness({ settings: makeSettings({ skipLimit: 1, teamCount: 2 }) });
+
+    const first = harness.deps.registry.findById(harness.game.id)?.currentTurn?.descriptorId;
+    skipTurn(harness.deps, harness.game.id, first as PlayerId);
+
+    const second = harness.deps.registry.findById(harness.game.id)?.currentTurn?.descriptorId;
+
+    expect(() => skipTurn(harness.deps, harness.game.id, second as PlayerId)).toThrow(
+      SkipLimitReachedError,
+    );
+  });
+
+  it("con límite 0 no se puede skipear", () => {
+    const harness = makeHarness({ settings: makeSettings({ skipLimit: 0 }) });
+
+    expect(() => skipTurn(harness.deps, harness.game.id, PlayerId.from("p1"))).toThrow(
+      SkipLimitReachedError,
     );
   });
 });

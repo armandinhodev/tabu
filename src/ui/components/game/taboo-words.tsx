@@ -19,6 +19,10 @@ interface TabooWordsProps {
 /**
  * Lista de palabras prohibidas (§6.1). Todos ven lo mismo; el rival además
  * puede tocar cada chip. La variante informativa no insinúa información oculta.
+ *
+ * Se muestra en **columna**, tipo menú ya desplegado: una palabra por fila,
+ * sin acordeón ni estado colapsado. El click del rival banea la carta (ya
+ * implementado: `turn:reportViolation` con `TABOO_WORD`).
  */
 export function TabooWords({
   words,
@@ -36,14 +40,14 @@ export function TabooWords({
         <AlertTriangle aria-hidden="true" className="size-4 shrink-0" />
         {heading}
       </p>
-      <ul className="flex flex-wrap gap-2">
+      <ul className="flex flex-col gap-2">
         {words.map((word) => {
           const reported = reportedWord === word;
 
           if (variant === "informative") {
             return (
               <li key={word}>
-                <span className="inline-flex h-9 items-center rounded-pill border border-danger bg-danger-soft px-4 text-body-sm text-fg">
+                <span className="flex h-9 w-full items-center rounded-pill border border-danger bg-danger-soft px-4 text-body-sm text-fg">
                   {word}
                 </span>
               </li>

@@ -1,6 +1,6 @@
 import { Schema } from "mongoose";
 import { MAX_TABOO_WORDS } from "../../../../domain/value-objects/TabooWords";
-import { DEFAULT_TABOO_WORD_COUNT } from "../../../../domain/entities/GameSettings";
+import { DEFAULT_SKIP_LIMIT, DEFAULT_TABOO_WORD_COUNT } from "../../../../domain/entities/GameSettings";
 
 export type GameStatusDocument = "waiting" | "playing" | "finished";
 export type TurnOutcomeDocument = "CORRECT" | "VIOLATION" | "SKIPPED" | "TIME";
@@ -20,6 +20,8 @@ export interface GameSettingsDocument {
   teamCount: number;
   turnSeconds: number;
   tabooWordCount: number;
+  /** Skips por ronda (S4). Ausente en partidas guardadas antes de esta regla. */
+  skipLimit?: number;
   rounds: number;
   randomTeams: boolean;
   minPlayersPerTeam: number;
@@ -92,6 +94,8 @@ export interface GameDocument {
   passedCards: GamePassedCardDocument[];
   turnHistory: GameTurnHistoryDocument[];
   round: number;
+  /** Skips consumidos en la ronda actual (S4). */
+  skipsUsed?: number;
   winnerTeamId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -132,6 +136,7 @@ const settingsSchema = new Schema<GameSettingsDocument>(
     teamCount: { type: Number, required: true, min: 2, max: 4 },
     turnSeconds: { type: Number, required: true, min: 1 },
     tabooWordCount: { type: Number, required: true, min: 1, max: 6, default: DEFAULT_TABOO_WORD_COUNT },
+    skipLimit: { type: Number, min: 0, max: 10, default: DEFAULT_SKIP_LIMIT },
     rounds: { type: Number, required: true, min: 1 },
     randomTeams: { type: Boolean, required: true },
     minPlayersPerTeam: { type: Number, required: true, min: 1 },
@@ -218,6 +223,7 @@ export const gameSchema = new Schema<GameDocument>(
     passedCards: { type: [passedCardSchema], required: true, default: [] },
     turnHistory: { type: [turnHistorySchema], required: true, default: [] },
     round: { type: Number, required: true, min: 1, default: 1 },
+    skipsUsed: { type: Number, required: true, min: 0, default: 0 },
     winnerTeamId: { type: String, default: null },
     createdAt: { type: Date, required: true },
     finishedAt: { type: Date, default: null },
