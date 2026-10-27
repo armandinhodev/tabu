@@ -12,8 +12,11 @@
   --color-surface: var(--bg-surface);
   --color-surface-2: var(--bg-surface-2);
   --color-surface-3: var(--bg-surface-3);
+  --color-raised: var(--bg-raised);
+  --color-raised-hover: var(--bg-raised-hover);
   --color-line: var(--border-subtle);
   --color-line-strong: var(--border-strong);
+  --color-line-control: var(--border-control);
 
   /* Texto */
   --color-fg: var(--text-primary);

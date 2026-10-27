@@ -5,18 +5,21 @@ import { Check, Circle } from "lucide-react";
 import type { PlayerView, TeamView } from "@/application/dto/game-state";
 import { Button } from "@/ui/components/ui/button";
 import { cn } from "@/ui/lib/cn";
-import { teamPalette } from "./team-colors";
+import { NEUTRAL_PALETTE, teamPalette } from "./team-colors";
 
 export function PlayerRow({
   player,
   color,
   showReady = true,
+  neutral = false,
 }: {
   readonly player: PlayerView;
   readonly color: string;
   readonly showReady?: boolean;
+  /** Sin equipo asignado: avatar neutro, sin color de equipo. */
+  readonly neutral?: boolean;
 }) {
-  const palette = teamPalette(color);
+  const palette = neutral ? NEUTRAL_PALETTE : teamPalette(color);
   const initial = player.name.trim().charAt(0).toUpperCase() || "?";
 
   return (
@@ -106,7 +109,13 @@ export function TeamPanel({
       )}
 
       {canJoin && !isMine ? (
-        <Button variant="ghost" size="sm" block className="mt-4" onClick={onJoin}>
+        <Button
+          variant="team"
+          size="sm"
+          block
+          className={cn("mt-4", palette.border, palette.soft, palette.softHover)}
+          onClick={onJoin}
+        >
           Unirme a {team.name}
         </Button>
       ) : null}

@@ -9,8 +9,18 @@
   --bg-surface: #161b22;
   --bg-surface-2: #1f2630;
   --bg-surface-3: #29313c;
+  /* Superficie elevada: controles que van sobre paneles de contenido
+     (botones de acción del lobby). Se separa 1.48:1 de --bg-surface, que
+     comparten los contenedores de equipos, para que el control no se funda
+     con el panel que lo rodea. */
+  --bg-raised: #2f3947;
+  --bg-raised-hover: #374253;
   --border-subtle: #2a323d;
   --border-strong: #3a4452;
+  /* Borde de control: 3.16:1 sobre --bg-raised, el mínimo que fija §9 para
+     bordes de control. Los bordes oscuros de arriba no llegan a ese ratio
+     sobre una superficie elevada. */
+  --border-control: #78869a;
 
   /* Texto */
   --text-primary: #f2f5f8;

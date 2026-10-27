@@ -11,6 +11,7 @@ import { CodeBadge } from "@/ui/components/game/code-badge";
 import { MuteButton } from "@/ui/components/game/mute-button";
 import { PlayerRow, TeamPanel } from "@/ui/components/game/team-panel";
 import { useGame } from "@/ui/providers/game-provider";
+import { cn } from "@/ui/lib/cn";
 
 /** 04 — Sala de espera (y 11 en desktop): código, equipos y arranque (§6.3). */
 export function LobbyScreen() {
@@ -46,7 +47,7 @@ export function LobbyScreen() {
       <ScreenHeader
         eyebrow="Antes de empezar"
         title="Sala de espera"
-        subtitle={`${state.settings.teamCount} equipos · ${state.settings.turnSeconds} s por turno · ${state.settings.tabooWordCount} prohibidas por carta · ${totalPlayers} de ${minimum} jugadores`}
+        subtitle={`${state.settings.teamCount} equipos · ${state.settings.turnSeconds} s por turno · ${state.settings.tabooWordCount} prohibidas por carta · ${state.settings.skipLimit} saltos por ronda · ${totalPlayers} de ${minimum} jugadores`}
         action={<MuteButton />}
       />
 
@@ -78,7 +79,13 @@ export function LobbyScreen() {
             ) : (
               <ul className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-4">
                 {state.waitingPlayers.map((player) => (
-                  <PlayerRow key={player.playerId} player={player} color="team-1" showReady={false} />
+                  <PlayerRow
+                    key={player.playerId}
+                    player={player}
+                    color="team-1"
+                    showReady={false}
+                    neutral
+                  />
                 ))}
               </ul>
             )}
@@ -86,16 +93,19 @@ export function LobbyScreen() {
         </div>
 
         <aside className="flex flex-col gap-3 xl:sticky xl:top-8 xl:self-start">
-          <Button variant="ghost" block disabled={busy} onClick={autoTeams}>
-            <Shuffle aria-hidden="true" className="size-4" />
+          <Button variant="tinted" block disabled={busy} onClick={autoTeams}>
+            <Shuffle aria-hidden="true" className="size-4 text-team-1" />
             Repartir equipos
           </Button>
-          <Button variant="ghost" block disabled={busy} onClick={toggleReady}>
-            <UserCheck aria-hidden="true" className="size-4" />
+          <Button variant="tinted" block disabled={busy} onClick={toggleReady}>
+            <UserCheck
+              aria-hidden="true"
+              className={cn("size-4", state.me.isReady ? "text-success" : "text-fg-muted")}
+            />
             {state.me.isReady ? "Ya no estoy listo" : "Estoy listo"}
           </Button>
-          <Button variant="quiet" block onClick={() => setConfirmLeave(true)}>
-            <LogOut aria-hidden="true" className="size-4" />
+          <Button variant="tinted" block onClick={() => setConfirmLeave(true)}>
+            <LogOut aria-hidden="true" className="size-4 text-warning" />
             Salir de la sala
           </Button>
         </aside>

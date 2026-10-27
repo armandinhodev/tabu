@@ -44,8 +44,11 @@ un espaciado o un radio literal.
   --bg-surface:     #161B22;
   --bg-surface-2:   #1F2630;
   --bg-surface-3:   #29313C;
+  --bg-raised:      #2F3947;   /* control elevado sobre panel de contenido */
+  --bg-raised-hover:#374253;
   --border-subtle:  #2A323D;
   --border-strong:  #3A4452;
+  --border-control: #78869A;   /* borde de control — 3.16:1 sobre --bg-raised */
 
   /* Texto */
   --text-primary:   #F2F5F8;
@@ -167,6 +170,19 @@ transición 120ms. `:hover` `--accent-hover`, `:active` escala a 0.98. Full-widt
 *Reportar gesto* / *Reportar sonido* y para el cartel de palabra prohibida.
 
 **Botón secundario (ghost)** — fondo transparente, borde `--border-subtle`, texto `--text-primary`.
+
+**Botón de control sobre panel (elevado)** — fondo `--bg-raised`, borde `--border-control`,
+texto `--text-primary`. Es el patrón para acciones que van dentro o al lado de un panel de
+contenido (los botones de la sala de espera, junto a los paneles de equipos).
+
+Se separa 1.48:1 de `--bg-surface`, la superficie de los paneles de equipo: sin este salto el
+control se funde con el panel y se lee como contenido. El borde cumple los 3:1 que exige §9
+para bordes de control; los bordes oscuros del sistema no llegan a ese ratio sobre una
+superficie elevada.
+
+El color va **solo en el ícono**, nunca en la superficie: `--accent` coincide con `--team-1` y
+`--success` con `--team-2`, así que un fondo de color en un control de acción se lee como
+pertenencia a un equipo. `:hover` sube a `--bg-raised-hover` con sombra `--elevation-float`.
 
 **Chip de equipo / puntaje** — alto 40px, radio 12px, fondo del color de equipo al 18% + borde del
 color de equipo, cifra en el color del equipo (tabular, 800).
