@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Shuffle, UserCheck } from "lucide-react";
+import { LogOut, Shuffle } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
@@ -10,8 +10,8 @@ import { ScreenSkeleton } from "@/ui/components/game/banners";
 import { CodeBadge } from "@/ui/components/game/code-badge";
 import { MuteButton } from "@/ui/components/game/mute-button";
 import { PlayerRow, TeamPanel } from "@/ui/components/game/team-panel";
+import { ReadyToggle } from "@/ui/components/game/ready-toggle";
 import { useGame } from "@/ui/providers/game-provider";
-import { cn } from "@/ui/lib/cn";
 
 /** 04 — Sala de espera (y 11 en desktop): código, equipos y arranque (§6.3). */
 export function LobbyScreen() {
@@ -64,6 +64,8 @@ export function LobbyScreen() {
                   team={team}
                   canJoin={!busy}
                   isMine={team.id === state.me.teamId}
+                  viewerId={state.me.playerId}
+                  onToggleReady={toggleReady}
                   onJoin={() => assignTeam(team.id)}
                 />
               ))}
@@ -89,6 +91,14 @@ export function LobbyScreen() {
                 ))}
               </ul>
             )}
+
+            {state.me.teamId === null ? (
+              <ReadyToggle
+                isReady={state.me.isReady}
+                disabled={busy}
+                onToggle={toggleReady}
+              />
+            ) : null}
           </section>
         </div>
 
@@ -96,13 +106,6 @@ export function LobbyScreen() {
           <Button variant="tinted" block disabled={busy} onClick={autoTeams}>
             <Shuffle aria-hidden="true" className="size-4 text-team-1" />
             Repartir equipos
-          </Button>
-          <Button variant="tinted" block disabled={busy} onClick={toggleReady}>
-            <UserCheck
-              aria-hidden="true"
-              className={cn("size-4", state.me.isReady ? "text-success" : "text-fg-muted")}
-            />
-            {state.me.isReady ? "Ya no estoy listo" : "Estoy listo"}
           </Button>
           <Button variant="tinted" block onClick={() => setConfirmLeave(true)}>
             <LogOut aria-hidden="true" className="size-4 text-warning" />
