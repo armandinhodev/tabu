@@ -247,7 +247,7 @@ Game {
 
 Team { id: TeamId; name: string; color: TeamColor; players: Player[]; score: Score; turnCursor: number }
 
-Player { id: PlayerId; name: string; teamId: TeamId | null; isHost: boolean; isReady: boolean; connected: boolean }
+Player { id: PlayerId; name: string; teamId: TeamId | null; isHost: boolean; connected: boolean }
 
 Card { id: CardId; word: string; taboo: TabooWords }   // TabooWords: 1..4 términos, normalizados (minúsculas, sin acentos)
 
@@ -326,7 +326,7 @@ Violation {
 { _id, code: string /* 6 chars, UNIQUE */, status: 'waiting'|'playing'|'finished',
   deckId: ObjectId, deckSnapshot: { name: string, cards: Array<{ word, taboo }> },
   settings: { teamCount: number, turnSeconds: number, rounds: number, randomTeams: boolean, minPlayersPerTeam: number },
-  teams: Array<{ id, name, color, score, players: Array<{ id, name, isHost, isReady, connected, lastSeenAt }> }>,
+  teams: Array<{ id, name, color, score, players: Array<{ id, name, isHost, connected, lastSeenAt }> }>,
   turnOrder: string[],
   currentTurn: { id, teamId, descriptorId, word, taboo: string[], startedAt, deadlineAt } | null,
   discardedCardIds: string[],
@@ -357,7 +357,6 @@ Todos los payloads se validan con Zod en el servidor. Los nombres de evento est�
 | `game:reconnect` | `{ gameId, playerToken }` | `{ state: GameState }` | el mismo jugador |
 | `game:assignTeam` | `{ teamId }` | `void` | cualquiera en la sala |
 | `game:autoTeams` | `void` | `void` | cualquiera en la sala |
-| `game:ready` | `void` | `void` | cualquiera en la sala |
 | `game:start` | `void` | `void` | solo el host |
 | `game:leave` | `void` | `void` | cualquiera |
 | `turn:guess` | `void` | `{ pointsAwarded: number, teamScore: number }` | equipo que describe |
@@ -467,8 +466,8 @@ Validá todo con Zod al arrancar: si falta una variable crítica, el server no l
    por turno (chips 30/45/60), toggle de reparto aleatorio. Botón "Crear sala".
 3. **Unirse** (`/unirse`): 6 cajas de código con foco automático en la primera, campo nombre,
    botón "Entrar a la sala".
-4. **Sala de espera** (`/sala/[code]`): código grande con copiar, paneles de equipo con jugadores y
-   estado "listo", opción de reparto automático, botón "Comenzar partida" (solo host).
+4. **Sala de espera** (`/sala/[code]`): código grande con copiar, paneles de equipo con jugadores,
+   opción de reparto automático, botón "Comenzar partida" (solo host).
 5. **Juego — equipo que describe (activo)**: puntaje de ambos equipos, ronda, **palabra objetivo
    grande**, aviso ámbar "No digas estas palabras" + **chips de palabras prohibidas** (informativos,
    sin acción), temporizador circular, botón **"¡Adiviné!"** y "Pasar turno".

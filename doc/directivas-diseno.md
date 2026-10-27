@@ -63,7 +63,7 @@ un espaciado o un radio literal.
   --on-accent:      #17110C;   /* texto sobre naranja (contraste ~8:1) */
 
   /* Semánticos */
-  --success:        #18B98C;   /* verde azulado — acierto, listo, equipo verde, banner rival */
+  --success:        #18B98C;   /* verde azulado — acierto, equipo verde, banner rival */
   --success-soft:   #10241F;
   --warning:        #FFC043;   /* ámbar — tiempo, avisos, banner del descriptor */
   --warning-soft:   #2A2113;
@@ -104,7 +104,7 @@ terracota `#C05B3C` o coral `#E2725B`.
 |---|---|---|
 | Acción primaria | `--accent` | botón Continuar / Crear sala / Comenzar / **Adiviné** |
 | Equipo | `--team-1..4` | chips de puntaje, nombre de equipo, acentos de tarjeta |
-| Acierto | `--success` | estado "listo", banner del equipo rival |
+| Acierto | `--success` | banner del equipo rival |
 | Urgencia | `--warning` | temporizador, avisos ("no digas estas palabras", "sos quien describe") |
 | Prohibido / penalización | `--danger` | **chips de palabras prohibidas** y cartel de penalización |
 | Puntos / premio | `--gold` | puntajes en ranking, trofeo, MVP |

@@ -17,7 +17,6 @@ export interface PlayerView {
   readonly playerId: string;
   readonly name: string;
   readonly isHost: boolean;
-  readonly isReady: boolean;
   readonly connected: boolean;
   readonly points: number;
 }
@@ -57,7 +56,6 @@ export interface MeView {
   readonly name: string;
   readonly teamId: string | null;
   readonly isHost: boolean;
-  readonly isReady: boolean;
   readonly role: PlayerRole;
 }
 
@@ -143,7 +141,6 @@ export function toMeView(game: Game, viewerId: PlayerId): MeView {
     name: player?.name ?? "",
     teamId: team?.id ?? null,
     isHost: player?.isHost ?? false,
-    isReady: player?.isReady ?? false,
     role: roleOf(game, viewerId, team),
   };
 }
@@ -175,7 +172,6 @@ export function toPlayerView(player: Player): PlayerView {
     playerId: player.id,
     name: player.name,
     isHost: player.isHost,
-    isReady: player.isReady,
     connected: player.connected,
     points: player.points,
   };

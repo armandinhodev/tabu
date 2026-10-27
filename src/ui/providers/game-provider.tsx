@@ -61,7 +61,6 @@ interface GameContextValue {
   readonly joinGame: (code: string, name?: string) => Promise<boolean>;
   readonly assignTeam: (teamId: string) => void;
   readonly autoTeams: () => void;
-  readonly toggleReady: () => void;
   readonly startGame: () => void;
   readonly leaveGame: () => void;
   /** Chat privado de adivinación: respuesta escrita y confirmación del servidor. */
@@ -403,10 +402,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     void run((done) => getSocket().emit("game:autoTeams", done));
   }, [run]);
 
-  const toggleReady = useCallback(() => {
-    void run((done) => getSocket().emit("game:ready", done));
-  }, [run]);
-
   const startGameAction = useCallback(() => {
     void run((done) => getSocket().emit("game:start", done));
   }, [run]);
@@ -501,7 +496,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       joinGame,
       assignTeam,
       autoTeams,
-      toggleReady,
       startGame: startGameAction,
       leaveGame,
       guessMessages,
@@ -524,7 +518,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       joinGame,
       assignTeam,
       autoTeams,
-      toggleReady,
       startGameAction,
       leaveGame,
       guessMessages,

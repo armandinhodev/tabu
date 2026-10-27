@@ -12,7 +12,7 @@ import { locatePlayer, type GameDeps } from "../../application/use-cases/common"
 import { createGame } from "../../application/use-cases/create-game";
 import { joinGame } from "../../application/use-cases/join-game";
 import { assignTeam, autoAssignTeams } from "../../application/use-cases/team-assignment";
-import { setReady, startGame } from "../../application/use-cases/lobby";
+import { startGame } from "../../application/use-cases/lobby";
 import { leaveGame, markDisconnected, reconnectPlayer } from "../../application/use-cases/session";
 import { guessWord, passTurn, reportViolation, skipTurn } from "../../application/use-cases/turn";
 import { logger } from "../config/logger";
@@ -162,16 +162,6 @@ export function attachSocketServer(
       void run(socket, ack, () => {
         const { gameId } = requireBinding(socket);
         const game = autoAssignTeams(deps, gameId);
-
-        snapshot(game);
-        broadcaster.emitState(game);
-      });
-    });
-
-    socket.on(CLIENT_EVENTS.gameReady, (ack) => {
-      void run(socket, ack, () => {
-        const { gameId, playerId } = requireBinding(socket);
-        const game = setReady(deps, gameId, playerId);
 
         snapshot(game);
         broadcaster.emitState(game);

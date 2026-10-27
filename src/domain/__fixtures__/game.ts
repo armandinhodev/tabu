@@ -38,7 +38,6 @@ export function makePlayer(
     name: `Jugador ${id}`,
     teamId: teamId === null ? null : TeamId.from(teamId),
     isHost: false,
-    isReady: true,
     connected: true,
     points: 0,
     lastSeenAt: NOW,

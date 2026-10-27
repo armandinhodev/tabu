@@ -98,7 +98,6 @@ export async function createGame(
     name: input.playerName,
     teamId: null,
     isHost: true,
-    isReady: false,
     connected: true,
     points: 0,
     lastSeenAt: now,

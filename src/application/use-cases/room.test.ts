@@ -20,7 +20,7 @@ import { InvalidRoomCodeError } from "../../domain/errors/DomainError";
 import { createGame } from "./create-game";
 import { joinGame } from "./join-game";
 import { assignTeam, autoAssignTeams } from "./team-assignment";
-import { setReady, startGame } from "./lobby";
+import { startGame } from "./lobby";
 import type { GameDeps } from "./common";
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
@@ -281,16 +281,6 @@ describe("equipos en el lobby", () => {
     expect(next.players).toEqual([]);
     expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
     expect(sizes.reduce((total, size) => total + size, 0)).toBe(4);
-  });
-
-  it("alterna el listo", async () => {
-    const created = await createdRoom(harness);
-
-    const ready = setReady(harness.deps, created.data.gameId, created.data.playerId);
-    const notReady = setReady(harness.deps, created.data.gameId, created.data.playerId);
-
-    expect(ready.players[0]?.isReady).toBe(true);
-    expect(notReady.players[0]?.isReady).toBe(false);
   });
 });
 

@@ -161,7 +161,7 @@ describe("game mapper", () => {
   it("round-trips players without a team and their last contact (D35)", () => {
     const game = makeGame({
       players: [
-        makePlayer("p9", null, { isReady: false, lastSeenAt: LATER }),
+        makePlayer("p9", null, { lastSeenAt: LATER }),
         makePlayer("p10", null, { lastSeenAt: null }),
       ],
     });

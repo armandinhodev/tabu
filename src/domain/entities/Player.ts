@@ -5,7 +5,6 @@ export interface Player {
   readonly name: string;
   readonly teamId: TeamId | null;
   readonly isHost: boolean;
-  readonly isReady: boolean;
   readonly connected: boolean;
   /** Puntos individuales para el MVP del resultado final. */
   readonly points: number;

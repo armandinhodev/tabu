@@ -31,7 +31,6 @@ export interface GamePlayerDocument {
   id: string;
   name: string;
   isHost: boolean;
-  isReady: boolean;
   connected: boolean;
   /** Puntos individuales para el MVP (D4). */
   points: number;
@@ -149,7 +148,6 @@ const playerSchema = new Schema<GamePlayerDocument>(
     id: { type: String, required: true, trim: true },
     name: { type: String, required: true, trim: true },
     isHost: { type: Boolean, required: true },
-    isReady: { type: Boolean, required: true },
     connected: { type: Boolean, required: true },
     points: { type: Number, required: true, min: 0, default: 0 },
     lastSeenAt: { type: Date, default: null },

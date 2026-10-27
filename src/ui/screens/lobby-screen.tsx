@@ -10,7 +10,6 @@ import { ScreenSkeleton } from "@/ui/components/game/banners";
 import { CodeBadge } from "@/ui/components/game/code-badge";
 import { MuteButton } from "@/ui/components/game/mute-button";
 import { PlayerRow, TeamPanel } from "@/ui/components/game/team-panel";
-import { ReadyToggle } from "@/ui/components/game/ready-toggle";
 import { useGame } from "@/ui/providers/game-provider";
 
 /** 04 — Sala de espera (y 11 en desktop): código, equipos y arranque (§6.3). */
@@ -20,7 +19,6 @@ export function LobbyScreen() {
     busy,
     assignTeam,
     autoTeams,
-    toggleReady,
     startGame,
     leaveGame,
     goTo,
@@ -57,15 +55,13 @@ export function LobbyScreen() {
 
           <section className="flex flex-col gap-3">
             <h2 className="text-caption uppercase text-fg-muted">Equipos</h2>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+            <div className="grid gap-3 md:grid-cols-2">
               {state.teams.map((team) => (
                 <TeamPanel
                   key={team.id}
                   team={team}
                   canJoin={!busy}
                   isMine={team.id === state.me.teamId}
-                  viewerId={state.me.playerId}
-                  onToggleReady={toggleReady}
                   onJoin={() => assignTeam(team.id)}
                 />
               ))}
@@ -81,24 +77,10 @@ export function LobbyScreen() {
             ) : (
               <ul className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-4">
                 {state.waitingPlayers.map((player) => (
-                  <PlayerRow
-                    key={player.playerId}
-                    player={player}
-                    color="team-1"
-                    showReady={false}
-                    neutral
-                  />
+                  <PlayerRow key={player.playerId} player={player} color="team-1" neutral />
                 ))}
               </ul>
             )}
-
-            {state.me.teamId === null ? (
-              <ReadyToggle
-                isReady={state.me.isReady}
-                disabled={busy}
-                onToggle={toggleReady}
-              />
-            ) : null}
           </section>
         </div>
 

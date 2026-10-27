@@ -42,7 +42,6 @@ export function joinGame(
     name: uniquePlayerName(game, input.playerName),
     teamId: null,
     isHost: false,
-    isReady: false,
     connected: true,
     points: 0,
     lastSeenAt: deps.clock.now(),

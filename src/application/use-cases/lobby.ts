@@ -3,7 +3,7 @@ import { GameNotFoundError } from "../../domain/errors/DomainError";
 import type { DomainEvent } from "../../domain/events/events";
 import { startGame as startGameTransition } from "../../domain/services/GameStateMachine";
 import type { PlayerId } from "../../domain/value-objects/PlayerId";
-import { requireHost, requirePlayer, requireWaiting, updatePlayer, type GameDeps } from "./common";
+import { requireHost, type GameDeps } from "./common";
 
 export interface StartGameData {
   readonly startedAt: Date;
@@ -18,22 +18,6 @@ function requireGame(deps: GameDeps, gameId: string): Game {
   }
 
   return game;
-}
-
-/** `game:ready` alterna el listo del jugador; es informativo para el host. */
-export function setReady(deps: GameDeps, gameId: string, playerId: PlayerId): Game {
-  const game = requireGame(deps, gameId);
-  requireWaiting(game);
-  requirePlayer(game, playerId);
-
-  const next = updatePlayer(game, playerId, (player) => ({
-    ...player,
-    isReady: !player.isReady,
-  }));
-
-  deps.registry.save(next);
-
-  return next;
 }
 
 /** Solo el host arranca; las reglas de mínimo por equipo viven en el dominio. */
