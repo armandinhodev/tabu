@@ -23,9 +23,9 @@ interface DeckOption {
 type LoadState = "loading" | "ready" | "error";
 
 const TEAM_OPTIONS = [
-  { value: "2", label: "2 equipos" },
-  { value: "3", label: "3 equipos" },
-  { value: "4", label: "4 equipos" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
 ] as const;
 
 const TIME_OPTIONS = [
@@ -153,47 +153,49 @@ export function CreateScreen() {
         </fieldset>
       )}
 
-      <div className="flex flex-col gap-2">
-        <span className="text-caption uppercase text-fg-muted">Equipos</span>
-        <SegmentedControl
-          label="Cantidad de equipos"
-          value={teamCount}
-          options={TEAM_OPTIONS}
-          onValueChange={setTeamCount}
-        />
-      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
+        <div className="flex flex-col gap-2">
+          <span className="text-caption uppercase text-fg-muted">Equipos</span>
+          <SegmentedControl
+            label="Cantidad de equipos"
+            value={teamCount}
+            options={TEAM_OPTIONS}
+            onValueChange={setTeamCount}
+          />
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-caption uppercase text-fg-muted">Tiempo por turno</span>
-        <SegmentedControl
-          label="Tiempo por turno"
-          value={turnSeconds}
-          options={TIME_OPTIONS}
-          onValueChange={setTurnSeconds}
-        />
-      </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-caption uppercase text-fg-muted">Tiempo por turno</span>
+          <SegmentedControl
+            label="Tiempo por turno"
+            value={turnSeconds}
+            options={TIME_OPTIONS}
+            onValueChange={setTurnSeconds}
+          />
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-caption uppercase text-fg-muted">Palabras prohibidas por carta</span>
-        <SegmentedControl
-          label="Cantidad de palabras prohibidas"
-          value={tabooWordCount}
-          options={TABOO_COUNT_OPTIONS}
-          onValueChange={setTabooWordCount}
-        />
-      </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-caption uppercase text-fg-muted">Palabras prohibidas por carta</span>
+          <SegmentedControl
+            label="Cantidad de palabras prohibidas"
+            value={tabooWordCount}
+            options={TABOO_COUNT_OPTIONS}
+            onValueChange={setTabooWordCount}
+          />
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-caption uppercase text-fg-muted">Saltos de carta por ronda</span>
-        <SegmentedControl
-          label="Cantidad de saltos de carta por ronda"
-          value={skipLimit}
-          options={SKIP_LIMIT_OPTIONS}
-          onValueChange={setSkipLimit}
-        />
-        <p className="text-body-sm text-fg-subtle">
-          Skipear no resta puntos: solo acota cuántas cartas se pueden pasar por ronda.
-        </p>
+        <div className="flex flex-col gap-2">
+          <span className="text-caption uppercase text-fg-muted">Saltos de carta por ronda</span>
+          <SegmentedControl
+            label="Cantidad de saltos de carta por ronda"
+            value={skipLimit}
+            options={SKIP_LIMIT_OPTIONS}
+            onValueChange={setSkipLimit}
+          />
+          <p className="text-body-sm text-fg-subtle">
+            Skipear no resta puntos: solo acota cuántas cartas se pueden pasar por ronda.
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface p-4">

@@ -20,7 +20,12 @@ interface SegmentedControlProps<T extends string> {
 
 /**
  * Grupo de toggles de Base UI (foco y teclado resueltos por la primitiva, §13).
- * Se usa para cantidad de equipos y tiempo por turno.
+ * Se usa para cantidad de equipos, tiempo por turno, palabras prohibidas y
+ * saltos de carta.
+ *
+ * En dos columnas el control puede quedar en ~316px. Cada botón conserva un
+ * ancho mínimo y el grupo envuelve en vez de comprimir, para no bajar del
+ * área táctil de 44px ni cortar la etiqueta (§9).
  */
 export function SegmentedControl<T extends string>({
   label,
@@ -41,7 +46,7 @@ export function SegmentedControl<T extends string>({
         }
       }}
       className={cn(
-        "flex w-full gap-1 rounded-md border border-line bg-surface p-1",
+        "flex w-full flex-wrap gap-1 rounded-md border border-line bg-surface p-1",
         className,
       )}
     >
@@ -50,7 +55,7 @@ export function SegmentedControl<T extends string>({
           key={option.value}
           value={option.value}
           className={cn(
-            "min-h-11 flex-1 rounded-sm px-3 font-sans text-body-sm font-medium text-fg-muted",
+            "min-h-11 min-w-11 flex-1 rounded-sm px-3 font-sans text-body-sm font-medium text-fg-muted",
             "transition-colors duration-[var(--dur-instant)] hover:bg-surface-2",
             "data-[pressed]:bg-accent-soft data-[pressed]:text-accent",
           )}
