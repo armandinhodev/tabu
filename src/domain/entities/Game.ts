@@ -46,8 +46,6 @@ export interface Game {
   readonly passedCards: readonly PassedCard[];
   readonly turnHistory: readonly TurnHistoryEntry[];
   readonly round: number;
-  /** Skips consumidos en la ronda actual; se reinicia al cerrar la ronda (S4). */
-  readonly skipsUsed: number;
   readonly createdAt: Date;
   readonly finishedAt: Date | null;
   readonly winnerTeamId: TeamId | null;

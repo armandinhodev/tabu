@@ -71,6 +71,7 @@ export function makeTurn(params: {
   startedAt?: Date;
   deadlineAt?: Date;
   status?: "active" | "ended";
+  skipsUsed?: number;
 }): Turn {
   return {
     id: TurnId.from(params.id ?? "turn-1"),
@@ -80,6 +81,7 @@ export function makeTurn(params: {
     startedAt: params.startedAt ?? NOW,
     deadlineAt: params.deadlineAt ?? LATER,
     status: params.status ?? "active",
+    skipsUsed: params.skipsUsed ?? 0,
   };
 }
 
@@ -122,7 +124,6 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     passedCards: [],
     turnHistory: [],
     round: 1,
-    skipsUsed: 0,
     createdAt: NOW,
     finishedAt: null,
     winnerTeamId: null,

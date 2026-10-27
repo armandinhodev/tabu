@@ -48,6 +48,20 @@ export type DomainEvent =
       readonly cardDiscarded: boolean;
     }
   | {
+      readonly type: "TurnSkipped";
+      readonly gameId: GameId;
+      readonly turnId: TurnId;
+      readonly teamId: TeamId;
+      readonly descriptorId: PlayerId;
+      /** Palabra de la carta nueva que sigue describiendo. */
+      readonly word: string;
+      readonly taboo: readonly string[];
+      /** Palabra de la carta que se skipeó. */
+      readonly skippedWord: string;
+      readonly skipsUsed: number;
+      readonly deadlineAt: Date;
+    }
+  | {
       readonly type: "ScoreChanged";
       readonly gameId: GameId;
       readonly teams: readonly Standing[];

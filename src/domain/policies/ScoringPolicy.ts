@@ -8,7 +8,6 @@ export function pointsForOutcome(kind: TurnOutcomeKind): number {
       return 1;
     case "VIOLATION":
       return -1;
-    case "SKIPPED":
     case "TIME":
       return 0;
     default: {

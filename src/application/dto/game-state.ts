@@ -122,7 +122,7 @@ export function toGameState(game: Game, viewerId: PlayerId): GameStateView {
     round: game.round,
     skipsLeft: Math.max(
       0,
-      effectiveSkipLimit(game.settings.skipLimit, game.settings.teamCount) - game.skipsUsed,
+      effectiveSkipLimit(game.settings.skipLimit) - (turn?.skipsUsed ?? 0),
     ),
     ...(turn === null ? {} : { turn: toTurnView(turn, game.settings.turnSeconds.seconds, me.role) }),
   };

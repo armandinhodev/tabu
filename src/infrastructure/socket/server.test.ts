@@ -212,7 +212,7 @@ describe("socket server", () => {
     expect(states.get(rival.playerId)?.turn?.turnId).toBe(turnBefore);
   });
 
-  it("rechaza el skip cuando se agotaron los saltos de la ronda (S4)", async () => {
+  it("rechaza el skip cuando se agotaron los saltos del turno (S4)", async () => {
     const host = await harness.connect();
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
       playerName: "Host",
@@ -239,29 +239,19 @@ describe("socket server", () => {
     await emitAck(host, "game:autoTeams");
     await emitAck(host, "game:start");
 
-    const first = await waitFor(
+    const descriptor = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER"),
-      "primer descriptor",
+      "descriptor",
     );
-    const firstTeamId = states.get(first.playerId)?.turn?.teamId;
 
-    // El primer skip del equipo A se acepta y no resta puntos.
+    // El primer skip se acepta y no resta puntos.
     // El ack de un skip exitoso es null: el handler no devuelve payload.
-    const accepted = await emitAck<{ error?: { code: string } } | null>(first.client, "turn:skip");
+    const accepted = await emitAck<{ error?: { code: string } } | null>(descriptor.client, "turn:skip");
 
     expect(accepted).toBeNull();
 
-    // Ahora describe el equipo B: su skip agota el límite de la ronda.
-    const second = await waitFor(
-      () =>
-        players.find(({ playerId }) => {
-          const state = states.get(playerId);
-          return state?.me.role === "DESCRIBER" && state?.turn?.teamId !== firstTeamId;
-        }),
-      "segundo descriptor",
-    );
-
-    const rejected = await emitAck<{ error: { code: string } }>(second.client, "turn:skip");
+    // El turno sigue siendo del mismo descriptor: el segundo skip agota el límite.
+    const rejected = await emitAck<{ error: { code: string } }>(descriptor.client, "turn:skip");
 
     expect(rejected.error.code).toBe("SKIP_LIMIT_REACHED");
   });

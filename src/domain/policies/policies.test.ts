@@ -23,10 +23,9 @@ import { pointsForOutcome, scoreAfterOutcome } from "./ScoringPolicy";
 import { nextDescriptor, nextTeam } from "./TurnOrderPolicy";
 
 describe("ScoringPolicy", () => {
-  it("asigna +1 al acierto, -1 a la infracción y 0 a skip/timeout", () => {
+  it("asigna +1 al acierto, -1 a la infracción y 0 al timeout", () => {
     expect(pointsForOutcome("CORRECT")).toBe(1);
     expect(pointsForOutcome("VIOLATION")).toBe(-1);
-    expect(pointsForOutcome("SKIPPED")).toBe(0);
     expect(pointsForOutcome("TIME")).toBe(0);
   });
 
@@ -35,7 +34,6 @@ describe("ScoringPolicy", () => {
     expect(scoreAfterOutcome(Score.from(0), "VIOLATION").value).toBe(0);
     expect(scoreAfterOutcome(Score.from(2), "VIOLATION").value).toBe(1);
     expect(scoreAfterOutcome(Score.from(5), "TIME").value).toBe(5);
-    expect(scoreAfterOutcome(Score.from(5), "SKIPPED").value).toBe(5);
   });
 });
 

@@ -70,25 +70,35 @@ describe("game mapper", () => {
     ).toBe(3);
   });
 
-  it("loads an older snapshot without skips used as zero", () => {
-    const game = makeGame();
+  it("loads an older turn without skips used as zero", () => {
+    const game = makeGame({
+      status: "playing",
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+    });
     const document = toGameDocument(game);
-    const legacy = { ...document } as Partial<typeof document>;
-    delete legacy.skipsUsed;
+    const legacyTurn = { ...document.currentTurn } as Partial<NonNullable<typeof document.currentTurn>>;
+    delete legacyTurn.skipsUsed;
 
-    expect(toGameDomain({ ...legacy, updatedAt: LATER } as GameDocument).skipsUsed).toBe(0);
+    const restored = toGameDomain({
+      ...document,
+      currentTurn: { ...legacyTurn } as NonNullable<typeof document.currentTurn>,
+      updatedAt: LATER,
+    });
+
+    expect(restored.currentTurn?.skipsUsed).toBe(0);
   });
 
-  it("round-trips the skip limit and the skips used", () => {
+  it("round-trips the skip limit and the skips used of the turn", () => {
     const game = makeGame({
       settings: makeSettings({ skipLimit: 2 }),
-      skipsUsed: 1,
+      status: "playing",
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1", skipsUsed: 1 }),
     });
 
     const restored = toGameDomain({ ...toGameDocument(game), updatedAt: LATER });
 
     expect(restored.settings.skipLimit).toBe(2);
-    expect(restored.skipsUsed).toBe(1);
+    expect(restored.currentTurn?.skipsUsed).toBe(1);
   });
 
   it("round-trips the whole aggregate", () => {

@@ -28,6 +28,7 @@ import {
   isTurnExpired,
   reassignDescriptor,
   resolveTurn,
+  skipCard,
   startGame,
   type TransitionContext,
 } from "./GameStateMachine";
@@ -211,7 +212,7 @@ describe("resolveTurn", () => {
     expect(penalty && "cardDiscarded" in penalty ? penalty.cardDiscarded : null).toBe(true);
   });
 
-  it("pasa la carta al equipo rival cuando el descriptor acepta", () => {
+  it("el descriptor salta la carta sin cerrar el turno", () => {
     const { ctx, game } = started();
     const turn = game.currentTurn;
     const deckSizeBefore = game.deck.cards.size;
@@ -220,14 +221,31 @@ describe("resolveTurn", () => {
       throw new Error("expected active turn");
     }
 
-    const result = resolveTurn(game, { kind: "SKIPPED" }, ctx);
+    const result = skipCard(game, ctx);
 
-    // El equipo rival arranca su turno con la carta pasada: no se roba del mazo.
-    expect(result.game.currentTurn?.teamId).toBe("t2");
-    expect(result.game.currentTurn?.card.id).toBe(turn.card.id);
-    expect(result.game.deck.cards.size).toBe(deckSizeBefore);
-    expect(result.game.passedCards).toHaveLength(0);
-    expect(result.game.turnHistory[0]?.reason).toBe("SKIPPED");
+    // Mismo turno y mismo reloj, con otra carta robada del mazo.
+    expect(result.game.currentTurn?.id).toBe(turn.id);
+    expect(result.game.currentTurn?.descriptorId).toBe(turn.descriptorId);
+    expect(result.game.currentTurn?.deadlineAt.getTime()).toBe(turn.deadlineAt.getTime());
+    expect(result.game.currentTurn?.card.id).not.toBe(turn.card.id);
+    expect(result.game.currentTurn?.skipsUsed).toBe(1);
+    expect(result.game.deck.cards.size).toBe(deckSizeBefore - 1);
+
+    // La carta skipeada pasa al rival.
+    expect(result.game.passedCards).toHaveLength(1);
+    expect(result.game.passedCards[0]?.card.id).toBe(turn.card.id);
+    expect(result.game.passedCards[0]?.toTeamId).toBe("t2");
+    expect(eventTypes(result.events)).toContain("TurnSkipped");
+  });
+
+  it("el skip no suma ni resta puntos", () => {
+    const { ctx, game } = started();
+
+    const result = skipCard(game, ctx);
+
+    expect(result.game.teams[0]?.score.value).toBe(0);
+    expect(result.game.teams[1]?.score.value).toBe(0);
+    expect(result.game.turnHistory).toHaveLength(0);
   });
 
   it("devuelve la carta al final del mazo cuando se agota el tiempo", () => {
@@ -250,7 +268,7 @@ describe("resolveTurn", () => {
     const ctx = makeContext();
     const game = makeGame({ status: "playing", currentTurn: null });
 
-    expect(() => resolveTurn(game, { kind: "SKIPPED" }, ctx)).toThrow(TurnNotActiveError);
+    expect(() => resolveTurn(game, { kind: "TIME" }, ctx)).toThrow(TurnNotActiveError);
   });
 
   it("rechaza resolver en una partida que no está jugando", () => {
@@ -260,7 +278,24 @@ describe("resolveTurn", () => {
       currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
     });
 
-    expect(() => resolveTurn(game, { kind: "SKIPPED" }, ctx)).toThrow(GameNotPlayingError);
+    expect(() => resolveTurn(game, { kind: "TIME" }, ctx)).toThrow(GameNotPlayingError);
+  });
+
+  it("rechaza saltar la carta sin turno activo", () => {
+    const ctx = makeContext();
+    const game = makeGame({ status: "playing", currentTurn: null });
+
+    expect(() => skipCard(game, ctx)).toThrow(TurnNotActiveError);
+  });
+
+  it("rechaza saltar la carta en una partida que no está jugando", () => {
+    const ctx = makeContext();
+    const game = makeGame({
+      status: "waiting",
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+    });
+
+    expect(() => skipCard(game, ctx)).toThrow(GameNotPlayingError);
   });
 });
 
@@ -337,8 +372,8 @@ describe("rondas y fin de partida", () => {
       ctx,
     ).game;
 
-    const afterFirst = resolveTurn(game, { kind: "SKIPPED" }, ctx);
-    const afterSecond = resolveTurn(afterFirst.game, { kind: "SKIPPED" }, ctx);
+    const afterFirst = resolveTurn(game, { kind: "TIME" }, ctx);
+    const afterSecond = resolveTurn(afterFirst.game, { kind: "TIME" }, ctx);
 
     expect(afterSecond.game.round).toBe(2);
     expect(afterSecond.game.status).toBe("playing");
@@ -346,7 +381,7 @@ describe("rondas y fin de partida", () => {
     expect(afterSecond.events.some((event) => event.type === "GameFinished")).toBe(false);
   });
 
-  it("reinicia el contador de skips al cambiar de ronda (S4)", () => {
+  it("reinicia el contador de skips en cada turno nuevo (S4)", () => {
     const ctx = makeContext();
     const game = startGame(
       makeGame({
@@ -363,16 +398,17 @@ describe("rondas y fin de partida", () => {
       ctx,
     ).game;
 
-    const afterFirst = resolveTurn(game, { kind: "SKIPPED" }, ctx);
-    expect(afterFirst.game.skipsUsed).toBe(1);
+    const skipped = skipCard(game, ctx);
+    expect(skipped.game.currentTurn?.skipsUsed).toBe(1);
 
-    const afterSecond = resolveTurn(afterFirst.game, { kind: "SKIPPED" }, ctx);
+    // El turno siguiente arranca con el contador en cero.
+    const after = resolveTurn(skipped.game, { kind: "TIME" }, ctx);
 
-    expect(afterSecond.game.round).toBe(2);
-    expect(afterSecond.game.skipsUsed).toBe(0);
+    expect(after.game.currentTurn?.skipsUsed).toBe(0);
   });
 
-  it("termina cuando se agota el mazo y no quedan cartas pasadas", () => {    const ctx = makeContext();
+  it("termina cuando se agota el mazo y no quedan cartas pasadas", () => {
+    const ctx = makeContext();
     const game = startGame(makeGame({ deck: makeDeck([makeCard("c1")]) }), ctx).game;
     const result = resolveTurn(game, { kind: "CORRECT", actorId: PlayerId.from("p1") }, ctx);
 

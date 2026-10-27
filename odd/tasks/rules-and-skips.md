@@ -53,17 +53,22 @@
 - **T1** → S1 — Verticalizar `TabooWords` (lista en columna, desplegada). ✅ `taboo-words.tsx` (`flex flex-col gap-2`), `chip.tsx` (`flex w-full`, texto truncado).
 - **T2** → S4 — `skipLimit` en `GameSettings` + default 3. ✅ `GameSettings.ts` (`DEFAULT_SKIP_LIMIT = 3`).
 - **T3** → S4 — Contador de skips en el agregado `Game` + reset por ronda + error de dominio. ✅ `Game.ts` (`skipsUsed`), `GameStateMachine.ts` (incremento en `SKIPPED`, reset en cambio de ronda), `DomainError.ts` (`SkipLimitReachedError`, code `SKIP_LIMIT_REACHED`).
-- **T4** → S4 — Validación del límite en `skipTurn` (use case). ✅ `turn.ts` + `SkipLimitPolicy.ts` (límite efectivo).
-- **T5** → S4 — Propagar `skipLimit` por payload/socket/DTO/persistencia. ✅ `payloads.ts` (zod 0..10), `create-game.ts`, `game-state.ts` (`SettingsView.skipLimit`, `GameStateView.skipsLeft`), `game.schema.ts`, `game-mapper.ts` (default 3 para partidas viejas).
-- **T6** → S4 — Exponer el contador y bloquear el botón en la UI. ✅ `describing-view.tsx` (botón deshabilitado + "Sin saltos disponibles" + contador), `create-screen.tsx` (`SKIP_LIMIT_OPTIONS`, default "3"), `lobby-screen.tsx` (subtítulo).
+- **T4** → S4 — Validación del límite en `skipTurn` (use case). ✅ `turn.ts` + `SkipLimitPolicy.ts` (límite efectivo). **Revisado:** ahora el skip no cierra el turno.
+- **T5** → S4 — Propagar `skipLimit` por payload/socket/DTO/persistencia. ✅ `payloads.ts` (zod 0..10), `create-game.ts`, `game-state.ts` (`SettingsView.skipLimit`, `GameStateView.skipsLeft`), `game.schema.ts`, `game-mapper.ts` (default 3 para partidas viejas). **Revisado:** `skipsUsed` se mudó del agregado al turno.
+- **T6** → S4 — Exponer el contador y bloquear el botón en la UI. ✅ `describing-view.tsx` (botón deshabilitado + "Sin saltos disponibles" + contador), `create-screen.tsx` (`SKIP_LIMIT_OPTIONS`, default "3"), `lobby-screen.tsx` (subtítulo). **Revisado:** los textos dicen "por turno".
 - **T7** → S2 — Tests de la regla de un solo descriptor por turno. ✅ `turn.test.ts` (3 tests nuevos en "un solo descriptor por turno (S2)").
-- **T8** → S4 — Test end-to-end por socket del límite agotado. ✅ `server.test.ts` ("rechaza el skip cuando se agotaron los saltos de la ronda (S4)"): el primer skip se acepta, el segundo recibe `SKIP_LIMIT_REACHED`.
+- **T8** → S4 — Test end-to-end por socket del límite agotado. ✅ `server.test.ts` ("rechaza el skip cuando se agotaron los saltos del turno (S4)"): el primer skip se acepta, el segundo recibe `SKIP_LIMIT_REACHED`.
+- **T9** → S4 — Skip dentro del turno: nueva transición `skipCard`, evento `TurnSkipped`, socket `turn:skipped`. ✅ `GameStateMachine.ts` (`skipCard`), `events.ts` (dominio + socket), `broadcaster.ts`, `game-provider.tsx` (nuevo listener). Se eliminó el outcome `SKIPPED` y el campo `skipsUsed` del agregado.
 
 **Gates:** `pnpm typecheck` exit 0 · `pnpm lint` exit 0 · `pnpm test` 237 pass / 8 skip · `pnpm build` ✓ Compiled successfully (15.0s).
 
 ### Spec revision (S4)
 
-**S4 (revisada, 2026-10-27).** El límite de skips **nunca puede superar la cantidad de equipos**: una ronda es un turno por equipo, así que con 2 equipos el máximo real de skips por ronda es 2 y un límite de 3 quedaría inalcanzable. `effectiveSkipLimit(skipLimit, teamCount)` acota el límite a `teamCount`. El default de configuración sigue siendo 3, que es alcanzable con 3 o 4 equipos.
+**S4 (revisada, 2026-10-27, 2ª revisión).** El límite de skips es **por turno**, no por ronda. El skip **no cierra el turno**: la carta actual pasa al rival y el descriptor recibe otra del mazo, con el mismo reloj. El contador vive en el turno (`turn.skipsUsed`) y se reinicia en cada turno nuevo.
+
+**S4 (revisada, 2026-10-27, 1ª revisión).** El límite de skips nunca puede superar la cantidad de equipos: una ronda es un turno por equipo, así que con 2 equipos el máximo real de skips por ronda es 2 y un límite de 3 quedaría inalcanzable. `effectiveSkipLimit(skipLimit, teamCount)` acota el límite a `teamCount`. El default de configuración sigue siendo 3, que es alcanzable con 3 o 4 equipos.
+
+> **Nota:** la 1ª revisión quedó obsoleta por la 2ª. Con el límite por turno ya no hace falta acotar por la cantidad de equipos: `effectiveSkipLimit(skipLimit)` solo normaliza a un entero no negativo. El outcome `SKIPPED` se eliminó del dominio porque el skip ya no cierra el turno; el nuevo evento `TurnSkipped` reemplaza a `TurnEnded` en ese caso.
 
 ---
 

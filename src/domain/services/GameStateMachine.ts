@@ -30,7 +30,6 @@ export interface TransitionContext {
 export type TurnOutcome =
   | { readonly kind: "CORRECT"; readonly actorId: PlayerId }
   | { readonly kind: "VIOLATION"; readonly violation: Violation }
-  | { readonly kind: "SKIPPED" }
   | { readonly kind: "TIME" };
 
 export interface TransitionResult {
@@ -98,7 +97,6 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     discardedCardIds: [],
     passedCards: [],
     round: 1,
-    skipsUsed: 0,
     winnerTeamId: null,
     finishedAt: null,
   };
@@ -177,6 +175,7 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     startedAt: ctx.now,
     deadlineAt: new Date(ctx.now.getTime() + game.settings.turnSeconds.toMilliseconds()),
     status: "active",
+    skipsUsed: 0,
   };
 
   const next: Game = {
@@ -201,6 +200,70 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
   };
 
   return { game: next, events: [started] };
+}
+
+/**
+ * Salta la carta que el descriptor está describiendo (S4).
+ *
+ * El turno **no** termina: la carta actual pasa al equipo rival y el
+ * descriptor recibe otra del mazo, con el mismo reloj. El límite de skips
+ * vive en el turno (`turn.skipsUsed`), así que se reinicia con cada turno.
+ */
+export function skipCard(game: Game, ctx: TransitionContext): TransitionResult {
+  if (game.status !== "playing") {
+    throw new GameNotPlayingError(game.status);
+  }
+
+  const turn = game.currentTurn;
+
+  if (turn === null || turn.status !== "active") {
+    throw new TurnNotActiveError();
+  }
+
+  const rival = nextTeam(game.teams, turn.teamId);
+
+  const drawn = game.deck.cards.draw();
+
+  if (drawn.card === null) {
+    // No queda mazo: la carta skipeada pasa al rival y la partida termina.
+    const passedCards = [...game.passedCards, { card: turn.card, toTeamId: rival.id }];
+    const finished = finishGame({ ...game, passedCards }, ctx);
+
+    return { game: finished.game, events: finished.events };
+  }
+
+  const activeCard: Card = {
+    ...drawn.card,
+    taboo: TabooWords.create(drawn.card.taboo.words.slice(0, game.settings.tabooWordCount)),
+  };
+
+  const nextTurn: Turn = {
+    ...turn,
+    card: activeCard,
+    skipsUsed: turn.skipsUsed + 1,
+  };
+
+  const next: Game = {
+    ...game,
+    deck: { ...game.deck, cards: drawn.deck },
+    passedCards: [...game.passedCards, { card: turn.card, toTeamId: rival.id }],
+    currentTurn: nextTurn,
+  };
+
+  const skipped: DomainEvent = {
+    type: "TurnSkipped",
+    gameId: game.id,
+    turnId: turn.id,
+    teamId: turn.teamId,
+    descriptorId: turn.descriptorId,
+    word: nextTurn.card.word,
+    taboo: nextTurn.card.taboo.words,
+    skippedWord: turn.card.word,
+    skipsUsed: nextTurn.skipsUsed,
+    deadlineAt: turn.deadlineAt,
+  };
+
+  return { game: next, events: [skipped] };
 }
 
 export function resolveTurn(
@@ -241,16 +304,10 @@ export function resolveTurn(
 
   let deck = game.deck.cards;
   let discardedCardIds: readonly CardId[] = game.discardedCardIds;
-  let passedCards: readonly PassedCard[] = game.passedCards;
-  let skipsUsed = game.skipsUsed;
 
   if (kind === "VIOLATION") {
     deck = deck.remove(turn.card.id);
     discardedCardIds = [...discardedCardIds, turn.card.id];
-  } else if (kind === "SKIPPED") {
-    const rival = nextTeam(game.teams, turn.teamId);
-    passedCards = [...passedCards, { card: turn.card, toTeamId: rival.id }];
-    skipsUsed += 1;
   } else if (kind === "TIME") {
     deck = deck.returnToBottom(turn.card);
   }
@@ -302,10 +359,8 @@ export function resolveTurn(
     teams,
     deck: { ...game.deck, cards: deck },
     discardedCardIds,
-    passedCards,
     turnHistory: [...game.turnHistory, historyEntry],
     currentTurn: null,
-    skipsUsed,
   };
 
   const firstTeam = teams[0];
@@ -337,9 +392,7 @@ export function resolveTurn(
   }
 
   const withRound: Game =
-    roundComplete && !roundsReached
-      ? { ...nextGame, round: nextGame.round + 1, skipsUsed: 0 }
-      : nextGame;
+    roundComplete && !roundsReached ? { ...nextGame, round: nextGame.round + 1 } : nextGame;
 
   const nextTurn = beginTurn(withRound, ctx);
 

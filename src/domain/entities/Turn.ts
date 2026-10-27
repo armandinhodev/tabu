@@ -4,7 +4,7 @@ import type { PlayerId, TeamId, TurnId } from "../value-objects/PlayerId";
 export type TurnStatus = "active" | "ended";
 
 /** Resultado de un turno; determina puntaje y destino de la carta. */
-export type TurnOutcomeKind = "CORRECT" | "VIOLATION" | "SKIPPED" | "TIME";
+export type TurnOutcomeKind = "CORRECT" | "VIOLATION" | "TIME";
 
 export interface Turn {
   readonly id: TurnId;
@@ -14,4 +14,6 @@ export interface Turn {
   readonly startedAt: Date;
   readonly deadlineAt: Date;
   readonly status: TurnStatus;
+  /** Cartas que este descriptor ya skipeó dentro del turno (S4). */
+  readonly skipsUsed: number;
 }

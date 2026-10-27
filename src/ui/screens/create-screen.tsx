@@ -44,7 +44,7 @@ const TABOO_COUNT_OPTIONS = [
   { value: "6", label: "6" },
 ] as const;
 
-/** Skips por ronda (S4): el skip no penaliza, solo acota cuántas cartas se pueden pasar. */
+/** Skips por turno (S4): el skip no penaliza, solo acota cuántas cartas se pueden saltar. */
 const SKIP_LIMIT_OPTIONS = [
   { value: "0", label: "0" },
   { value: "1", label: "1" },
@@ -185,15 +185,15 @@ export function CreateScreen() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <span className="text-caption uppercase text-fg-muted">Saltos de carta por ronda</span>
+          <span className="text-caption uppercase text-fg-muted">Saltos de carta por turno</span>
           <SegmentedControl
-            label="Cantidad de saltos de carta por ronda"
+            label="Cantidad de saltos de carta por turno"
             value={skipLimit}
             options={SKIP_LIMIT_OPTIONS}
             onValueChange={setSkipLimit}
           />
           <p className="text-body-sm text-fg-subtle">
-            Skipear no resta puntos: solo acota cuántas cartas se pueden pasar por ronda.
+            Skipear no resta puntos: solo acota cuántas cartas se pueden saltar en un turno.
           </p>
         </div>
       </div>

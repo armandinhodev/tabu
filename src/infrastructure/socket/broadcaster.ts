@@ -79,6 +79,15 @@ export class Broadcaster {
           turnSeconds: event.turnSeconds,
         });
         return;
+      case "TurnSkipped":
+        this.io.to(game.id).emit(SERVER_EVENTS.turnSkipped, {
+          turnId: event.turnId,
+          teamId: event.teamId,
+          skippedWord: event.skippedWord,
+          skipsUsed: event.skipsUsed,
+          deadlineAt: event.deadlineAt.getTime(),
+        });
+        return;
       case "TurnEnded":
         this.io.to(game.id).emit(SERVER_EVENTS.turnEnded, {
           turnId: event.turnId,

@@ -39,7 +39,7 @@ export interface CreateGameOptions {
   readonly teamCount: number;
   readonly turnSeconds: number;
   readonly tabooWordCount: number;
-  /** Skips por ronda (S4). */
+  /** Skips por turno (S4). */
   readonly skipLimit: number;
   readonly randomTeams: boolean;
 }
@@ -204,12 +204,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
       if (payload.reason === "CORRECT") {
         playSound("correct.guess");
-        return;
       }
+    };
 
-      if (payload.reason === "SKIPPED") {
-        playSound("turn.skip");
-      }
+    const onTurnSkipped = (payload: { skippedWord: string }): void => {
+      // El turno sigue: el descriptor recibe otra carta con el mismo reloj.
+      playSound("turn.skip");
+      appendGuessMessage(`Carta pasada: "${payload.skippedWord}" va al rival.`, "notice");
     };
 
     const onPenalty = (payload: PenaltyAppliedView): void => {
@@ -255,6 +256,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.on("turn:started", onTurnStarted);
     socket.on("turn:tick", onTick);
     socket.on("turn:ended", onTurnEnded);
+    socket.on("turn:skipped", onTurnSkipped);
     socket.on("penalty:applied", onPenalty);
     socket.on("score:updated", onScore);
     socket.on("round:ended", onRoundEnded);
@@ -276,6 +278,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off("turn:started", onTurnStarted);
       socket.off("turn:tick", onTick);
       socket.off("turn:ended", onTurnEnded);
+      socket.off("turn:skipped", onTurnSkipped);
       socket.off("penalty:applied", onPenalty);
       socket.off("score:updated", onScore);
       socket.off("round:ended", onRoundEnded);

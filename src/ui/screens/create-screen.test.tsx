@@ -40,13 +40,13 @@ describe("CreateScreen", () => {
     expect(screen.getByLabelText("Cantidad de equipos")).toBeInTheDocument();
     expect(screen.getByLabelText("Tiempo por turno")).toBeInTheDocument();
     expect(screen.getByLabelText("Cantidad de palabras prohibidas")).toBeInTheDocument();
-    expect(screen.getByLabelText("Cantidad de saltos de carta por ronda")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cantidad de saltos de carta por turno")).toBeInTheDocument();
   });
 
-  it("usa el default de 3 saltos por ronda", () => {
+  it("usa el default de 3 saltos por turno", () => {
     render(<CreateScreen />);
 
-    const group = screen.getByLabelText("Cantidad de saltos de carta por ronda");
+    const group = screen.getByLabelText("Cantidad de saltos de carta por turno");
     const pressed = [...group.querySelectorAll("button")].find(
       (el) => el.getAttribute("aria-pressed") === "true" || el.hasAttribute("data-pressed"),
     );

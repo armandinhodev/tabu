@@ -120,7 +120,6 @@ export async function createGame(
     passedCards: [],
     turnHistory: [],
     round: 1,
-    skipsUsed: 0,
     createdAt: now,
     finishedAt: null,
     winnerTeamId: null,

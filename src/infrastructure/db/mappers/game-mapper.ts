@@ -59,7 +59,6 @@ export function toGameDocument(game: Game): GameDocumentInput {
       at: entry.at,
     })),
     round: game.round,
-    skipsUsed: game.skipsUsed,
     winnerTeamId: game.winnerTeamId,
     createdAt: game.createdAt,
     finishedAt: game.finishedAt,
@@ -103,7 +102,6 @@ export function toGameDomain(document: GameDocument): Game {
       at: entry.at,
     })),
     round: document.round,
-    skipsUsed: document.skipsUsed ?? 0,
     createdAt: document.createdAt,
     finishedAt: document.finishedAt,
     winnerTeamId: document.winnerTeamId === null ? null : TeamId.from(document.winnerTeamId),
@@ -155,6 +153,7 @@ function toTurnDocument(turn: Turn): GameTurnDocument {
     startedAt: turn.startedAt,
     deadlineAt: turn.deadlineAt,
     status: turn.status,
+    skipsUsed: turn.skipsUsed,
   };
 }
 
@@ -188,6 +187,7 @@ function toTurnDomain(turn: GameTurnDocument): Turn {
     startedAt: turn.startedAt,
     deadlineAt: turn.deadlineAt,
     status: turn.status,
+    skipsUsed: turn.skipsUsed ?? 0,
   };
 }
 

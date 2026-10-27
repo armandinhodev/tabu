@@ -3,7 +3,7 @@ import { MAX_TABOO_WORDS } from "../../../../domain/value-objects/TabooWords";
 import { DEFAULT_SKIP_LIMIT, DEFAULT_TABOO_WORD_COUNT } from "../../../../domain/entities/GameSettings";
 
 export type GameStatusDocument = "waiting" | "playing" | "finished";
-export type TurnOutcomeDocument = "CORRECT" | "VIOLATION" | "SKIPPED" | "TIME";
+export type TurnOutcomeDocument = "CORRECT" | "VIOLATION" | "TIME";
 
 export interface GameDeckCardDocument {
   id: string;
@@ -57,6 +57,8 @@ export interface GameTurnDocument {
   startedAt: Date;
   deadlineAt: Date;
   status: "active" | "ended";
+  /** Cartas skipeadas dentro de este turno (S4). */
+  skipsUsed?: number;
 }
 
 export interface GamePassedCardDocument {
@@ -93,8 +95,6 @@ export interface GameDocument {
   passedCards: GamePassedCardDocument[];
   turnHistory: GameTurnHistoryDocument[];
   round: number;
-  /** Skips consumidos en la ronda actual (S4). */
-  skipsUsed?: number;
   winnerTeamId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -178,6 +178,7 @@ const turnSchema = new Schema<GameTurnDocument>(
     startedAt: { type: Date, required: true },
     deadlineAt: { type: Date, required: true },
     status: { type: String, required: true, enum: ["active", "ended"] },
+    skipsUsed: { type: Number, required: true, min: 0, default: 0 },
   },
   { _id: false, versionKey: false },
 );
@@ -197,7 +198,7 @@ const turnHistorySchema = new Schema<GameTurnHistoryDocument>(
     turnId: { type: String, required: true, trim: true },
     teamId: { type: String, required: true, trim: true },
     descriptorId: { type: String, required: true, trim: true },
-    reason: { type: String, required: true, enum: ["CORRECT", "VIOLATION", "SKIPPED", "TIME"] },
+    reason: { type: String, required: true, enum: ["CORRECT", "VIOLATION", "TIME"] },
     pointsDelta: { type: Number, required: true },
     cardDiscarded: { type: Boolean, required: true },
     at: { type: Date, required: true },
@@ -221,7 +222,6 @@ export const gameSchema = new Schema<GameDocument>(
     passedCards: { type: [passedCardSchema], required: true, default: [] },
     turnHistory: { type: [turnHistorySchema], required: true, default: [] },
     round: { type: Number, required: true, min: 1, default: 1 },
-    skipsUsed: { type: Number, required: true, min: 0, default: 0 },
     winnerTeamId: { type: String, default: null },
     createdAt: { type: Date, required: true },
     finishedAt: { type: Date, default: null },

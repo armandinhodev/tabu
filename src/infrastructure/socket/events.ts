@@ -31,6 +31,7 @@ export const SERVER_EVENTS = {
   gameStarted: "game:started",
   gameFinished: "game:finished",
   turnStarted: "turn:started",
+  turnSkipped: "turn:skipped",
   turnTick: "turn:tick",
   turnEnded: "turn:ended",
   penaltyApplied: "penalty:applied",
@@ -108,10 +109,19 @@ export interface TurnStartedView {
 
 export interface TurnEndedView {
   readonly turnId: string;
-  readonly reason: "CORRECT" | "VIOLATION" | "SKIPPED" | "TIME";
+  readonly reason: "CORRECT" | "VIOLATION" | "TIME";
   readonly pointsDelta: number;
   readonly teamId: string;
   readonly cardDiscarded: boolean;
+}
+
+/** El descriptor saltó la carta: sigue en el mismo turno con otra palabra. */
+export interface TurnSkippedView {
+  readonly turnId: string;
+  readonly teamId: string;
+  readonly skippedWord: string;
+  readonly skipsUsed: number;
+  readonly deadlineAt: number;
 }
 
 export interface PenaltyAppliedView {
@@ -140,6 +150,7 @@ export interface ServerToClientEvents {
   "game:started": (payload: GameStartedView) => void;
   "game:finished": (payload: GameFinishedView) => void;
   "turn:started": (payload: TurnStartedView) => void;
+  "turn:skipped": (payload: TurnSkippedView) => void;
   "turn:tick": (payload: { readonly remaining: number }) => void;
   "turn:ended": (payload: TurnEndedView) => void;
   "penalty:applied": (payload: PenaltyAppliedView) => void;

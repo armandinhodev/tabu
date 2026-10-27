@@ -9,7 +9,7 @@ import type { DomainEvent } from "../../domain/events/events";
 import type { GuessRequest, ReportViolationRequest } from "../../infrastructure/socket/payloads";
 import { validateReport } from "../../domain/policies/PenaltyPolicy";
 import { effectiveSkipLimit } from "../../domain/policies/SkipLimitPolicy";
-import { resolveTurn, type TurnOutcome } from "../../domain/services/GameStateMachine";
+import { resolveTurn, skipCard, type TurnOutcome } from "../../domain/services/GameStateMachine";
 import type { PlayerId, TeamId } from "../../domain/value-objects/PlayerId";
 import { normalizeWord } from "../../domain/value-objects/TabooWords";
 import { requirePlayer, requirePlaying, type GameDeps } from "./common";
@@ -120,14 +120,11 @@ export function reportViolation(
 }
 
 /**
- * Solo el descriptor acepta y pasa la carta, según §8.1 (D38).
+ * El descriptor salta la carta que está describiendo (S4).
  *
- * El skip no penaliza (0 puntos) pero está acotado por ronda (S4): cuando se
- * agotan los skips permitidos, la acción se rechaza sin cerrar el turno.
- *
- * El límite nunca supera la cantidad de equipos: una ronda es un turno por
- * equipo, así que con 2 equipos el máximo real de skips por ronda es 2 y un
- * límite de 3 quedaría inalcanzable.
+ * El turno **no** termina: la carta pasa al rival y el descriptor recibe otra,
+ * con el mismo reloj. El skip no penaliza (0 puntos); solo acota cuántas
+ * cartas se pueden saltar dentro de un mismo turno.
  */
 export function skipTurn(deps: GameDeps, gameId: string, playerId: PlayerId): TurnActionData {
   const game = requireGame(deps, gameId);
@@ -139,13 +136,28 @@ export function skipTurn(deps: GameDeps, gameId: string, playerId: PlayerId): Tu
     throw new NotAllowedError("Only the descriptor can pass the card");
   }
 
-  const limit = effectiveSkipLimit(game.settings.skipLimit, game.settings.teamCount);
+  const limit = effectiveSkipLimit(game.settings.skipLimit);
 
-  if (game.skipsUsed >= limit) {
+  if (turn.skipsUsed >= limit) {
     throw new SkipLimitReachedError(limit);
   }
 
-  return apply(deps, game, { kind: "SKIPPED" }, turn.teamId);
+  const result = skipCard(game, {
+    now: deps.clock.now(),
+    rng: deps.rng,
+    newTurnId: deps.ids.turnId,
+  });
+
+  deps.registry.save(result.game);
+
+  const team = result.game.teams.find((candidate) => candidate.id === turn.teamId);
+
+  return {
+    game: result.game,
+    pointsDelta: 0,
+    teamScore: team?.score.value ?? 0,
+    events: result.events,
+  };
 }
 
 /** Cierre por reloj: lo usa el scheduler cuando se cumple `deadlineAt` (S10). */
