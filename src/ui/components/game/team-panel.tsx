@@ -1,6 +1,7 @@
 "use client";
 
 import type { PlayerView, TeamView } from "@/application/dto/game-state";
+import { Mic } from "lucide-react";
 import { Button } from "@/ui/components/ui/button";
 import { cn } from "@/ui/lib/cn";
 import { NEUTRAL_PALETTE, teamPalette } from "./team-colors";
@@ -9,17 +10,25 @@ export function PlayerRow({
   player,
   color,
   neutral = false,
+  isDescriptor = false,
 }: {
   readonly player: PlayerView;
   readonly color: string;
   /** Sin equipo asignado: avatar neutro, sin color de equipo. */
   readonly neutral?: boolean;
+  readonly isDescriptor?: boolean;
 }) {
   const palette = neutral ? NEUTRAL_PALETTE : teamPalette(color);
   const initial = player.name.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <li className="flex items-center gap-3">
+    <li
+      aria-current={isDescriptor ? "true" : undefined}
+      className={cn(
+        "flex items-center gap-3",
+        isDescriptor && ["-mx-2 rounded-md border px-2 py-2", palette.border, palette.soft],
+      )}
+    >
       <span
         aria-hidden="true"
         className={cn(
@@ -30,9 +39,21 @@ export function PlayerRow({
       >
         {initial}
       </span>
-      <span className="min-w-0 flex-1 truncate text-body text-fg">{player.name}</span>
+      <span
+        className={`min-w-0 flex-1 truncate text-body ${isDescriptor ? `font-semibold ${palette.text}` : "text-fg"}`}
+      >
+        {player.name}
+      </span>
+      {isDescriptor ? (
+        <span
+          className={`inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-1 text-micro font-semibold ${palette.text}`}
+        >
+          <Mic aria-hidden="true" className="size-3" />
+          Describe
+        </span>
+      ) : null}
       {player.isHost ? (
-        <span className="rounded-sm bg-surface-3 px-2 py-0.5 text-micro uppercase text-fg-muted">
+        <span className="rounded-sm bg-surface-3 px-2 py-0.5 text-micro text-fg-muted uppercase">
           host
         </span>
       ) : null}
@@ -47,6 +68,7 @@ interface TeamPanelProps {
   readonly isMine: boolean;
   readonly isActive?: boolean;
   readonly showScore?: boolean;
+  readonly descriptorId?: string;
 }
 
 /** Panel de equipo del lobby y de la partida (§11, §12). */
@@ -57,6 +79,7 @@ export function TeamPanel({
   isMine,
   isActive = false,
   showScore = false,
+  descriptorId,
 }: TeamPanelProps) {
   const palette = teamPalette(team.color);
 
@@ -65,8 +88,8 @@ export function TeamPanel({
       aria-label={team.name}
       className={cn(
         "rounded-lg border bg-surface p-4",
-        isActive ? "border-line-strong" : "border-line",
-        isMine && "border-line-strong",
+        isActive ? palette.border : "border-line",
+        isMine && !isActive && "border-line-strong",
       )}
     >
       <header className="flex items-center justify-between gap-3">
@@ -86,7 +109,12 @@ export function TeamPanel({
       ) : (
         <ul className="mt-3 flex flex-col gap-2.5">
           {team.players.map((player) => (
-            <PlayerRow key={player.playerId} player={player} color={team.color} />
+            <PlayerRow
+              key={player.playerId}
+              player={player}
+              color={team.color}
+              isDescriptor={isActive && player.playerId === descriptorId}
+            />
           ))}
         </ul>
       )}

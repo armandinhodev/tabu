@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Sonido sintetizado con Web Audio (§8): sin archivos, sin bundle extra.
- * El contexto nace suspendido y se reanuda con el primer gesto del usuario
- * (requisito de iOS/Safari). Volumen maestro 0.5 y mute persistido.
+ * Lightweight Web Audio cues: soft harmonic voices, short envelopes and a
+ * filtered, gently compressed mix. No audio assets or runtime dependencies.
+ * Gesture unlock, master volume and persisted mute retain their existing API.
  */
 
 export type SoundName =
@@ -32,121 +32,137 @@ function tone(
   start: number,
   frequency: number,
   duration: number,
-  type: OscillatorType = "sine",
-  gain = 0.6,
+  gain = 0.22,
+  endFrequency = frequency,
 ): void {
-  const oscillator = context.createOscillator();
   const envelope = context.createGain();
-
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(gain, start + 0.01);
+  envelope.gain.setValueAtTime(0, start);
+  envelope.gain.linearRampToValueAtTime(gain, start + Math.min(0.012, duration * 0.12));
+  envelope.gain.exponentialRampToValueAtTime(gain * 0.34, start + Math.min(0.06, duration * 0.4));
   envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
-  oscillator.connect(envelope);
+  envelope.gain.linearRampToValueAtTime(0, start + duration + 0.012);
   envelope.connect(out);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.02);
-}
 
-function slide(
-  context: AudioContext,
-  out: GainNode,
-  start: number,
-  from: number,
-  to: number,
-  duration: number,
-): void {
-  const oscillator = context.createOscillator();
-  const envelope = context.createGain();
+  // Quiet, slightly inharmonic overtones give each note a rounded mallet timbre.
+  const partials = [
+    [1, 0.76],
+    [2.003, 0.18],
+    [3.997, 0.06],
+  ] as const;
+  const audible = partials.filter(
+    ([ratio]) => Math.max(frequency, endFrequency) * ratio < context.sampleRate * 0.45,
+  );
+  let remaining = audible.length;
 
-  oscillator.type = "sawtooth";
-  oscillator.frequency.setValueAtTime(from, start);
-  oscillator.frequency.exponentialRampToValueAtTime(to, start + duration);
-  envelope.gain.setValueAtTime(0.0001, start);
-  envelope.gain.exponentialRampToValueAtTime(0.5, start + 0.01);
-  envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
-  oscillator.connect(envelope);
-  envelope.connect(out);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.02);
+  for (const [ratio, level] of audible) {
+    const oscillator = context.createOscillator();
+    const partial = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency * ratio, start);
+    if (endFrequency !== frequency) {
+      oscillator.frequency.exponentialRampToValueAtTime(endFrequency * ratio, start + duration);
+    }
+    partial.gain.value = level;
+    oscillator.connect(partial);
+    partial.connect(envelope);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      partial.disconnect();
+      if (--remaining === 0) envelope.disconnect();
+    };
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.016);
+  }
 }
 
 function noise(context: AudioContext, out: GainNode, start: number, duration: number): void {
-  const frames = Math.floor(context.sampleRate * duration);
+  const frames = Math.ceil(context.sampleRate * (duration + 0.02));
   const buffer = context.createBuffer(1, frames, context.sampleRate);
   const data = buffer.getChannelData(0);
 
   for (let index = 0; index < frames; index += 1) {
-    data[index] = (Math.random() * 2 - 1) * (1 - index / frames);
+    data[index] = Math.random() * 2 - 1;
   }
 
   const source = context.createBufferSource();
+  const filter = context.createBiquadFilter();
   const envelope = context.createGain();
 
   source.buffer = buffer;
-  envelope.gain.value = 0.25;
-  source.connect(envelope);
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(1_900, start);
+  filter.frequency.exponentialRampToValueAtTime(650, start + duration);
+  filter.Q.value = 0.65;
+  envelope.gain.setValueAtTime(0, start);
+  envelope.gain.linearRampToValueAtTime(0.07, start + 0.012);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  envelope.gain.linearRampToValueAtTime(0, start + duration + 0.012);
+  source.connect(filter);
+  filter.connect(envelope);
   envelope.connect(out);
+  source.onended = () => {
+    source.disconnect();
+    filter.disconnect();
+    envelope.disconnect();
+  };
   source.start(start);
+  source.stop(start + duration + 0.016);
 }
 
 const SOUNDS: Record<SoundName, Voice> = {
   "ui.click": (context, out, start) => {
-    tone(context, out, start, 1_200, 0.04, "sine", 0.35);
+    tone(context, out, start, 760, 0.04, 0.1);
   },
   "player.join": (context, out, start) => {
-    tone(context, out, start, 523.25, 0.07, "triangle", 0.4);
-    tone(context, out, start + 0.07, 659.25, 0.07, "triangle", 0.4);
+    tone(context, out, start, 523.25, 0.13, 0.16);
+    tone(context, out, start + 0.075, 659.25, 0.16, 0.18);
   },
   "game.start": (context, out, start) => {
-    [523.25, 659.25, 783.99, 1_046.5].forEach((frequency, index) => {
-      tone(context, out, start + index * 0.09, frequency, 0.12, "triangle", 0.4);
+    [261.63, 329.63, 392, 523.25].forEach((frequency, index) => {
+      tone(context, out, start + index * 0.085, frequency, 0.19, 0.22);
     });
   },
   "turn.start": (context, out, start) => {
-    tone(context, out, start, 880, 0.06, "square", 0.3);
-    tone(context, out, start + 0.08, 1_320, 0.04, "sine", 0.3);
+    tone(context, out, start, 523.25, 0.13, 0.16);
+    tone(context, out, start + 0.085, 783.99, 0.18, 0.2);
   },
   "turn.tick": (context, out, start) => {
-    tone(context, out, start, 1_500, 0.03, "square", 0.22);
+    tone(context, out, start, 990, 0.045, 0.08);
   },
   "correct.guess": (context, out, start) => {
     [659.25, 783.99, 1_046.5].forEach((frequency, index) => {
-      tone(context, out, start + index * 0.08, frequency, 0.14, "triangle", 0.42);
+      tone(context, out, start + index * 0.075, frequency, 0.18, 0.22);
     });
   },
   "taboo.hit": (context, out, start) => {
-    slide(context, out, start, 220, 110, 0.36);
-    noise(context, out, start, 0.18);
+    tone(context, out, start, 220, 0.23, 0.21, 174.61);
+    tone(context, out, start + 0.085, 146.83, 0.2, 0.17, 130.81);
   },
   "turn.skip": (context, out, start) => {
-    tone(context, out, start, 392, 0.09, "triangle", 0.35);
-    tone(context, out, start + 0.09, 294, 0.1, "triangle", 0.35);
+    noise(context, out, start, 0.14);
+    tone(context, out, start + 0.04, 392, 0.12, 0.14, 329.63);
   },
   "score.change": (context, out, start) => {
-    tone(context, out, start, 988, 0.06, "square", 0.28);
-    tone(context, out, start + 0.06, 1_318, 0.08, "square", 0.28);
+    tone(context, out, start, 783.99, 0.09, 0.12);
+    tone(context, out, start + 0.06, 1_046.5, 0.12, 0.14);
   },
   "round.end": (context, out, start) => {
-    [523.25, 659.25, 880].forEach((frequency, index) => {
-      tone(context, out, start + index * 0.14, frequency, 0.2, "triangle", 0.4);
+    [392, 493.88, 587.33].forEach((frequency, index) => {
+      tone(context, out, start + index * 0.1, frequency, 0.22, 0.2);
     });
   },
   "game.over": (context, out, start) => {
-    [523.25, 659.25, 783.99, 1_046.5].forEach((frequency, index) => {
-      tone(context, out, start + index * 0.15, frequency, 0.24, "triangle", 0.44);
+    [261.63, 329.63, 392, 523.25].forEach((frequency, index) => {
+      tone(context, out, start + index * 0.11, frequency, 0.26, 0.23);
     });
   },
   error: (context, out, start) => {
-    tone(context, out, start, 196, 0.05, "sawtooth", 0.32);
-    tone(context, out, start + 0.06, 165, 0.05, "sawtooth", 0.32);
+    tone(context, out, start, 293.66, 0.1, 0.16);
+    tone(context, out, start + 0.09, 261.63, 0.13, 0.14);
   },
   reconnect: (context, out, start) => {
-    tone(context, out, start, 440, 0.08, "sine", 0.32);
-    tone(context, out, start + 0.09, 554, 0.08, "sine", 0.32);
+    tone(context, out, start, 440, 0.12, 0.14);
+    tone(context, out, start + 0.09, 554.37, 0.15, 0.16);
   },
 };
 
@@ -213,7 +229,26 @@ export function unlockAudio(): void {
     context = new Ctor();
     master = context.createGain();
     master.gain.value = MASTER_VOLUME;
-    master.connect(context.destination);
+    const filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = Math.min(6_800, context.sampleRate * 0.45);
+    filter.Q.value = 0.5;
+    const compressor = context.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 20;
+    compressor.ratio.value = 3;
+    compressor.attack.value = 0.004;
+    compressor.release.value = 0.08;
+    const reflection = context.createDelay(0.1);
+    reflection.delayTime.value = 0.045;
+    const wet = context.createGain();
+    wet.gain.value = 0.08;
+    master.connect(filter);
+    filter.connect(compressor);
+    filter.connect(reflection);
+    reflection.connect(wet);
+    wet.connect(compressor);
+    compressor.connect(context.destination);
   }
 
   if (context.state === "suspended") {

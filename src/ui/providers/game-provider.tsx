@@ -19,8 +19,9 @@ import type {
   GuessAck,
   PenaltyAppliedView,
   RoundEndedView,
+  TurnStartedView,
 } from "@/infrastructure/socket/events";
-import type { GuessMessage, GuessMessageKind } from "@/ui/lib/guess-messages";
+import { isPublicMessage, type GuessMessage, type GuessMessageKind } from "@/ui/lib/guess-messages";
 import { getSocket } from "@/ui/lib/socket";
 import { playSound } from "@/ui/lib/sound";
 import {
@@ -91,14 +92,28 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const lastTick = useRef<number>(0);
   const guessMessageId = useRef<number>(0);
 
-  const appendGuessMessage = useCallback((text: string, kind: GuessMessageKind): void => {
-    guessMessageId.current += 1;
-    const message: GuessMessage = { id: guessMessageId.current, text, kind };
+  const appendGuessMessage = useCallback(
+    (text: string, kind: GuessMessageKind, outcome?: GuessMessage["outcome"]): void => {
+      guessMessageId.current += 1;
+      const message: GuessMessage = {
+        id: guessMessageId.current,
+        text,
+        kind,
+        ...(outcome ? { outcome } : {}),
+      };
 
-    setGuessMessages((current) => [...current, message]);
-  }, []);
+      setGuessMessages((current) => [...current, message]);
+    },
+    [],
+  );
 
   const applyState = useCallback((next: GameStateView) => {
+    if (
+      stateRef.current !== null &&
+      (stateRef.current.code !== next.code || stateRef.current.turn?.turnId !== next.turn?.turnId)
+    ) {
+      setGuessMessages([]);
+    }
     stateRef.current = next;
     setState(next);
 
@@ -179,9 +194,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       playSound("game.start");
     };
 
-    const onTurnStarted = (): void => {
+    const teamName = (teamId?: string): string =>
+      stateRef.current?.teams?.find((team) => team.id === teamId)?.name ?? "Equipo";
+    const playerName = (playerId: string): string =>
+      stateRef.current?.teams
+        ?.flatMap((team) => team.players)
+        .find((player) => player.playerId === playerId)?.name ?? "Un jugador";
+
+    const onTurnStarted = (payload: TurnStartedView): void => {
       lastTick.current = 0;
       playSound("turn.start");
+      appendGuessMessage(
+        `Comienza el turno de ${teamName(payload.teamId)}. Describe ${playerName(payload.descriptorId)}.`,
+        "turn",
+      );
     };
 
     const onTick = (payload: { remaining: number }): void => {
@@ -197,34 +223,39 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       playSound("turn.tick");
     };
 
-    const onTurnEnded = (payload: { reason: string }): void => {
-      // Clear guesses when a card resolves or the timed round ends.
-      // Penalty notices arrive afterwards and remain visible for the next card.
-      setGuessMessages([]);
+    const onTurnEnded = (payload: { reason: string; teamId?: string }): void => {
+      // Keep public activity while clearing the previous card's private answers.
+      setGuessMessages((current) => current.filter(isPublicMessage));
 
       if (payload.reason === "CORRECT") {
         playSound("correct.guess");
+        appendGuessMessage(`Acierto para ${teamName(payload.teamId)} (+1 punto).`, "score");
+      } else if (payload.reason === "TIME") {
+        appendGuessMessage(`Finalizó el turno de ${teamName(payload.teamId)}.`, "turn");
       }
     };
 
     const onTurnSkipped = (payload: { skippedWord: string }): void => {
       // El turno sigue: el descriptor recibe otra carta con el mismo reloj.
       playSound("turn.skip");
-      appendGuessMessage(`Carta pasada: "${payload.skippedWord}" va al rival.`, "notice");
+      appendGuessMessage(
+        `Carta saltada: "${payload.skippedWord}". Pasa al siguiente equipo.`,
+        "skip",
+      );
     };
 
     const onPenalty = (payload: PenaltyAppliedView): void => {
       setPenalty(payload);
       playSound("taboo.hit");
 
-      const turn = stateRef.current?.turn;
-
-      if (turn !== undefined && payload.teamId === turn.teamId) {
-        appendGuessMessage(
-          "Carta pasada: el otro equipo apretó una palabra prohibida y tu equipo pierde 1 punto.",
-          "notice",
-        );
-      }
+      const action =
+        payload.reason === "TABOO_WORD" && payload.tabooWord
+          ? `marcó la palabra prohibida "${payload.tabooWord}"`
+          : "reportó una infracción";
+      appendGuessMessage(
+        `${playerName(payload.reportedBy)} ${action}. Carta anulada: ${teamName(payload.teamId)} pierde 1 punto.`,
+        "penalty",
+      );
     };
 
     const onScore = (): void => {
@@ -441,9 +472,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      const roomCode = stateRef.current?.code;
+      const senderId = stateRef.current?.me.playerId;
+      const turnId = stateRef.current?.turn?.turnId;
+
       void run<GuessAck>((done) => getSocket().emit("turn:guess", { guess: trimmed }, done)).then(
         (ack) => {
-          if (ack === null) {
+          if (
+            ack === null ||
+            stateRef.current?.code !== roomCode ||
+            stateRef.current?.me.playerId !== senderId ||
+            stateRef.current?.turn?.turnId !== turnId
+          ) {
             return;
           }
 
@@ -451,6 +491,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           appendGuessMessage(
             ack.correct ? "¡Acertaste!" : "No es esa. Probá de nuevo.",
             "feedback",
+            ack.correct ? "correct" : "incorrect",
           );
         },
       );

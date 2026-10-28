@@ -1,16 +1,18 @@
 /**
- * Líneas del chat privado de adivinación (S3, S5).
- *
- * El chat es por socket: cada jugador tiene su propia lista y nunca se
- * transmite al resto de la sala. `guess` es la respuesta escrita por el
- * jugador, `feedback` la confirmación del servidor y `notice` el aviso de
- * penalización por palabra prohibida.
+ * Local activity feed. Guess/feedback entries are private to their author;
+ * event entries are derived from existing public game events.
  */
 
-export type GuessMessageKind = "guess" | "feedback" | "notice";
+export type GuessMessageKind =
+  "guess" | "feedback" | "notice" | "skip" | "penalty" | "turn" | "score";
 
 export interface GuessMessage {
   readonly id: number;
   readonly text: string;
   readonly kind: GuessMessageKind;
+  readonly outcome?: "correct" | "incorrect";
+}
+
+export function isPublicMessage(message: GuessMessage): boolean {
+  return message.kind !== "guess" && message.kind !== "feedback";
 }

@@ -16,6 +16,30 @@ vi.mock("react", async () => {
 
 afterEach(cleanup);
 
+it.each([
+  "Si alguien dice una palabra prohibida, el otro equipo la marca.",
+  "Solo vos y el rival ven la palabra",
+])("does not display the removed game legend: %s", (legend) => {
+  const game = makeGame({
+    status: "playing",
+    currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+  });
+  const state = toGameState(game, PlayerId.from("p1"));
+  render(
+    <SoundProvider>
+      <DescribingView
+        state={state}
+        turn={state.turn!}
+        busy={false}
+        reportedWord={null}
+        onSkipCard={vi.fn()}
+        onReport={vi.fn()}
+      />
+    </SoundProvider>,
+  );
+  expect(screen.queryByText(legend)).not.toBeInTheDocument();
+});
+
 it.each(["p1", "p2", "p3"])(
   "shows only card skipping to the descriptor and no turn-skipping control (%s)",
   (playerId) => {
@@ -41,6 +65,9 @@ it.each(["p1", "p2", "p3"])(
     );
 
     expect(screen.queryByRole("button", { name: /reportar gesto/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /silenciar sonido|activar sonido/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reportar sonido/i })).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /pasar turno|saltar turno/i }),

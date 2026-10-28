@@ -63,15 +63,18 @@ export async function startAppServer({
         await socketServer.close();
       }
 
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
+      // Socket.IO also closes its attached HTTP server.
+      if (server.listening) {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolve();
+          });
         });
-      });
+      }
       await app.close();
     },
   };

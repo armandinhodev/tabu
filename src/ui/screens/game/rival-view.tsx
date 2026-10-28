@@ -1,8 +1,6 @@
 "use client";
 
 import { StickyFooter } from "@/ui/components/ui/screen";
-import { MuteButton } from "@/ui/components/game/mute-button";
-import { TimerRing } from "@/ui/components/game/timer-ring";
 import { RoleBanner, ScoreBoard, TabooWords } from "@/ui/components/game/taboo-words";
 import { teamNameOf } from "@/ui/components/game/team-colors";
 import type { RoleViewProps } from "./role-view-props";
@@ -46,13 +44,11 @@ export function RivalView({ state, turn, busy, reportedWord, onReport }: RoleVie
       </section>
 
       <section className="flex flex-col items-center gap-3">
-        <TimerRing deadlineAt={turn.deadlineAt} turnSeconds={turn.turnSeconds} />
         <p className="text-body-sm text-fg-muted">Tocá la palabra prohibida si la dice.</p>
       </section>
 
       <StickyFooter>
         <div className="flex items-center justify-center gap-2">
-          <MuteButton />
           <p className="text-micro text-fg-subtle uppercase">Vos ves la palabra y las prohibidas</p>
         </div>
       </StickyFooter>

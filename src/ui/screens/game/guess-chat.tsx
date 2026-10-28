@@ -1,12 +1,23 @@
 "use client";
 
-import { Send } from "lucide-react";
-import { useState } from "react";
+import {
+  Bell,
+  CheckCircle2,
+  Clock3,
+  Info,
+  MessageCircle,
+  Send,
+  ShieldAlert,
+  SkipForward,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
 import { cn } from "@/ui/lib/cn";
-import type { GuessMessage, GuessMessageKind } from "@/ui/lib/guess-messages";
+import { isPublicMessage, type GuessMessage, type GuessMessageKind } from "@/ui/lib/guess-messages";
 
 export interface GuessChatProps {
   /** `true` cuando el jugador puede escribir y enviar una respuesta. */
@@ -17,27 +28,89 @@ export interface GuessChatProps {
   readonly disabled?: boolean;
 }
 
-const MESSAGE_STYLES: Record<GuessMessageKind, string> = {
-  guess: "text-fg-muted",
-  feedback: "text-fg",
-  notice: "text-warning",
+interface MessageAppearance {
+  readonly label: string;
+  readonly icon: LucideIcon;
+  readonly surface: string;
+  readonly accent: string;
+}
+
+const MESSAGE_STYLES: Record<GuessMessageKind, MessageAppearance> = {
+  guess: {
+    label: "Tu respuesta",
+    icon: MessageCircle,
+    surface: "border-line bg-surface",
+    accent: "text-fg-muted",
+  },
+  feedback: {
+    label: "Respuesta",
+    icon: Info,
+    surface: "border-line bg-surface",
+    accent: "text-fg-muted",
+  },
+  notice: {
+    label: "Aviso",
+    icon: Bell,
+    surface: "border-line bg-surface",
+    accent: "text-fg-muted",
+  },
+  skip: {
+    label: "Carta saltada",
+    icon: SkipForward,
+    surface: "border-warning/30 bg-warning-soft",
+    accent: "text-warning",
+  },
+  penalty: {
+    label: "Carta anulada",
+    icon: ShieldAlert,
+    surface: "border-danger/30 bg-danger-soft",
+    accent: "text-danger",
+  },
+  turn: { label: "Turno", icon: Clock3, surface: "border-line bg-surface", accent: "text-accent" },
+  score: {
+    label: "Acierto",
+    icon: CheckCircle2,
+    surface: "border-success/30 bg-success-soft",
+    accent: "text-success",
+  },
 };
 
-/**
- * 05 — Chat privado de adivinación (S3, S5).
- *
- * El equipo que adivina escribe la respuesta; el servidor la verifica contra
- * la carta activa y devuelve si acertó. La caja solo existe para el jugador
- * que adivina: nadie más ve su contenido. También muestra el aviso de
- * penalización cuando el rival apretó una palabra prohibida y la carta pasó.
- */
+function appearanceFor(message: GuessMessage): MessageAppearance {
+  if (message.kind === "feedback" && message.outcome === "correct") {
+    return {
+      label: "Respuesta correcta",
+      icon: CheckCircle2,
+      surface: "border-success/30 bg-success-soft",
+      accent: "text-success",
+    };
+  }
+  if (message.kind === "feedback" && message.outcome === "incorrect") {
+    return {
+      label: "Respuesta incorrecta",
+      icon: XCircle,
+      surface: "border-warning/30 bg-warning-soft",
+      accent: "text-warning",
+    };
+  }
+  return MESSAGE_STYLES[message.kind];
+}
+
+/** Private answers and public activity share one panel, but not one audience. */
 export function GuessChat({ active, messages, onGuess, disabled = false }: GuessChatProps) {
   const [answer, setAnswer] = useState("");
+  const logRef = useRef<HTMLUListElement>(null);
+  const visibleMessages = active ? messages : messages.filter(isPublicMessage);
+  const PanelIcon = active ? MessageCircle : Bell;
+
+  useEffect(() => {
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [messages, active]);
 
   const submit = (): void => {
     const trimmed = answer.trim();
 
-    if (trimmed === "" || disabled) {
+    if (!active || trimmed === "" || disabled) {
       return;
     }
 
@@ -47,25 +120,67 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
 
   return (
     <section
-      className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-5"
-      aria-label="Tus respuestas"
+      className="flex flex-col gap-4 rounded-lg border border-line bg-surface-2 p-5"
+      aria-label={active ? "Tus respuestas" : "Notificaciones de la partida"}
     >
-      <p className="text-body-sm text-fg-muted">
-        Escribí la palabra que adivinás. Solo vos ves lo que escribís.
-      </p>
+      <header className="flex items-start gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-md bg-surface-3 text-fg-muted">
+          <PanelIcon aria-hidden="true" className="size-5" />
+        </span>
+        <div>
+          <h2 className="font-display text-h3 font-semibold text-fg">
+            {active ? "Respuestas y actividad" : "Notificaciones"}
+          </h2>
+          <p className="mt-1 text-body-sm text-fg-muted">
+            {active
+              ? "Tus respuestas son privadas. Los avisos de la partida son visibles para todos."
+              : "Cartas saltadas, penalizaciones y cambios de turno."}
+          </p>
+        </div>
+      </header>
 
-      {messages.length > 0 ? (
-        <ul className="flex flex-col gap-2" aria-live="polite">
-          {messages.map((message) => (
-            <li key={message.id} className={cn("text-body-sm", MESSAGE_STYLES[message.kind])}>
-              {message.text}
+      <ul
+        ref={logRef}
+        role="log"
+        aria-label="Actividad de la partida"
+        aria-live="polite"
+        aria-relevant="additions text"
+        className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1"
+      >
+        {visibleMessages.length === 0 ? (
+          <li className="rounded-md border border-dashed border-line p-4 text-center text-body-sm text-fg-subtle">
+            Todavía no hay actividad.
+          </li>
+        ) : null}
+        {visibleMessages.map((message) => {
+          const appearance = appearanceFor(message);
+          const Icon = appearance.icon;
+          return (
+            <li
+              key={message.id}
+              className={cn(
+                "flex items-start gap-3 rounded-md border p-3",
+                appearance.surface,
+                message.kind === "guess" && "ml-6",
+              )}
+            >
+              <Icon
+                aria-hidden="true"
+                className={cn("mt-0.5 size-4 shrink-0", appearance.accent)}
+              />
+              <div className="min-w-0">
+                <p className={`text-micro font-semibold uppercase ${appearance.accent}`}>
+                  {appearance.label}
+                </p>
+                <p className="mt-1 text-body-sm break-words text-fg">{message.text}</p>
+              </div>
             </li>
-          ))}
-        </ul>
-      ) : null}
+          );
+        })}
+      </ul>
 
       {active ? (
-        <div className="flex gap-2">
+        <div className="flex gap-2 rounded-md border border-line bg-surface p-3">
           <label htmlFor="guess-answer" className="sr-only">
             Tu respuesta
           </label>

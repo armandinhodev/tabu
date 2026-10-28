@@ -8,6 +8,8 @@ import { ConfirmDialog } from "@/ui/components/ui/dialog";
 import { ErrorState, ScreenSkeleton } from "@/ui/components/game/banners";
 import { MuteButton } from "@/ui/components/game/mute-button";
 import { TeamPanel } from "@/ui/components/game/team-panel";
+import { CurrentTurnCard } from "@/ui/components/game/current-turn-card";
+import { TimerRing } from "@/ui/components/game/timer-ring";
 import { useGame } from "@/ui/providers/game-provider";
 import { ResultScreen } from "@/ui/screens/result-screen";
 import { DescribingView } from "./game/describing-view";
@@ -76,14 +78,17 @@ export function GameScreen() {
         <span className="text-caption text-fg-subtle uppercase">
           {state.code} · ronda {state.round}
         </span>
-        <Button
-          variant="quiet"
-          size="icon"
-          aria-label="Salir de la partida"
-          onClick={() => setConfirmLeave(true)}
-        >
-          <LogOut aria-hidden="true" className="size-5" />
-        </Button>
+        <div role="group" aria-label="Controles de la partida" className="flex items-center gap-2">
+          <MuteButton />
+          <Button
+            variant="quiet"
+            size="icon"
+            aria-label="Salir de la partida"
+            onClick={() => setConfirmLeave(true)}
+          >
+            <LogOut aria-hidden="true" className="size-5" />
+          </Button>
+        </div>
       </div>
 
       <aside className="hidden xl:flex xl:flex-col xl:gap-3">
@@ -95,12 +100,13 @@ export function GameScreen() {
             canJoin={false}
             isMine={team.id === state.me.teamId}
             isActive={team.id === turn.teamId}
+            descriptorId={turn.descriptorId}
             showScore
           />
         ))}
       </aside>
 
-      <div className="flex flex-col gap-4">
+      <div className="order-2 flex flex-col gap-4 xl:order-none">
         {turn.status === "pending" ? (
           <WaitingTurnView state={state} turn={turn} busy={busy} onStart={startTurn} />
         ) : isRival ? (
@@ -109,36 +115,59 @@ export function GameScreen() {
           <DescribingView {...props} />
         )}
 
-        {turn.status !== "pending" && (isGuesser || guessMessages.length > 0) ? (
-          <GuessChat active={isGuesser} disabled={busy} messages={guessMessages} onGuess={guess} />
-        ) : null}
+        <GuessChat
+          active={isGuesser && turn.status !== "pending"}
+          disabled={busy}
+          messages={guessMessages}
+          onGuess={guess}
+        />
       </div>
 
-      <aside className="hidden xl:flex xl:flex-col xl:gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-caption text-fg-subtle uppercase">Turno</h2>
+      <aside
+        aria-label="Información del turno"
+        className={
+          turn.status === "pending"
+            ? "hidden xl:flex xl:flex-col xl:gap-3"
+            : "order-1 flex flex-col gap-3 xl:order-none"
+        }
+      >
+        {turn.status !== "pending" ? (
+          <>
+            <CurrentTurnCard team={activeTeam} descriptorId={turn.descriptorId} pending={false} />
+            <section
+              aria-label="Tiempo del turno"
+              className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-4"
+            >
+              <h2 className="text-caption text-fg-muted uppercase">Tiempo restante</h2>
+              <TimerRing
+                deadlineAt={turn.deadlineAt}
+                turnSeconds={turn.turnSeconds}
+                className="size-[144px] md:size-[160px]"
+              />
+            </section>
+          </>
+        ) : null}
+        <div className="hidden items-center justify-between gap-2 xl:flex">
+          <h2 className="text-caption text-fg-subtle uppercase">Tu rol</h2>
           <MuteButton />
         </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <p className="text-body-sm text-fg-muted">Describe</p>
-          <p className="mt-1 text-h3 font-semibold text-fg">
-            {activeTeam?.players.find((player) => player.playerId === turn.descriptorId)?.name ??
-              "—"}
-          </p>
-          <p className="mt-3 text-body-sm text-fg-muted">
-            Tu rol:{" "}
-            <span className="text-fg">
-              {role === "DESCRIBER"
-                ? "describís"
-                : role === "ACTIVE"
-                  ? "adivinás"
-                  : role === "RIVAL"
-                    ? "vigilás"
-                    : "mirás"}
-            </span>
+        <div className="hidden rounded-lg border border-line bg-surface p-4 xl:block">
+          <p className="text-h3 font-semibold text-fg">
+            {role === "DESCRIBER"
+              ? "describís"
+              : role === "ACTIVE"
+                ? "adivinás"
+                : role === "RIVAL"
+                  ? "vigilás"
+                  : "mirás"}
           </p>
         </div>
-        <Button variant="quiet" block onClick={() => setConfirmLeave(true)}>
+        <Button
+          variant="quiet"
+          block
+          className="hidden xl:inline-flex"
+          onClick={() => setConfirmLeave(true)}
+        >
           <LogOut aria-hidden="true" className="size-4" />
           Salir de la partida
         </Button>

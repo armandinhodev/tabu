@@ -2,7 +2,7 @@
 
 import type { GameStateView, TurnView } from "@/application/dto/game-state";
 import { Button } from "@/ui/components/ui/button";
-import { teamNameOf } from "@/ui/components/game/team-colors";
+import { CurrentTurnCard } from "@/ui/components/game/current-turn-card";
 
 export function WaitingTurnView({
   state,
@@ -15,25 +15,22 @@ export function WaitingTurnView({
   readonly busy: boolean;
   readonly onStart: () => void;
 }) {
-  const descriptor = state.teams
-    .flatMap((team) => team.players)
-    .find((player) => player.playerId === turn.descriptorId);
+  const team = state.teams.find((candidate) => candidate.id === turn.teamId) ?? null;
   return (
-    <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface-2 p-5">
-      <h1 className="font-display text-h2 font-bold text-fg">
-        Turno de {teamNameOf(state.teams, turn.teamId)}
-      </h1>
-      <p className="text-body text-fg">Describe: {descriptor?.name ?? "Jugador"}</p>
-      <p className="text-body-sm text-fg-muted">
-        El reloj comienza cuando quien describe inicia el turno.
-      </p>
-      {state.me.role === "DESCRIBER" ? (
-        <Button block disabled={busy} onClick={onStart}>
-          Comenzar turno
-        </Button>
-      ) : (
-        <p className="text-body-sm text-fg-muted">Esperando a quien describe.</p>
-      )}
-    </section>
+    <div className="flex flex-col gap-4">
+      <CurrentTurnCard team={team} descriptorId={turn.descriptorId} pending />
+      <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface p-5">
+        <p className="text-body-sm text-fg-muted">
+          El reloj comienza cuando quien describe inicia el turno.
+        </p>
+        {state.me.role === "DESCRIBER" ? (
+          <Button block disabled={busy} onClick={onStart}>
+            Comenzar turno
+          </Button>
+        ) : (
+          <p className="text-body-sm text-fg-muted">Esperando a quien describe.</p>
+        )}
+      </section>
+    </div>
   );
 }

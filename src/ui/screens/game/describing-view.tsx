@@ -4,8 +4,6 @@ import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/ui/components/ui/button";
 import { StickyFooter } from "@/ui/components/ui/screen";
-import { MuteButton } from "@/ui/components/game/mute-button";
-import { TimerRing } from "@/ui/components/game/timer-ring";
 import { RoleBanner, ScoreBoard, TabooWords } from "@/ui/components/game/taboo-words";
 import { teamNameOf } from "@/ui/components/game/team-colors";
 import type { RoleViewProps } from "./role-view-props";
@@ -64,7 +62,6 @@ export function DescribingView({ state, turn, busy, onSkipCard }: RoleViewProps)
       )}
 
       <section className="flex flex-col items-center gap-3">
-        <TimerRing deadlineAt={turn.deadlineAt} turnSeconds={turn.turnSeconds} />
         <p className="text-body-sm text-fg-muted">
           {isDescriptor ? "Tu equipo está adivinando." : "Escuchá a tu equipo y adiviná."}
         </p>
@@ -90,16 +87,11 @@ export function DescribingView({ state, turn, busy, onSkipCard }: RoleViewProps)
           </>
         ) : null}
 
-        <p className="text-center text-body-sm text-fg-subtle">
-          Si alguien dice una palabra prohibida, el otro equipo la marca.
-        </p>
-
-        <div className="flex items-center justify-center gap-2">
-          <MuteButton />
-          <p className="text-micro text-fg-subtle uppercase">
-            {isDescriptor ? "Solo vos y el rival ven la palabra" : "Tu equipo no ve la palabra"}
+        {!isDescriptor ? (
+          <p className="text-center text-micro text-fg-subtle uppercase">
+            Tu equipo no ve la palabra
           </p>
-        </div>
+        ) : null}
       </StickyFooter>
     </div>
   );

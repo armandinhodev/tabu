@@ -19,6 +19,13 @@ saltar ni reportar cartas. El reloj vuelve a esperar esa confirmación al cambia
 Stack: Next.js 15 (App Router) + TypeScript estricto, Socket.IO 4.8 sobre un servidor HTTP propio,
 MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI y Vitest.
 
+Durante el turno, el cronómetro aparece en el sidebar derecho, apilado arriba en móvil. El panel de
+actividad combina respuestas privadas y avisos públicos: quienes adivinan pueden escribir; el
+descriptor y los rivales solo ven notificaciones. Los avisos muestran la palabra saltada, quién
+marcó una prohibida, la carta anulada y el equipo penalizado, con colores, etiquetas e íconos.
+Las respuestas y su confirmación nunca se comparten. Los avisos se conservan al cambiar de carta
+dentro del mismo turno y se reinician al seleccionar el turno siguiente, salir o cambiar de sala.
+
 ## Levantarlo
 
 Requisitos: Node 22, pnpm 11 (Corepack) y Docker (o un MongoDB 7 accesible).
@@ -38,6 +45,35 @@ Para producción:
 pnpm build
 pnpm start
 ```
+
+### Aplicación en Docker
+
+La imagen compila Next.js y arranca el servidor propio de HTTP y Socket.IO como usuario sin
+privilegios. Requiere `MONGODB_URI` al ejecutar; `.env`, credenciales y dependencias del equipo
+local quedan fuera del contexto de construcción.
+
+Con Docker Desktop y el MongoDB local del compose, usando `.env` basado en `.env.example`:
+
+```bash
+docker compose up -d mongo
+docker build -t tabu:local .
+docker run -d --rm --name tabu-app -p 3000:3000 --env-file .env -e MONGODB_URI=mongodb://host.docker.internal:27017 tabu:local
+docker exec tabu-app node --import tsx src/infrastructure/seed/seed.ts
+```
+
+Abrir `http://localhost:3000`. `localhost` dentro del contenedor no apunta al host: para otro
+despliegue, proporcionar la URI real de MongoDB y el origen público en `SOCKET_CORS_ORIGIN`.
+En Linux sin Docker Desktop, agregar `--add-host host.docker.internal:host-gateway` al comando
+`docker run` si MongoDB está en el host.
+
+```bash
+docker inspect --format '{{.State.Health.Status}}' tabu-app
+docker logs -f tabu-app
+docker stop tabu-app
+```
+
+La imagen incluye `tsx` y el árbol instalado del lockfile porque el servidor personalizado ejecuta
+TypeScript en producción. No usa `next start` ni el servidor standalone, que omitirían Socket.IO.
 
 ### Si ves una pantalla en blanco con `invariant expected layout router to be mounted`
 
@@ -168,8 +204,9 @@ que más afectan el uso:
 - **Una ruta, pantallas por estado.** El cliente no navega entre rutas: cambia de pantalla según el
   estado de la partida, así el socket y el `playerToken` sobreviven (D44).
 - **Mongo caído no bloquea.** El servidor arranca en modo memoria con un warning (D41).
-- **Sonido sintetizado.** Web Audio, sin archivos, mute persistido y desbloqueo con el primer gesto
-  (§8).
+- **Sonido sintetizado.** Web Audio sin archivos ni dependencias adicionales: timbres suaves con
+  armónicos, transiciones progresivas, ruido filtrado y mezcla con compresión ligera y ambiente corto.
+  Se mantienen el mute persistido, el desbloqueo con el primer gesto y los efectos de menos de 700 ms.
 - **Cobertura.** `pnpm test:coverage` mide `src/domain`: 95,1 % statements / 95,97 % branches, por
   encima del umbral de 80 % (la nota vieja D28 quedó obsoleta). Los tests de componentes con React 19
   - Vitest **sí** corren (jsdom): la UI se cubre con Testing Library (D47 quedó obsoleto).

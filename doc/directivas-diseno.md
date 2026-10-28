@@ -265,26 +265,31 @@ el cambio de opacidad; sin shake, sin confeti).
 
 ## 8. Sonido
 
-Implementado con **Web Audio API sintetizado** (sin archivos de audio, sin licencias, sin peso en el
-bundle). Un único `SoundProvider` + una tabla declarativa `SOUNDS`. El `AudioContext` se crea
+Implementado con **Web Audio API sintetizado**, sin archivos de audio ni dependencias adicionales.
+Un único `SoundProvider` + una tabla declarativa `SOUNDS`. El `AudioContext` se crea
 suspendido y se reanuda con el **primer gesto del usuario** (requisito de iOS/Safari). Botón de
 silencio **siempre visible**, estado persistido en `localStorage`. Volumen maestro 0.5.
 
-| Evento | Descripción | Duración |
+Los timbres combinan senos con armónicos suaves, ataque progresivo y cierre a cero antes de detener
+cada fuente. La mezcla usa filtro de agudos, compresión ligera y una reflexión de 45 ms al 8 %,
+sin realimentación. No se usan ondas cuadradas, dientes de sierra ni ráfagas de ruido sin filtrar.
+Las fuentes y sus nodos temporales se desconectan al terminar.
+
+| Evento | Descripción | Duración aproximada, incluida la cola |
 |---|---|---|
-| `ui.click` | click corto, seno 1200Hz | 40ms |
-| `player.join` | dos notas ascendentes C5→E5 | 140ms |
-| `game.start` | arpegio de 4 notas | 420ms |
-| `turn.start` | blip + tick | 180ms |
-| `turn.tick` | tick por segundo en los últimos 10s | 30ms |
-| `correct.guess` | arpegio ascendente + "ding" de puntaje | 320ms |
-| `taboo.hit` | buzzer serrucha 220→110Hz + ráfaga de ruido | 400ms |
-| `turn.skip` | dos notas descendentes suaves | 200ms |
-| `score.change` | dos notas tipo moneda | 160ms |
-| `round.end` | fanfarria corta de 3 notas | 500ms |
-| `game.over` | fanfarria de 4 notas | 700ms |
-| `error` | dos tonos cortos graves | 120ms |
-| `reconnect` | dos notas medias | 180ms |
+| `ui.click` | pulso suave y corto | 110 ms |
+| `player.join` | dos notas redondeadas ascendentes C5→E5 | 310 ms |
+| `game.start` | arpegio cálido de cuatro notas | 520 ms |
+| `turn.start` | dos notas claras, sin pitido agudo | 340 ms |
+| `turn.tick` | pulso tenue por segundo en los últimos 10 s | 120 ms |
+| `correct.guess` | arpegio ascendente de confirmación | 410 ms |
+| `taboo.hit` | dos notas graves descendentes, sin buzzer | 360 ms |
+| `turn.skip` | barrido de aire filtrado y nota descendente | 240 ms |
+| `score.change` | dos campanillas discretas | 260 ms |
+| `round.end` | cierre suave de tres notas | 500 ms |
+| `game.over` | arpegio de celebración de cuatro notas | 670 ms |
+| `error` | dos notas descendentes cortas | 300 ms |
+| `reconnect` | dos notas medias ascendentes | 320 ms |
 
 Reglas: nunca un sonido supera 700ms; nunca dos sonidos de UI se superponen; el tick del timer solo
 en los últimos 10 segundos; el sonido `taboo.hit` suena **una sola vez** aunque se reporte la

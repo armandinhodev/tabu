@@ -2,6 +2,9 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GameProvider, useGame } from "./game-provider";
+import { toGameState } from "@/application/dto/game-state";
+import { makeGame, makeTurn } from "@/domain/__fixtures__/game";
+import { PlayerId } from "@/domain/value-objects/PlayerId";
 
 vi.mock("react", async () => {
   const { createRequire } = await import("node:module");
@@ -75,6 +78,35 @@ describe("GameProvider joinGame", () => {
 });
 
 describe("GameProvider adivinación escrita", () => {
+  it.each(["room", "turn"] as const)(
+    "does not append a late private answer after changing %s",
+    async (change) => {
+      let respond: ((response: unknown) => void) | undefined;
+      socket.emit.mockImplementation(
+        (event: string, _payload: unknown, ack?: (response: unknown) => void) => {
+          if (event === "turn:guess") respond = ack;
+        },
+      );
+      const { result } = renderHook(useGame, { wrapper: GameProvider });
+      const state = toGameState(
+        makeGame({
+          status: "playing",
+          currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+        }),
+        PlayerId.from("p2"),
+      );
+      act(() => socket.handlers.get("game:state")?.(state));
+      await act(async () => result.current.guess("private old answer"));
+      const next =
+        change === "room"
+          ? { ...state, code: "XYZ234" }
+          : { ...state, turn: { ...state.turn!, turnId: "turn-2", status: "pending" } };
+      act(() => socket.handlers.get("game:state")?.(next));
+      await act(async () => respond?.({ correct: false, pointsAwarded: 0, teamScore: 0 }));
+      expect(result.current.guessMessages).toEqual([]);
+    },
+  );
+
   function ackGuess(response: {
     correct: boolean;
     pointsAwarded: number;
@@ -107,6 +139,7 @@ describe("GameProvider adivinación escrita", () => {
       "Fuego",
       "¡Acertaste!",
     ]);
+    expect(result.current.guessMessages[1]?.outcome).toBe("correct");
   });
 
   it("una respuesta incorrecta se confirma sin puntos", async () => {
@@ -122,6 +155,7 @@ describe("GameProvider adivinación escrita", () => {
       "Agua",
       "No es esa. Probá de nuevo.",
     ]);
+    expect(result.current.guessMessages[1]?.outcome).toBe("incorrect");
   });
 
   it("avisa al equipo activo cuando el rival penaliza una palabra", async () => {
@@ -146,7 +180,7 @@ describe("GameProvider adivinación escrita", () => {
       });
     });
 
-    const notices = result.current.guessMessages.filter((message) => message.kind === "notice");
+    const notices = result.current.guessMessages.filter((message) => message.kind === "penalty");
 
     expect(notices).toHaveLength(1);
     expect(notices[0]?.text).toContain("palabra prohibida");
@@ -167,6 +201,74 @@ describe("GameProvider adivinación escrita", () => {
       socket.handlers.get(event)?.({ reason: event === "card:resolved" ? "CORRECT" : "TIME" });
     });
 
-    expect(result.current.guessMessages).toEqual([]);
+    expect(
+      result.current.guessMessages.filter(
+        (message) => message.kind === "guess" || message.kind === "feedback",
+      ),
+    ).toEqual([]);
   });
+
+  it.each(["p1", "p2", "p3"])(
+    "keeps current-turn notices across cards and resets them for the next turn (%s)",
+    (playerId) => {
+      const { result } = renderHook(useGame, { wrapper: GameProvider });
+      const state = toGameState(
+        makeGame({
+          status: "playing",
+          currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+        }),
+        PlayerId.from(playerId),
+      );
+      act(() => socket.handlers.get("game:state")?.(state));
+      act(() => socket.handlers.get("turn:skipped")?.({ skippedWord: "playa", teamId: "t1" }));
+      expect(
+        result.current.guessMessages.find((message) => message.kind === "skip")?.text,
+      ).toContain('"playa"');
+      act(() => socket.handlers.get("card:resolved")?.({ reason: "VIOLATION", teamId: "t1" }));
+      act(() =>
+        socket.handlers.get("penalty:applied")?.({
+          reason: "TABOO_WORD",
+          tabooWord: "llama",
+          teamId: "t1",
+          pointsDelta: -1,
+          reportedBy: "p3",
+          cardDiscarded: true,
+        }),
+      );
+      const notice = result.current.guessMessages.find((message) => message.kind === "penalty")!;
+      expect(notice.text).toContain("Jugador p3");
+      expect(notice.text).toContain("llama");
+      expect(notice.text).toContain("Equipo 1");
+      act(() => socket.handlers.get("turn:ended")?.({ reason: "TIME", teamId: "t1" }));
+      expect(
+        result.current.guessMessages.filter((message) =>
+          ["skip", "penalty"].includes(message.kind),
+        ),
+      ).toHaveLength(2);
+      expect(socket.emit).not.toHaveBeenCalled();
+      const pendingTurn = {
+        ...state,
+        turn: { ...state.turn!, turnId: "turn-2", status: "pending" },
+      };
+      act(() => socket.handlers.get("game:state")?.(pendingTurn));
+      expect(result.current.guessMessages).toEqual([]);
+      act(() =>
+        socket.handlers.get("turn:started")?.({
+          turnId: "turn-2",
+          teamId: "t1",
+          descriptorId: "p1",
+        }),
+      );
+      act(() =>
+        socket.handlers.get("game:state")?.({
+          ...pendingTurn,
+          turn: { ...pendingTurn.turn, status: "active" },
+        }),
+      );
+      expect(result.current.guessMessages).toHaveLength(1);
+      expect(result.current.guessMessages[0]?.kind).toBe("turn");
+      act(() => socket.handlers.get("game:state")?.({ ...state, code: "XYZ234" }));
+      expect(result.current.guessMessages).toEqual([]);
+    },
+  );
 });
