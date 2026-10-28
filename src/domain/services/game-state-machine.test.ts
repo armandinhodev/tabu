@@ -27,11 +27,25 @@ import {
   beginTurn,
   isTurnExpired,
   reassignDescriptor,
-  resolveTurn,
+  resolveTurn as resolveActiveTurn,
   skipCard,
-  startGame,
+  startGame as prepareGame,
+  activateTurn,
   type TransitionContext,
 } from "./GameStateMachine";
+
+// Existing active-turn cases explicitly start the selected descriptor's clock.
+function startGame(...args: Parameters<typeof prepareGame>) {
+  const prepared = prepareGame(...args);
+  const active = activateTurn(prepared.game, args[1]);
+  return { game: active.game, events: [...prepared.events, ...active.events] };
+}
+
+function resolveTurn(...args: Parameters<typeof resolveActiveTurn>) {
+  const game =
+    args[0].currentTurn?.status === "pending" ? activateTurn(args[0], args[2]).game : args[0];
+  return resolveActiveTurn(game, args[1], args[2]);
+}
 
 function makeContext(overrides: Partial<TransitionContext> = {}): TransitionContext {
   let counter = 0;
@@ -154,7 +168,7 @@ describe("resolveTurn", () => {
     return { ctx, game };
   }
 
-  it("suma 1 al equipo y al jugador que acertó, y arranca el turno rival", () => {
+  it("scores the answer and keeps the same timed round", () => {
     const { ctx, game } = started();
     const turn = game.currentTurn;
     expect(turn).not.toBeNull();
@@ -168,8 +182,15 @@ describe("resolveTurn", () => {
     expect(scorer?.points).toBe(1);
     expect(result.game.turnHistory).toHaveLength(1);
     expect(result.game.turnHistory[0]?.reason).toBe("CORRECT");
-    expect(result.game.currentTurn?.teamId).toBe("t2");
-    expect(eventTypes(result.events)).toEqual(["TurnEnded", "ScoreChanged", "TurnStarted"]);
+    expect(result.game.currentTurn).toMatchObject({
+      id: turn?.id,
+      teamId: "t1",
+      descriptorId: turn?.descriptorId,
+      deadlineAt: turn?.deadlineAt,
+      skipsUsed: turn?.skipsUsed,
+    });
+    expect(result.game.currentTurn?.card.id).not.toBe(turn?.card.id);
+    expect(eventTypes(result.events)).toEqual(["CardResolved", "ScoreChanged"]);
   });
 
   it("resta 1, descarta la carta y no la vuelve a repartir", () => {
@@ -300,6 +321,23 @@ describe("resolveTurn", () => {
 });
 
 describe("rondas y fin de partida", () => {
+  it("honors the configured round limit when only rival passed cards remain", () => {
+    const ctx = makeContext();
+    const game = makeGame({
+      status: "playing",
+      round: 2,
+      settings: makeSettings({ rounds: 2 }),
+      deck: makeDeck([]),
+      passedCards: [{ card: makeCard("reserved"), toTeamId: TeamId.from("t1") }],
+      currentTurn: makeTurn({ teamId: "t2", descriptorId: "p3" }),
+    });
+
+    const result = resolveTurn(game, { kind: "CORRECT", actorId: PlayerId.from("p4") }, ctx);
+
+    expect(result.game.status).toBe("finished");
+    expect(eventTypes(result.events)).toContain("RoundEnded");
+  });
+
   it("con rounds = 1 juega hasta agotar el mazo (§6.10: 1 = mazo entero)", () => {
     const ctx = makeContext();
     const game = startGame(
@@ -309,7 +347,11 @@ describe("rondas y fin de partida", () => {
       ctx,
     ).game;
 
-    const afterFirst = resolveTurn(game, { kind: "CORRECT", actorId: PlayerId.from("p1") }, ctx).game;
+    const afterFirst = resolveTurn(
+      game,
+      { kind: "CORRECT", actorId: PlayerId.from("p1") },
+      ctx,
+    ).game;
     const afterSecond = resolveTurn(
       afterFirst,
       { kind: "CORRECT", actorId: PlayerId.from("p3") },
@@ -317,7 +359,7 @@ describe("rondas y fin de partida", () => {
     ).game;
 
     expect(afterSecond.status).toBe("playing");
-    expect(afterSecond.round).toBe(2);
+    expect(afterSecond.round).toBe(1);
 
     const afterThird = resolveTurn(
       afterSecond,
@@ -332,24 +374,26 @@ describe("rondas y fin de partida", () => {
 
     expect(afterFourth.status).toBe("finished");
     expect(afterFourth.finishedAt).not.toBeNull();
-    expect(afterFourth.winnerTeamId).toBeNull();
+    expect(afterFourth.winnerTeamId).toBe("t1");
   });
 
   it("con rounds = 2 termina al completar la segunda vuelta aunque queden cartas", () => {
     const ctx = makeContext();
     const cards = Array.from({ length: 8 }, (_, index) => makeCard(`c${index + 1}`));
-    const game = startGame(makeGame({ settings: makeSettings({ rounds: 2 }), deck: makeDeck(cards) }), ctx)
-      .game;
+    const game = startGame(
+      makeGame({ settings: makeSettings({ rounds: 2 }), deck: makeDeck(cards) }),
+      ctx,
+    ).game;
 
     let current = game;
 
-    for (const actorId of ["p1", "p3", "p1"]) {
-      current = resolveTurn(current, { kind: "CORRECT", actorId: PlayerId.from(actorId) }, ctx).game;
+    for (let index = 0; index < 3; index += 1) {
+      current = resolveTurn(current, { kind: "TIME" }, ctx).game;
     }
 
     expect(current.status).toBe("playing");
 
-    current = resolveTurn(current, { kind: "CORRECT", actorId: PlayerId.from("p3") }, ctx).game;
+    current = resolveTurn(current, { kind: "TIME" }, ctx).game;
 
     expect(current.deck.cards.isEmpty).toBe(false);
     expect(current.status).toBe("finished");
@@ -437,7 +481,7 @@ describe("rondas y fin de partida", () => {
       ctx,
     ).game;
     const afterSecond = resolveTurn(
-      afterFirst,
+      resolveTurn(afterFirst, { kind: "TIME" }, ctx).game,
       { kind: "CORRECT", actorId: PlayerId.from("p3") },
       ctx,
     ).game;

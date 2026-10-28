@@ -4,11 +4,17 @@ Juego de Tabú multijugador en tiempo real. 2–4 equipos, cada jugador en su pr
 registro: solo un nombre. La palabra objetivo y la lista de palabras prohibidas **no** se muestran a
 todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo adivina.
 
-- **Equipo que describe**: el descriptor ve la palabra y los chips en modo informativo, y además
-  *Pasar turno*, *Aceptar y pasar carta* y *Reportar gesto* / *Reportar sonido*.
+- **Quien describe**: ve _Comenzar turno_ antes de que arranque el reloj. Durante el turno ve la
+  palabra, los chips informativos y _Saltar esta carta_. No hay botón para saltar el turno.
 - **Equipo que adivina**: ve la carta en blanco y escribe la respuesta en un **chat privado**; el
   servidor la verifica contra la carta activa y le confirma el acierto.
-- **Equipo rival**: ve la palabra y los chips, pero **reportables** al toque; reporta gesto y sonido.
+- **Equipos rivales**: ven la palabra y los chips **reportables** al toque durante el turno activo.
+
+Al comenzar la partida se sortean el equipo inicial y su descriptor. Los equipos se alternan a
+partir de ese equipo; dentro de cada equipo se sortea entre quienes todavía no describieron, sin
+repetir hasta que pasen todos. Cada turno espera a que el descriptor pulse _Comenzar turno_: recién
+entonces se revela la carta y comienza el reloj completo. Mientras se espera no se puede adivinar,
+saltar ni reportar cartas. El reloj vuelve a esperar esa confirmación al cambiar de equipo.
 
 Stack: Next.js 15 (App Router) + TypeScript estricto, Socket.IO 4.8 sobre un servidor HTTP propio,
 MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI y Vitest.
@@ -53,17 +59,17 @@ tenga el mínimo de jugadores, el host toca **Comenzar partida**.
 
 ### Variables de entorno
 
-| Variable | Default | Para qué |
-|---|---|---|
-| `MONGODB_URI` | — (obligatoria) | Conexión a Mongo |
-| `MONGODB_DB` | `tabu` | Base de datos |
-| `PORT` | `3000` | Puerto HTTP y de Socket.IO (comparten) |
-| `HOST` | `0.0.0.0` | Interfaz de escucha (la LAN necesita `0.0.0.0`) |
-| `SOCKET_CORS_ORIGIN` | `http://localhost:3000` | Origen permitido por Socket.IO |
-| `TURN_SECONDS_DEFAULT` | `60` | Duración cuando el host no elige (30, 60, 90 o 120) |
-| `MAX_TEAMS` | `4` | Tope de equipos |
-| `MIN_PLAYERS_PER_TEAM` | `2` | Mínimo por equipo para arrancar |
-| `GAME_TTL_HOURS` | `24` | TTL de las partidas terminadas |
+| Variable               | Default                 | Para qué                                            |
+| ---------------------- | ----------------------- | --------------------------------------------------- |
+| `MONGODB_URI`          | — (obligatoria)         | Conexión a Mongo                                    |
+| `MONGODB_DB`           | `tabu`                  | Base de datos                                       |
+| `PORT`                 | `3000`                  | Puerto HTTP y de Socket.IO (comparten)              |
+| `HOST`                 | `0.0.0.0`               | Interfaz de escucha (la LAN necesita `0.0.0.0`)     |
+| `SOCKET_CORS_ORIGIN`   | `http://localhost:3000` | Origen permitido por Socket.IO                      |
+| `TURN_SECONDS_DEFAULT` | `60`                    | Duración cuando el host no elige (30, 60, 90 o 120) |
+| `MAX_TEAMS`            | `4`                     | Tope de equipos                                     |
+| `MIN_PLAYERS_PER_TEAM` | `2`                     | Mínimo por equipo para arrancar                     |
+| `GAME_TTL_HOURS`       | `24`                    | TTL de las partidas terminadas                      |
 
 Si falta `MONGODB_URI` el servidor no arranca y dice cuál falta. Si Mongo no responde al arrancar,
 el servidor igual levanta en modo memoria (las partidas se juegan, los snapshots se pierden).
@@ -93,27 +99,36 @@ server.ts ── Next handler + Socket.IO en el mismo puerto
 
 Cliente → servidor:
 
-| Evento | Payload | Ack | Quién |
-|---|---|---|---|
-| `game:create` | `{ playerName, deckId, options? }` | `{ gameId, code, playerToken, playerId }` | cualquiera |
-| `game:join` | `{ code, playerName }` | `{ gameId, playerToken, playerId, playerName }` | cualquiera |
-| `game:reconnect` | `{ gameId, playerToken }` | `{ state }` | el mismo jugador |
-| `game:assignTeam` | `{ teamId }` | — | en la sala |
-| `game:autoTeams` / `game:ready` | — | — | en la sala |
-| `game:start` | — | — | solo el host |
-| `game:leave` | — | — | cualquiera |
-| `turn:guess` | `{ guess }` | `{ correct, pointsAwarded, teamScore }` | equipo que adivina |
-| `turn:reportViolation` | `{ reason, tabooWord? }` | `{ pointsDelta, teamScore }` | rival o descriptor |
-| `turn:skip` | — | — | solo el descriptor |
-| `turn:pass` | — | — | equipo que describe |
+| Evento                          | Payload                            | Ack                                             | Quién                                                            |
+| ------------------------------- | ---------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
+| `game:create`                   | `{ playerName, deckId, options? }` | `{ gameId, code, playerToken, playerId }`       | cualquiera                                                       |
+| `game:join`                     | `{ code, playerName }`             | `{ gameId, playerToken, playerId, playerName }` | cualquiera                                                       |
+| `game:reconnect`                | `{ gameId, playerToken }`          | `{ state }`                                     | el mismo jugador                                                 |
+| `game:assignTeam`               | `{ teamId }`                       | —                                               | en la sala                                                       |
+| `game:autoTeams` / `game:ready` | —                                  | —                                               | en la sala                                                       |
+| `game:start`                    | —                                  | —                                               | solo el host                                                     |
+| `game:leave`                    | —                                  | —                                               | cualquiera                                                       |
+| `turn:guess`                    | `{ guess }`                        | `{ correct, pointsAwarded, teamScore }`         | equipo que adivina                                               |
+| `turn:reportViolation`          | `{ reason, tabooWord? }`           | `{ pointsDelta, teamScore }`                    | solo rivales para palabras; rival o descriptor para gesto/sonido |
+| `turn:skip`                     | —                                  | —                                               | solo el descriptor                                               |
+| `turn:start`                    | —                                  | —                                               | solo el descriptor elegido, antes de iniciar el reloj            |
 
 Servidor → cliente: `game:state` (por socket, con `me` y la palabra filtrada por rol), `game:playersUpdated`, `game:started`,
-`turn:started`, `turn:tick`, `turn:ended`, `penalty:applied`, `score:updated`, `round:ended`,
+`turn:started`, `turn:tick`, `turn:ended`, `card:resolved`, `penalty:applied`, `score:updated`, `round:ended`,
 `game:finished`, `game:error`.
+
+La palabra objetivo y las prohibidas son visibles para quien describe y todos los equipos rivales,
+pero no para los compañeros que adivinan. Solo los jugadores de otros equipos pueden marcar una
+palabra prohibida: se descarta la carta activa y se resta un punto al equipo que describe.
+Ni el descriptor ni sus compañeros pueden marcar esas palabras, incluso enviando el evento directamente.
 
 `turn:guess` solo lo puede enviar un teammate del equipo que describe: el servidor compara la
 respuesta con la carta activa, sin distinguir mayúsculas, y devuelve `correct`. Un acierto suma el
-punto y cierra el turno; una respuesta equivocada no cambia nada. La palabra objetivo viaja solo en
+punto y cambia la carta, sin cambiar el descriptor, el equipo, el reloj ni los saltos usados;
+una respuesta equivocada no cambia nada. Durante toda la ronda del reloj describe la misma persona
+y adivina el resto de su equipo. Una penalización descarta la carta y resta un punto, pero tampoco
+reinicia el reloj ni cambia al descriptor. Si no quedan cartas disponibles, se pasa al rival si
+tiene cartas pendientes, o termina la partida. La palabra objetivo viaja solo en
 el `game:state` de quien tiene rol `DESCRIBER` o `RIVAL`.
 
 Todo error de acción viaja en el ack (`{ error: { code, message } }`) **y** como `game:error` al
@@ -142,8 +157,8 @@ que más afectan el uso:
   y Node nunca entran al bundle del cliente (D3).
 - **El servidor es la autoridad.** El cliente nunca manda puntos ni tiempo; solo acciones. El
   temporizador se calcula con `deadlineAt` absoluto (S10).
-- **`turn:pass` además de `turn:skip`.** *Pasar turno* (equipo activo) devuelve la carta al mazo sin
-  puntos; *Aceptar y pasar carta* (solo descriptor) se la entrega al rival (D42, D38).
+- **Solo se saltan cartas, no turnos.** `turn:skip` entrega la carta al siguiente equipo rival sin
+  reiniciar el reloj. El turno cambia por tiempo agotado o falta de cartas disponibles.
 - **`turn:skip` es solo del descriptor**, aunque el preview muestre más botones: manda el contrato de
   socket, y el rival no tiene acción de pase (D48).
 - **Jugadores sin equipo.** Se puede esperar el reparto en el lobby; para arrancar, o todos eligieron
@@ -157,7 +172,7 @@ que más afectan el uso:
   (§8).
 - **Cobertura.** `pnpm test:coverage` mide `src/domain`: 95,1 % statements / 95,97 % branches, por
   encima del umbral de 80 % (la nota vieja D28 quedó obsoleta). Los tests de componentes con React 19
-  + Vitest **sí** corren (jsdom): la UI se cubre con Testing Library (D47 quedó obsoleto).
+  - Vitest **sí** corren (jsdom): la UI se cubre con Testing Library (D47 quedó obsoleto).
 - **La palabra objetivo es del descriptor y del rival.** El equipo que adivina no la ve en ningún
   evento, ni al reconectar; escribe la respuesta y el servidor la verifica (S4).
 - **Códigos de sala y nombres.** 6 caracteres sin `I`, `O`, `0` ni `1`; nombres repetidos se

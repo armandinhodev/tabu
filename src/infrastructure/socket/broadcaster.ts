@@ -97,6 +97,15 @@ export class Broadcaster {
           cardDiscarded: event.cardDiscarded,
         });
         return;
+      case "CardResolved":
+        this.io.to(game.id).emit(SERVER_EVENTS.cardResolved, {
+          turnId: event.turnId,
+          reason: event.reason,
+          pointsDelta: event.pointsDelta,
+          teamId: event.teamId,
+          cardDiscarded: event.cardDiscarded,
+        });
+        return;
       case "ScoreChanged":
         this.io.to(game.id).emit(SERVER_EVENTS.scoreUpdated, {
           teams: event.teams.map((standing) => ({

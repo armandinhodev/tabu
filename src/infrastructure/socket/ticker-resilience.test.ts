@@ -2,7 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { GameStateView } from "../../application/dto/game-state";
-import { emitAck, makeSocketHarness, nextEvent, waitFor, type SocketHarness } from "./test-support";
+import {
+  emitAck,
+  makeSocketHarness,
+  nextEvent,
+  waitFor,
+  startSelectedTurn,
+  type SocketHarness,
+} from "./test-support";
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 
@@ -42,6 +49,7 @@ describe("scheduler sin jugadores conectados", () => {
     await emitAck(host, "game:autoTeams");
     const started = nextEvent(host, "turn:started");
     await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
     await started;
 
     await waitFor(() => states.get(created.playerId)?.turn ?? undefined, "turno activo");

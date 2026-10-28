@@ -5,17 +5,27 @@ import type { IdGenerator } from "../ports/IdGenerator";
 import type { GameDeps } from "./common";
 import { InMemoryDeckRepository } from "../../infrastructure/db/repositories/InMemoryDeckRepository";
 import { InMemoryGameRepository } from "../../infrastructure/db/repositories/InMemoryGameRepository";
-import { LATER, makeCard, makeDeck, makeGame, makePlayer, makeSettings } from "../../domain/__fixtures__/game";
+import {
+  LATER,
+  makeCard,
+  makeDeck,
+  makeGame,
+  makePlayer,
+  makeSettings,
+} from "../../domain/__fixtures__/game";
 import {
   InvalidTabooWordError,
   NotAllowedError,
   SkipLimitReachedError,
   TurnNotActiveError,
 } from "../../domain/errors/DomainError";
-import { startGame as startGameTransition } from "../../domain/services/GameStateMachine";
+import {
+  activateTurn,
+  startGame as startGameTransition,
+} from "../../domain/services/GameStateMachine";
 import { GameId, PlayerId, TeamId, TurnId } from "../../domain/value-objects/PlayerId";
 import type { Game } from "../../domain/entities/Game";
-import { expireTurn, guessWord, passTurn, reportViolation, skipTurn } from "./turn";
+import { expireTurn, guessWord, reportViolation, skipTurn, startTurn } from "./turn";
 
 interface Harness {
   readonly deps: GameDeps;
@@ -37,11 +47,12 @@ function makeHarness(overrides: Partial<Game> = {}): Harness {
   };
 
   const waiting: Game = makeGame(overrides);
-  const started = startGameTransition(waiting, {
+  const pending = startGameTransition(waiting, {
     now,
     rng: () => 0,
     newTurnId: () => TurnId.from("turn-1"),
   });
+  const started = activateTurn(pending.game, { now, rng: () => 0, newTurnId: ids.turnId });
 
   registry.save(started.game);
 
@@ -72,6 +83,37 @@ function activeWord(game: Game): string {
   return game.currentTurn?.card.word ?? "";
 }
 
+describe("startTurn", () => {
+  it("only allows the selected descriptor to start once with a full clock", () => {
+    const harness = makeHarness();
+    const turn = harness.game.currentTurn!;
+    harness.deps.registry.save({ ...harness.game, currentTurn: { ...turn, status: "pending" } });
+    const before = JSON.stringify(harness.deps.registry.findById(harness.game.id));
+    for (const playerId of ["p2", "p3"]) {
+      expect(() => startTurn(harness.deps, harness.game.id, PlayerId.from(playerId))).toThrow(
+        NotAllowedError,
+      );
+      expect(JSON.stringify(harness.deps.registry.findById(harness.game.id))).toBe(before);
+    }
+    expect(expireTurn(harness.deps, harness.game.id)).toBeNull();
+    expect(() =>
+      guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), { guess: turn.card.word }),
+    ).toThrow(TurnNotActiveError);
+    const now = new Date(LATER.getTime() + 600_000);
+    harness.setNow(now);
+    const result = startTurn(harness.deps, harness.game.id, PlayerId.from("p1"));
+    expect(result.game.currentTurn).toMatchObject({
+      id: turn.id,
+      status: "active",
+      startedAt: now,
+      deadlineAt: new Date(now.getTime() + 60_000),
+    });
+    const active = JSON.stringify(harness.deps.registry.findById(harness.game.id));
+    expect(() => startTurn(harness.deps, harness.game.id, PlayerId.from("p1"))).toThrow();
+    expect(JSON.stringify(harness.deps.registry.findById(harness.game.id))).toBe(active);
+  });
+});
+
 describe("guessWord", () => {
   let harness: Harness;
 
@@ -79,7 +121,8 @@ describe("guessWord", () => {
     harness = makeHarness();
   });
 
-  it("suma 1 al equipo que describe y cierra el turno", () => {
+  it("scores a correct card without changing the timed round", () => {
+    const before = harness.game.currentTurn!;
     const result = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {
       guess: activeWord(harness.game).toUpperCase(),
     });
@@ -89,7 +132,17 @@ describe("guessWord", () => {
     expect(result.teamScore).toBe(1);
     expect(result.events.map((event) => event.type)).toContain("ScoreChanged");
     expect(result.game.teams[0]?.score.value).toBe(1);
-    expect(result.game.currentTurn?.teamId).toBe("t2");
+    expect(result.game.currentTurn).toMatchObject({
+      id: before.id,
+      teamId: before.teamId,
+      descriptorId: before.descriptorId,
+      startedAt: before.startedAt,
+      deadlineAt: before.deadlineAt,
+      skipsUsed: before.skipsUsed,
+    });
+    expect(result.game.currentTurn?.card.id).not.toBe(before.card.id);
+    expect(result.events.map((event) => event.type)).not.toContain("TurnEnded");
+    expect(harness.deps.registry.findById(harness.game.id)).toEqual(result.game);
   });
 
   it("acredita el punto al jugador que cantó el acierto", () => {
@@ -121,17 +174,17 @@ describe("guessWord", () => {
   });
 
   it("rechaza al equipo rival", () => {
-    expect(() => guessWord(harness.deps, harness.game.id, PlayerId.from("p3"), { guess: "fuego" })).toThrow(
-      NotAllowedError,
-    );
+    expect(() =>
+      guessWord(harness.deps, harness.game.id, PlayerId.from("p3"), { guess: "fuego" }),
+    ).toThrow(NotAllowedError);
   });
 
   it("rechaza a un jugador sin equipo", () => {
     harness.deps.registry.save({ ...harness.game, players: [makePlayer("p9", null)] });
 
-    expect(() => guessWord(harness.deps, harness.game.id, PlayerId.from("p9"), { guess: "fuego" })).toThrow(
-      NotAllowedError,
-    );
+    expect(() =>
+      guessWord(harness.deps, harness.game.id, PlayerId.from("p9"), { guess: "fuego" }),
+    ).toThrow(NotAllowedError);
   });
 });
 
@@ -156,7 +209,7 @@ describe("un solo descriptor por turno (S2)", () => {
     expect(first).toBe("p1");
 
     // Cerrar el turno (por reloj) abre el del equipo rival: descriptor nuevo.
-    const after = passTurn(harness.deps, harness.game.id, PlayerId.from("p2"));
+    const after = expireTurn(harness.deps, harness.game.id)!;
 
     expect(after.game.currentTurn?.teamId).toBe("t2");
     expect(after.game.currentTurn?.descriptorId).toBe("p3");
@@ -190,6 +243,21 @@ describe("reportViolation", () => {
   beforeEach(() => {
     harness = makeHarness();
   });
+
+  it.each(["p1", "p2"])(
+    "rejects the describing team's taboo-word report without mutation (%s)",
+    (playerId) => {
+      const before = JSON.stringify(harness.deps.registry.findById(harness.game.id));
+      const tabooWord = harness.game.currentTurn!.card.taboo.words[0]!;
+      expect(() =>
+        reportViolation(harness.deps, harness.game.id, PlayerId.from(playerId), {
+          reason: "TABOO_WORD",
+          tabooWord,
+        }),
+      ).toThrow(NotAllowedError);
+      expect(JSON.stringify(harness.deps.registry.findById(harness.game.id))).toBe(before);
+    },
+  );
 
   it("penaliza con la palabra prohibida exacta y anula la carta", () => {
     const word = harness.game.currentTurn?.card.taboo.words[0] ?? "";
@@ -252,7 +320,9 @@ describe("reportViolation", () => {
     });
 
     expect(gesture.pointsDelta).toBe(-1);
-    expect(gesture.game.currentTurn?.teamId).toBe("t2");
+    expect(gesture.game.currentTurn?.teamId).toBe("t1");
+    expect(gesture.game.currentTurn?.descriptorId).toBe("p1");
+    expect(gesture.game.currentTurn?.deadlineAt).toEqual(harness.game.currentTurn?.deadlineAt);
   });
 
   it("acepta el autorreporte del descriptor", () => {
@@ -418,31 +488,46 @@ describe("límite de skips por turno (S4)", () => {
   });
 });
 
-describe("passTurn", () => {
-  let harness: Harness;
+describe("timed round continuity", () => {
+  it("allows every other teammate to guess and keeps skips used after an answer", () => {
+    const harness = makeHarness({
+      teams: [
+        {
+          ...makeGame().teams[0]!,
+          players: [makePlayer("p1", "t1"), makePlayer("p2", "t1"), makePlayer("p5", "t1")],
+        },
+        makeGame().teams[1]!,
+      ],
+      settings: makeSettings({ skipLimit: 1 }),
+      deck: makeDeck(
+        Array.from({ length: 6 }, (_, index) => makeCard(`c${index}`, `word${index}`)),
+      ),
+    });
+    const initial = harness.game.currentTurn!;
+    skipTurn(harness.deps, harness.game.id, PlayerId.from("p1"));
 
-  beforeEach(() => {
-    harness = makeHarness();
-  });
-
-  it("termina el turno sin puntos y devuelve la carta al final del mazo", () => {
-    const expiredCardId = harness.game.currentTurn?.card.id;
-    const remainingBefore = harness.game.deck.cards.remaining.length;
-
-    const result = passTurn(harness.deps, harness.game.id, PlayerId.from("p2"));
-    const deck = result.game.deck.cards.remaining;
-
-    expect(result.pointsDelta).toBe(0);
-    expect(result.game.teams[0]?.score.value).toBe(0);
-    expect(result.game.currentTurn?.teamId).toBe("t2");
-    expect(deck.length).toBe(remainingBefore);
-    expect(deck.at(-1)?.id).toBe(expiredCardId);
-  });
-
-  it("lo puede pedir cualquier miembro del equipo activo, no el rival", () => {
-    expect(() => passTurn(harness.deps, harness.game.id, PlayerId.from("p3"))).toThrow(
-      NotAllowedError,
+    for (const playerId of ["p2", "p5"]) {
+      const current = harness.deps.registry.findById(harness.game.id)!;
+      const result = guessWord(harness.deps, harness.game.id, PlayerId.from(playerId), {
+        guess: activeWord(current),
+      });
+      expect(result.correct).toBe(true);
+      expect(result.game.currentTurn).toMatchObject({
+        id: initial.id,
+        descriptorId: initial.descriptorId,
+        teamId: initial.teamId,
+        deadlineAt: initial.deadlineAt,
+        skipsUsed: 1,
+      });
+    }
+    const before = JSON.stringify(harness.deps.registry.findById(harness.game.id));
+    expect(() => skipTurn(harness.deps, harness.game.id, PlayerId.from("p1"))).toThrow(
+      SkipLimitReachedError,
     );
+    expect(JSON.stringify(harness.deps.registry.findById(harness.game.id))).toBe(before);
+    const after = expireTurn(harness.deps, harness.game.id)!;
+    expect(after.game.currentTurn?.teamId).toBe("t2");
+    expect(after.game.teams[0]?.score.value).toBe(2);
   });
 });
 
@@ -476,8 +561,8 @@ describe("expireTurn", () => {
     const harness = makeHarness();
     harness.deps.registry.save({ ...harness.game, currentTurn: null });
 
-    expect(() => guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), { guess: "fuego" })).toThrow(
-      TurnNotActiveError,
-    );
+    expect(() =>
+      guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), { guess: "fuego" }),
+    ).toThrow(TurnNotActiveError);
   });
 });

@@ -38,6 +38,11 @@ afterEach(() => {
 });
 
 describe("GameProvider joinGame", () => {
+  it("starts the descriptor's turn through the server", async () => {
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+    act(() => result.current.startTurn());
+    expect(socket.emit).toHaveBeenCalledWith("turn:start", expect.any(Function));
+  });
   it("uses the name supplied at submit time instead of stale state", async () => {
     const { result } = renderHook(useGame, { wrapper: GameProvider });
 
@@ -70,7 +75,11 @@ describe("GameProvider joinGame", () => {
 });
 
 describe("GameProvider adivinación escrita", () => {
-  function ackGuess(response: { correct: boolean; pointsAwarded: number; teamScore: number }): void {
+  function ackGuess(response: {
+    correct: boolean;
+    pointsAwarded: number;
+    teamScore: number;
+  }): void {
     socket.emit.mockImplementation(
       (event: string, _payload: unknown, ack?: (value: unknown) => void) => {
         if (event === "turn:guess") {
@@ -143,7 +152,7 @@ describe("GameProvider adivinación escrita", () => {
     expect(notices[0]?.text).toContain("palabra prohibida");
   });
 
-  it("limpia el chat cuando termina el turno", async () => {
+  it.each(["turn:ended", "card:resolved"])("clears previous guesses on %s", async (event) => {
     ackGuess({ correct: false, pointsAwarded: 0, teamScore: 0 });
 
     const { result } = renderHook(useGame, { wrapper: GameProvider });
@@ -155,7 +164,7 @@ describe("GameProvider adivinación escrita", () => {
     expect(result.current.guessMessages).toHaveLength(2);
 
     act(() => {
-      socket.handlers.get("turn:ended")?.({ reason: "TIME" });
+      socket.handlers.get(event)?.({ reason: event === "card:resolved" ? "CORRECT" : "TIME" });
     });
 
     expect(result.current.guessMessages).toEqual([]);

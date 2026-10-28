@@ -76,7 +76,9 @@ describe("game mapper", () => {
       currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
     });
     const document = toGameDocument(game);
-    const legacyTurn = { ...document.currentTurn } as Partial<NonNullable<typeof document.currentTurn>>;
+    const legacyTurn = { ...document.currentTurn } as Partial<
+      NonNullable<typeof document.currentTurn>
+    >;
     delete legacyTurn.skipsUsed;
 
     const restored = toGameDomain({
@@ -138,9 +140,26 @@ describe("game mapper", () => {
     expect(restored).toEqual(game);
   });
 
+  it("round-trips pending turns and the remaining random descriptor queue", () => {
+    const original = makeGame();
+    const game = {
+      ...original,
+      teams: original.teams.map((team) => ({
+        ...team,
+        descriptorQueue: team.players.slice(1).map((player) => player.id),
+      })),
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1", status: "pending" }),
+    };
+    expect(toGameDomain({ ...toGameDocument(game), updatedAt: LATER })).toEqual(game);
+  });
+
   it("serializes deck and turn cards with their ids", () => {
     const game = makeGame({
-      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1", card: makeCard("c7", "sol", ["luna"]) }),
+      currentTurn: makeTurn({
+        teamId: "t1",
+        descriptorId: "p1",
+        card: makeCard("c7", "sol", ["luna"]),
+      }),
     });
 
     const document = toGameDocument(game);

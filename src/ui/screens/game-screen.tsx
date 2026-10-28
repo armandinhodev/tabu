@@ -13,6 +13,7 @@ import { ResultScreen } from "@/ui/screens/result-screen";
 import { DescribingView } from "./game/describing-view";
 import { GuessChat } from "./game/guess-chat";
 import { RivalView } from "./game/rival-view";
+import { WaitingTurnView } from "./game/waiting-turn-view";
 import type { RoleViewProps } from "./game/role-view-props";
 
 /**
@@ -21,8 +22,17 @@ import type { RoleViewProps } from "./game/role-view-props";
  * privado de respuestas. En ≥1280 se suman los dos rails (§10).
  */
 export function GameScreen() {
-  const { state, busy, guess, guessMessages, passTurn, skipTurn, reportViolation, penalty, leaveGame } =
-    useGame();
+  const {
+    state,
+    busy,
+    guess,
+    guessMessages,
+    startTurn,
+    skipTurn,
+    reportViolation,
+    penalty,
+    leaveGame,
+  } = useGame();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   if (state === null) {
@@ -52,7 +62,6 @@ export function GameScreen() {
     turn,
     busy,
     reportedWord: penalty?.tabooWord ?? null,
-    onPass: passTurn,
     onSkipCard: skipTurn,
     onReport: reportViolation,
   };
@@ -62,9 +71,9 @@ export function GameScreen() {
   const activeTeam = state.teams.find((team) => team.id === turn.teamId) ?? null;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4 md:px-8 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_300px] xl:items-start xl:gap-8 xl:pt-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-5 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:px-8 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_300px] xl:items-start xl:gap-8 xl:pt-8">
       <div className="mb-2 flex items-center justify-between xl:hidden">
-        <span className="text-caption uppercase text-fg-subtle">
+        <span className="text-caption text-fg-subtle uppercase">
           {state.code} · ronda {state.round}
         </span>
         <Button
@@ -78,7 +87,7 @@ export function GameScreen() {
       </div>
 
       <aside className="hidden xl:flex xl:flex-col xl:gap-3">
-        <h2 className="text-caption uppercase text-fg-subtle">Equipos</h2>
+        <h2 className="text-caption text-fg-subtle uppercase">Equipos</h2>
         {state.teams.map((team) => (
           <TeamPanel
             key={team.id}
@@ -92,21 +101,22 @@ export function GameScreen() {
       </aside>
 
       <div className="flex flex-col gap-4">
-        {isRival ? <RivalView {...props} /> : <DescribingView {...props} />}
+        {turn.status === "pending" ? (
+          <WaitingTurnView state={state} turn={turn} busy={busy} onStart={startTurn} />
+        ) : isRival ? (
+          <RivalView {...props} />
+        ) : (
+          <DescribingView {...props} />
+        )}
 
-        {isGuesser || guessMessages.length > 0 ? (
-          <GuessChat
-            active={isGuesser}
-            disabled={busy}
-            messages={guessMessages}
-            onGuess={guess}
-          />
+        {turn.status !== "pending" && (isGuesser || guessMessages.length > 0) ? (
+          <GuessChat active={isGuesser} disabled={busy} messages={guessMessages} onGuess={guess} />
         ) : null}
       </div>
 
       <aside className="hidden xl:flex xl:flex-col xl:gap-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-caption uppercase text-fg-subtle">Turno</h2>
+          <h2 className="text-caption text-fg-subtle uppercase">Turno</h2>
           <MuteButton />
         </div>
         <div className="rounded-lg border border-line bg-surface p-4">

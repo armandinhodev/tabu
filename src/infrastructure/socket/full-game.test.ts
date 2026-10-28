@@ -9,7 +9,14 @@ import type {
   TurnStartedView,
 } from "./events";
 import { makeCard } from "../../domain/__fixtures__/game";
-import { emitAck, makeSocketHarness, nextEvent, waitFor, type SocketHarness } from "./test-support";
+import {
+  emitAck,
+  makeSocketHarness,
+  nextEvent,
+  waitFor,
+  startSelectedTurn,
+  type SocketHarness,
+} from "./test-support";
 
 /**
  * Partida completa por socket (T5.1, §15): crear → unirse → repartir → arrancar
@@ -73,6 +80,7 @@ describe("partida completa por socket", () => {
 
     const started = nextEvent(host, "turn:started");
     await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
 
     const firstTurn = (await started) as TurnStartedView;
 
@@ -100,7 +108,7 @@ describe("partida completa por socket", () => {
     expect(states.get(guesser.playerId)?.turn?.taboo).toEqual([]);
 
     // Turno 1: acierto del equipo que adivina.
-    const firstEnded = nextEvent<TurnEndedView>(host, "turn:ended");
+    const firstEnded = nextEvent<TurnEndedView>(host, "card:resolved");
     const guessed = await emitAck<{ pointsAwarded: number; teamScore: number }>(
       guesser.client,
       "turn:guess",
@@ -114,16 +122,16 @@ describe("partida completa por socket", () => {
     const secondState = await waitFor(() => {
       const current = states.get(rival.playerId);
 
-      return current?.turn !== undefined && current.turn.turnId !== firstTurn.turnId
-        ? current
-        : undefined;
+      return current?.turn !== undefined && current.turn.word !== firstWord ? current : undefined;
     }, "segundo turno");
 
     const secondTurnWord = secondState.turn?.word ?? "";
     const secondTurnTaboo = secondState.turn?.taboo[0] ?? "";
     const secondDescriptorId = secondState.turn?.descriptorId ?? "";
 
-    expect(secondDescriptorId).not.toBe(firstTurn.descriptorId);
+    expect(secondDescriptorId).toBe(firstTurn.descriptorId);
+    expect(secondState.turn?.turnId).toBe(firstTurn.turnId);
+    expect(secondState.turn?.deadlineAt).toBe(firstTurn.deadlineAt);
     expect(secondTurnWord).not.toBe(firstWord);
 
     const penalty = nextEvent<PenaltyAppliedView>(rival.client, "penalty:applied");
@@ -150,7 +158,7 @@ describe("partida completa por socket", () => {
     const ended = await finished;
 
     expect(ended.standings).toHaveLength(2);
-    expect(ended.winnerTeamId).not.toBeNull();
+    expect(ended.winnerTeamId).toBeNull();
     expect(ended.mvp?.points).toBe(1);
 
     const final = await waitFor(() => {
@@ -159,7 +167,7 @@ describe("partida completa por socket", () => {
       return snapshot?.status === "finished" ? snapshot : undefined;
     }, "estado final");
 
-    expect(final.teams.map((team) => team.score).sort()).toEqual([0, 1]);
+    expect(final.teams.map((team) => team.score).sort()).toEqual([0, 0]);
   });
 });
 

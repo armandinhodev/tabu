@@ -21,6 +21,15 @@ export interface Mvp {
  */
 export type DomainEvent =
   | {
+      readonly type: "CardResolved";
+      readonly gameId: GameId;
+      readonly turnId: TurnId;
+      readonly teamId: TeamId;
+      readonly reason: TurnOutcomeKind;
+      readonly pointsDelta: number;
+      readonly cardDiscarded: boolean;
+    }
+  | {
       readonly type: "GameStarted";
       readonly gameId: GameId;
       readonly startedAt: Date;

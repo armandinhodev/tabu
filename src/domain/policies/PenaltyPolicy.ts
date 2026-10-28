@@ -34,9 +34,9 @@ export interface ReportMeta {
 }
 
 /**
- * Regla completa de reporte: solo el equipo rival o el descriptor pueden
- * reportar; una palabra prohibida debe pertenecer a la carta activa. Un reporte
- * inválido no penaliza ni cierra el turno: lanza error.
+ * Only rival teams may report taboo words from the active card.
+ * Legacy gesture/sound reports also allow the descriptor to self-report.
+ * Invalid reports throw without changing the game.
  */
 export function validateReport(
   game: Game,
@@ -59,6 +59,10 @@ export function validateReport(
   }
 
   if (input.reason === "TABOO_WORD") {
+    if (role !== "RIVAL") {
+      throw new NotAllowedError("Only players on other teams can report taboo words");
+    }
+
     if (!turn.card.taboo.contains(input.tabooWord)) {
       throw new InvalidTabooWordError(input.tabooWord);
     }

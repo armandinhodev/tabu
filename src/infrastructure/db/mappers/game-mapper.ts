@@ -1,5 +1,8 @@
 import type { Game } from "../../../domain/entities/Game";
-import { DEFAULT_SKIP_LIMIT, DEFAULT_TABOO_WORD_COUNT } from "../../../domain/entities/GameSettings";
+import {
+  DEFAULT_SKIP_LIMIT,
+  DEFAULT_TABOO_WORD_COUNT,
+} from "../../../domain/entities/GameSettings";
 import type { Player } from "../../../domain/entities/Player";
 import { TEAM_COLORS, type Team, type TeamColor } from "../../../domain/entities/Team";
 import type { Turn } from "../../../domain/entities/Turn";
@@ -115,6 +118,7 @@ function toTeamDocument(team: Team): GameTeamDocument {
     color: team.color,
     score: team.score.value,
     turnCursor: team.turnCursor,
+    ...(team.descriptorQueue === undefined ? {} : { descriptorQueue: [...team.descriptorQueue] }),
     players: team.players.map(toPlayerDocument),
   };
 }
@@ -166,6 +170,9 @@ function toTeamDomain(team: GameTeamDocument): Team {
     color: toTeamColor(team.color),
     score: Score.from(team.score),
     turnCursor: team.turnCursor,
+    ...(team.descriptorQueue === undefined
+      ? {}
+      : { descriptorQueue: team.descriptorQueue.map(PlayerId.from) }),
     players: team.players.map((player) => ({
       id: PlayerId.from(player.id),
       name: player.name,

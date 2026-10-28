@@ -68,7 +68,7 @@ interface GameContextValue {
   readonly guess: (answer: string) => void;
   readonly reportViolation: (reason: ViolationReason, tabooWord?: string) => void;
   readonly skipTurn: () => void;
-  readonly passTurn: () => void;
+  readonly startTurn: () => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -198,8 +198,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
 
     const onTurnEnded = (payload: { reason: string }): void => {
-      // El chat es por turno: se limpia al cerrar el turno. El aviso de
-      // penalización viaja después de `turn:ended` y queda como última línea (S5).
+      // Clear guesses when a card resolves or the timed round ends.
+      // Penalty notices arrive afterwards and remain visible for the next card.
       setGuessMessages([]);
 
       if (payload.reason === "CORRECT") {
@@ -256,6 +256,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.on("turn:started", onTurnStarted);
     socket.on("turn:tick", onTick);
     socket.on("turn:ended", onTurnEnded);
+    socket.on("card:resolved", onTurnEnded);
     socket.on("turn:skipped", onTurnSkipped);
     socket.on("penalty:applied", onPenalty);
     socket.on("score:updated", onScore);
@@ -278,6 +279,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off("turn:started", onTurnStarted);
       socket.off("turn:tick", onTick);
       socket.off("turn:ended", onTurnEnded);
+      socket.off("card:resolved", onTurnEnded);
       socket.off("turn:skipped", onTurnSkipped);
       socket.off("penalty:applied", onPenalty);
       socket.off("score:updated", onScore);
@@ -428,8 +430,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Respuesta escrita del equipo que adivina (S3): el servidor la verifica
-   * contra la carta activa y devuelve si acertó. Un acierto cierra el turno;
-   * una respuesta equivocada no cambia nada.
+   * contra la carta activa y devuelve si acertó. Un acierto cambia la carta
+   * sin reiniciar el reloj; una respuesta equivocada no cambia nada.
    */
   const guess = useCallback(
     (answer: string) => {
@@ -439,19 +441,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      void run<GuessAck>((done) =>
-        getSocket().emit("turn:guess", { guess: trimmed }, done),
-      ).then((ack) => {
-        if (ack === null) {
-          return;
-        }
+      void run<GuessAck>((done) => getSocket().emit("turn:guess", { guess: trimmed }, done)).then(
+        (ack) => {
+          if (ack === null) {
+            return;
+          }
 
-        appendGuessMessage(trimmed, "guess");
-        appendGuessMessage(
-          ack.correct ? "¡Acertaste!" : "No es esa. Probá de nuevo.",
-          "feedback",
-        );
-      });
+          appendGuessMessage(trimmed, "guess");
+          appendGuessMessage(
+            ack.correct ? "¡Acertaste!" : "No es esa. Probá de nuevo.",
+            "feedback",
+          );
+        },
+      );
     },
     [appendGuessMessage, run],
   );
@@ -473,8 +475,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     void run((done) => getSocket().emit("turn:skip", done));
   }, [run]);
 
-  const passTurn = useCallback(() => {
-    void run((done) => getSocket().emit("turn:pass", done));
+  const startTurn = useCallback(() => {
+    void run((done) => getSocket().emit("turn:start", done));
   }, [run]);
 
   const value = useMemo<GameContextValue>(
@@ -505,7 +507,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       guess,
       reportViolation,
       skipTurn,
-      passTurn,
+      startTurn,
     }),
     [
       view,
@@ -527,7 +529,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       guess,
       reportViolation,
       skipTurn,
-      passTurn,
+      startTurn,
     ],
   );
 

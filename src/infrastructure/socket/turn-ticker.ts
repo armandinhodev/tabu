@@ -20,6 +20,10 @@ export class TurnTicker {
   ) {}
 
   ensure(gameId: string): void {
+    if (this.deps.registry.findById(gameId)?.currentTurn?.status !== "active") {
+      this.stop(gameId);
+      return;
+    }
     if (this.timers.has(gameId)) {
       return;
     }
@@ -42,7 +46,7 @@ export class TurnTicker {
   tick(gameId: string): void {
     const game = this.deps.registry.findById(gameId);
 
-    if (game === null || game.status !== "playing" || game.currentTurn === null) {
+    if (game === null || game.status !== "playing" || game.currentTurn?.status !== "active") {
       this.stop(gameId);
       return;
     }
@@ -57,7 +61,7 @@ export class TurnTicker {
           this.broadcaster.emitEvents(result.game, result.events);
           this.broadcaster.emitState(result.game);
 
-          if (result.game.status !== "playing") {
+          if (result.game.status !== "playing" || result.game.currentTurn?.status !== "active") {
             this.stop(gameId);
           }
         }

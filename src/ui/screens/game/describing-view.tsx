@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Hand, Volume2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/ui/components/ui/button";
 import { StickyFooter } from "@/ui/components/ui/screen";
@@ -20,14 +20,7 @@ import type { RoleViewProps } from "./role-view-props";
  * Los chips nunca son reportables acá: el rojo queda reservado a las palabras
  * prohibidas (§3, S22) y el aviso del descriptor es ámbar.
  */
-export function DescribingView({
-  state,
-  turn,
-  busy,
-  onPass,
-  onSkipCard,
-  onReport,
-}: RoleViewProps) {
+export function DescribingView({ state, turn, busy, onSkipCard }: RoleViewProps) {
   const isDescriptor = state.me.role === "DESCRIBER";
   const activeTeamName = teamNameOf(state.teams, turn.teamId);
 
@@ -65,7 +58,7 @@ export function DescribingView({
             Escuchá a quien describe y escribí la respuesta en el chat de abajo.
           </p>
           <p className="text-body-sm text-fg-subtle">
-            Ni tu equipo ni el rival ven la palabra que estás adivinando.
+            La palabra y las prohibidas solo las ven quien describe y los otros equipos.
           </p>
         </section>
       )}
@@ -78,10 +71,6 @@ export function DescribingView({
       </section>
 
       <StickyFooter>
-        <Button variant="ghost" block disabled={busy} onClick={onPass}>
-          Pasar turno
-        </Button>
-
         {isDescriptor ? (
           <>
             <Button
@@ -98,29 +87,6 @@ export function DescribingView({
                 ? "Se agotaron los saltos de este turno. Hay que adivinar."
                 : `Te quedan ${state.skipsLeft} ${state.skipsLeft === 1 ? "salto" : "saltos"} en este turno.`}
             </p>
-
-            <div className="flex gap-2">
-              <Button
-                variant="danger"
-                size="md"
-                block
-                disabled={busy}
-                onClick={() => onReport("GESTURE")}
-              >
-                <Hand aria-hidden="true" className="size-4" />
-                Reportar gesto
-              </Button>
-              <Button
-                variant="danger"
-                size="md"
-                block
-                disabled={busy}
-                onClick={() => onReport("SOUND")}
-              >
-                <Volume2 aria-hidden="true" className="size-4" />
-                Reportar sonido
-              </Button>
-            </div>
           </>
         ) : null}
 

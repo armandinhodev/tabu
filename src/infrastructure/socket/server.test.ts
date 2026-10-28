@@ -8,6 +8,7 @@ import {
   makeSocketHarness,
   nextEvent,
   waitFor,
+  startSelectedTurn,
   type SocketHarness,
 } from "./test-support";
 
@@ -50,6 +51,7 @@ describe("socket server", () => {
     await emitAck(host, "game:autoTeams");
     const turnStarted = nextEvent<{ turnId: string; descriptorId: string }>(host, "turn:started");
     await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
 
     const turn = await turnStarted;
 
@@ -77,9 +79,7 @@ describe("socket server", () => {
     expect(guesserTurn?.taboo).toEqual([]);
 
     // S3: ni el rival ni el descriptor pueden adivinar.
-    await expect(
-      emitAck(rival.client, "turn:guess", { guess: "fuego" }),
-    ).resolves.toMatchObject({
+    await expect(emitAck(rival.client, "turn:guess", { guess: "fuego" })).resolves.toMatchObject({
       error: { code: "NOT_ALLOWED" },
     });
 
@@ -89,8 +89,7 @@ describe("socket server", () => {
       error: { code: "NOT_ALLOWED" },
     });
 
-    const turnEnded = nextEvent<{ reason: string; pointsDelta: number }>(host, "turn:ended");
-    const nextTurn = nextEvent<{ turnId: string }>(host, "turn:started");
+    const resolved = nextEvent<{ reason: string; pointsDelta: number }>(host, "card:resolved");
     const guessed = await emitAck<{ correct: boolean; pointsAwarded: number; teamScore: number }>(
       guesser.client,
       "turn:guess",
@@ -100,8 +99,18 @@ describe("socket server", () => {
     expect(guessed.correct).toBe(true);
     expect(guessed.pointsAwarded).toBe(1);
     expect(guessed.teamScore).toBe(1);
-    await expect(turnEnded).resolves.toMatchObject({ reason: "CORRECT", pointsDelta: 1 });
-    expect((await nextTurn).turnId).not.toBe(turn.turnId);
+    await expect(resolved).resolves.toMatchObject({ reason: "CORRECT", pointsDelta: 1 });
+    const continued = await waitFor(() => {
+      const state = states.get(descriptor.playerId);
+      return state?.turn?.word !== descriptorTurn?.word ? state : undefined;
+    }, "next card in the same timed round");
+    expect(continued.turn).toMatchObject({
+      turnId: turn.turnId,
+      descriptorId: turn.descriptorId,
+      teamId: descriptorTurn?.teamId,
+      deadlineAt: descriptorTurn?.deadlineAt,
+    });
+    expect(states.get(guesser.playerId)?.turn?.word).toBeUndefined();
   });
 
   it("una respuesta equivocada no da puntos ni cierra el turno", async () => {
@@ -130,6 +139,7 @@ describe("socket server", () => {
 
     await emitAck(host, "game:autoTeams");
     await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
 
     const guesser = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE"),
@@ -193,6 +203,7 @@ describe("socket server", () => {
 
     await emitAck(host, "game:autoTeams");
     await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
 
     const rival = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "RIVAL"),
@@ -238,6 +249,7 @@ describe("socket server", () => {
 
     await emitAck(host, "game:autoTeams");
     await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
 
     const descriptor = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER"),
@@ -246,7 +258,10 @@ describe("socket server", () => {
 
     // El primer skip se acepta y no resta puntos.
     // El ack de un skip exitoso es null: el handler no devuelve payload.
-    const accepted = await emitAck<{ error?: { code: string } } | null>(descriptor.client, "turn:skip");
+    const accepted = await emitAck<{ error?: { code: string } } | null>(
+      descriptor.client,
+      "turn:skip",
+    );
 
     expect(accepted).toBeNull();
 
@@ -281,6 +296,7 @@ describe("socket server", () => {
 
     await emitAck(host, "game:autoTeams");
     await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
 
     const rival = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "RIVAL"),

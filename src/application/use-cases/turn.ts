@@ -9,7 +9,12 @@ import type { DomainEvent } from "../../domain/events/events";
 import type { GuessRequest, ReportViolationRequest } from "../../infrastructure/socket/payloads";
 import { validateReport } from "../../domain/policies/PenaltyPolicy";
 import { effectiveSkipLimit } from "../../domain/policies/SkipLimitPolicy";
-import { resolveTurn, skipCard, type TurnOutcome } from "../../domain/services/GameStateMachine";
+import {
+  activateTurn,
+  resolveTurn,
+  skipCard,
+  type TurnOutcome,
+} from "../../domain/services/GameStateMachine";
 import type { PlayerId, TeamId } from "../../domain/value-objects/PlayerId";
 import { normalizeWord } from "../../domain/value-objects/TabooWords";
 import { requirePlayer, requirePlaying, type GameDeps } from "./common";
@@ -45,6 +50,22 @@ function activeTurn(game: Game): NonNullable<Game["currentTurn"]> {
   return turn;
 }
 
+export function startTurn(deps: GameDeps, gameId: string, playerId: PlayerId) {
+  const game = requireGame(deps, gameId);
+  requirePlaying(game);
+  requirePlayer(game, playerId);
+  if (game.currentTurn?.descriptorId !== playerId) {
+    throw new NotAllowedError("Only the selected descriptor can start the turn");
+  }
+  const result = activateTurn(game, {
+    now: deps.clock.now(),
+    rng: deps.rng,
+    newTurnId: deps.ids.turnId,
+  });
+  deps.registry.save(result.game);
+  return result;
+}
+
 function apply(deps: GameDeps, game: Game, outcome: TurnOutcome, teamId: TeamId): TurnActionData {
   const result = resolveTurn(game, outcome, {
     now: deps.clock.now(),
@@ -55,11 +76,13 @@ function apply(deps: GameDeps, game: Game, outcome: TurnOutcome, teamId: TeamId)
   deps.registry.save(result.game);
 
   const team = result.game.teams.find((candidate) => candidate.id === teamId);
-  const ended = result.events.find((event) => event.type === "TurnEnded");
+  const ended = result.events.find(
+    (event) => event.type === "TurnEnded" || event.type === "CardResolved",
+  );
 
   return {
     game: result.game,
-    pointsDelta: ended?.type === "TurnEnded" ? ended.pointsDelta : 0,
+    pointsDelta: ended?.pointsDelta ?? 0,
     teamScore: team?.score.value ?? 0,
     events: result.events,
   };
@@ -88,12 +111,15 @@ export function guessWord(
     return { game, correct: false, pointsDelta: 0, teamScore: team?.score.value ?? 0, events: [] };
   }
 
-  return { ...apply(deps, game, { kind: "CORRECT", actorId: playerId }, turn.teamId), correct: true };
+  return {
+    ...apply(deps, game, { kind: "CORRECT", actorId: playerId }, turn.teamId),
+    correct: true,
+  };
 }
 
 /**
- * Reporte del rival o autorreporte del descriptor: la política valida rol y
- * palabra antes de penalizar, así un reporte inválido no cierra el turno (S6).
+ * The policy checks reporter permissions and the active taboo word before
+ * applying any penalty. Only opposing teams may report taboo words.
  */
 export function reportViolation(
   deps: GameDeps,
@@ -164,28 +190,9 @@ export function skipTurn(deps: GameDeps, gameId: string, playerId: PlayerId): Tu
 export function expireTurn(deps: GameDeps, gameId: string): TurnActionData | null {
   const game = deps.registry.findById(gameId);
 
-  if (game === null || game.status !== "playing" || game.currentTurn === null) {
+  if (game === null || game.status !== "playing" || game.currentTurn?.status !== "active") {
     return null;
   }
 
   return apply(deps, game, { kind: "TIME" }, game.currentTurn.teamId);
-}
-
-/**
- * *Pasar turno* del equipo activo (S4, §6.4): termina el turno sin puntos y
- * devuelve la carta al final del mazo. Es distinto de *Aceptar y pasar carta*
- * (`turn:skip`), que se la entrega al rival (§6.8, D42).
- */
-export function passTurn(deps: GameDeps, gameId: string, playerId: PlayerId): TurnActionData {
-  const game = requireGame(deps, gameId);
-  requirePlaying(game);
-
-  const turn = activeTurn(game);
-  const { player } = requirePlayer(game, playerId);
-
-  if (player.teamId === null || player.teamId !== turn.teamId) {
-    throw new NotAllowedError("Only the describing team can pass the turn");
-  }
-
-  return apply(deps, game, { kind: "TIME" }, turn.teamId);
 }

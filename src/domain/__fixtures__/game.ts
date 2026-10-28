@@ -70,7 +70,7 @@ export function makeTurn(params: {
   card?: Card;
   startedAt?: Date;
   deadlineAt?: Date;
-  status?: "active" | "ended";
+  status?: "pending" | "active" | "ended";
   skipsUsed?: number;
 }): Turn {
   return {

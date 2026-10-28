@@ -41,6 +41,7 @@ export interface SettingsView {
 }
 
 export interface TurnView {
+  readonly status?: Turn["status"];
   readonly turnId: string;
   readonly teamId: string;
   readonly descriptorId: string;
@@ -96,12 +97,14 @@ export function toTeamViews(teams: readonly Team[]): readonly TeamView[] {
 }
 
 export function toTurnView(turn: Turn, turnSeconds: number, role: PlayerRole): TurnView {
+  const visible = turn.status === "active" && (role === "DESCRIBER" || role === "RIVAL");
   return {
+    status: turn.status,
     turnId: turn.id,
     teamId: turn.teamId,
     descriptorId: turn.descriptorId,
-    ...(role === "DESCRIBER" || role === "RIVAL" ? { word: turn.card.word } : {}),
-    taboo: role === "DESCRIBER" || role === "RIVAL" ? turn.card.taboo.words : [],
+    ...(visible ? { word: turn.card.word } : {}),
+    taboo: visible ? turn.card.taboo.words : [],
     startedAt: turn.startedAt.getTime(),
     deadlineAt: turn.deadlineAt.getTime(),
     turnSeconds,
@@ -120,11 +123,10 @@ export function toGameState(game: Game, viewerId: PlayerId): GameStateView {
     waitingPlayers: game.players.map(toPlayerView),
     me,
     round: game.round,
-    skipsLeft: Math.max(
-      0,
-      effectiveSkipLimit(game.settings.skipLimit) - (turn?.skipsUsed ?? 0),
-    ),
-    ...(turn === null ? {} : { turn: toTurnView(turn, game.settings.turnSeconds.seconds, me.role) }),
+    skipsLeft: Math.max(0, effectiveSkipLimit(game.settings.skipLimit) - (turn?.skipsUsed ?? 0)),
+    ...(turn === null
+      ? {}
+      : { turn: toTurnView(turn, game.settings.turnSeconds.seconds, me.role) }),
   };
 
   return base;
@@ -145,18 +147,14 @@ export function toMeView(game: Game, viewerId: PlayerId): MeView {
   };
 }
 
-function roleOf(
-  game: Game,
-  viewerId: PlayerId,
-  team: Team | undefined,
-): PlayerRole {
+function roleOf(game: Game, viewerId: PlayerId, team: Team | undefined): PlayerRole {
   if (team === undefined) {
     return "SPECTATOR";
   }
 
   const turn = game.currentTurn;
 
-  if (turn === null || turn.status !== "active") {
+  if (turn === null || turn.status === "ended") {
     return "IDLE";
   }
 

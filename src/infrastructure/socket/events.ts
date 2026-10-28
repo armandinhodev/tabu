@@ -1,8 +1,4 @@
-import type {
-  GameStateView,
-  SettingsView,
-  TeamView,
-} from "../../application/dto/game-state";
+import type { GameStateView, SettingsView, TeamView } from "../../application/dto/game-state";
 import type { ViolationReason } from "../../domain/entities/Violation";
 
 /**
@@ -22,7 +18,7 @@ export const CLIENT_EVENTS = {
   turnGuess: "turn:guess",
   turnReportViolation: "turn:reportViolation",
   turnSkip: "turn:skip",
-  turnPass: "turn:pass",
+  turnStart: "turn:start",
 } as const;
 
 export const SERVER_EVENTS = {
@@ -34,6 +30,7 @@ export const SERVER_EVENTS = {
   turnSkipped: "turn:skipped",
   turnTick: "turn:tick",
   turnEnded: "turn:ended",
+  cardResolved: "card:resolved",
   penaltyApplied: "penalty:applied",
   scoreUpdated: "score:updated",
   roundEnded: "round:ended",
@@ -136,7 +133,11 @@ export interface PenaltyAppliedView {
 export interface GameFinishedView {
   readonly winnerTeamId: string | null;
   readonly standings: readonly StandingView[];
-  readonly mvp: { readonly playerId: string; readonly name: string; readonly points: number } | null;
+  readonly mvp: {
+    readonly playerId: string;
+    readonly name: string;
+    readonly points: number;
+  } | null;
 }
 
 export interface RoundEndedView {
@@ -145,6 +146,7 @@ export interface RoundEndedView {
 }
 
 export interface ServerToClientEvents {
+  "card:resolved": (payload: TurnEndedView) => void;
   "game:state": (payload: GameStateView) => void;
   "game:playersUpdated": (payload: { readonly teams: readonly TeamView[] }) => void;
   "game:started": (payload: GameStartedView) => void;
@@ -160,10 +162,7 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  "game:create": (
-    payload: unknown,
-    ack: Ack<CreateGameAck>,
-  ) => void;
+  "game:create": (payload: unknown, ack: Ack<CreateGameAck>) => void;
   "game:join": (payload: unknown, ack: Ack<JoinGameAck>) => void;
   "game:reconnect": (payload: unknown, ack: Ack<ReconnectAck>) => void;
   "game:assignTeam": (payload: unknown, ack: Ack<void>) => void;
@@ -173,5 +172,5 @@ export interface ClientToServerEvents {
   "turn:guess": (payload: unknown, ack: Ack<GuessAck>) => void;
   "turn:reportViolation": (payload: unknown, ack: Ack<ReportViolationAck>) => void;
   "turn:skip": (ack: Ack<void>) => void;
-  "turn:pass": (ack: Ack<void>) => void;
+  "turn:start": (ack: Ack<void>) => void;
 }

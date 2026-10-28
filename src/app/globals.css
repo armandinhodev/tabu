@@ -78,7 +78,7 @@
   --text-micro--line-height: 0.875rem;
 
   /* Palabra objetivo (§4) */
-  --text-word: clamp(48px, 12vw, 96px);
+  --text-word: clamp(24px, 6vw, 48px);
   --text-word--line-height: 1;
   --text-word--letter-spacing: -0.02em;
 

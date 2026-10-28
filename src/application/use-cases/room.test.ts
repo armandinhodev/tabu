@@ -52,12 +52,19 @@ async function makeHarness(): Promise<Harness> {
     language: "es",
     active: true,
     cards: [
-       makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
-       makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
-       makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
-       makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
-       makeCard("general-005", "silla", ["mueble", "asiento", "patas", "respaldo", "sentar", "mesa"]),
-       makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
+      makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
+      makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
+      makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
+      makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
+      makeCard("general-005", "silla", [
+        "mueble",
+        "asiento",
+        "patas",
+        "respaldo",
+        "sentar",
+        "mesa",
+      ]),
+      makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
     ],
   });
 
@@ -291,7 +298,11 @@ describe("startGame", () => {
     harness = await makeHarness();
   });
 
-  async function roomWithTeams(): Promise<{ gameId: string; hostId: ReturnType<typeof PlayerId.from>; code: string }> {
+  async function roomWithTeams(): Promise<{
+    gameId: string;
+    hostId: ReturnType<typeof PlayerId.from>;
+    code: string;
+  }> {
     const created = await createdRoom(harness);
     const code = created.data.code;
 
@@ -338,7 +349,8 @@ describe("startGame", () => {
 
     expect(game?.status).toBe("playing");
     expect(game?.currentTurn).not.toBeNull();
-    expect(started.events.map((event) => event.type)).toEqual(["GameStarted", "TurnStarted"]);
+    expect(started.events.map((event) => event.type)).toEqual(["GameStarted"]);
+    expect(game?.currentTurn?.status).toBe("pending");
     expect(game?.currentTurn?.card.taboo.words.length).toBeGreaterThan(0);
   });
 

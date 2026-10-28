@@ -2,7 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { GameStateView } from "../../application/dto/game-state";
-import { emitAck, makeSocketHarness, waitFor, type SocketHarness } from "./test-support";
+import {
+  emitAck,
+  makeSocketHarness,
+  waitFor,
+  startSelectedTurn,
+  type SocketHarness,
+} from "./test-support";
 
 /**
  * Contrato que consume la UI: quién puede qué (S4), visibilidad pública (S3) y
@@ -19,15 +25,16 @@ describe("contrato cliente-servidor", () => {
     await harness.close();
   });
 
-  async function playingGame() {
+  async function playingGame(teamCount = 2, activate = true) {
     const host = await harness.connect();
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
       playerName: "Host",
       deckId: harness.deckId,
+      options: { teamCount },
     });
     const players = [{ client: host, playerId: created.playerId }];
 
-    for (const name of ["Ana", "Beto", "Caro"]) {
+    for (const name of ["Ana", "Beto", "Caro", "Dani", "Eva"].slice(0, teamCount * 2 - 1)) {
       const client = await harness.connect();
       const joined = await emitAck<{ playerId: string }>(client, "game:join", {
         code: created.code,
@@ -46,12 +53,13 @@ describe("contrato cliente-servidor", () => {
 
     await emitAck(host, "game:autoTeams");
     await emitAck(host, "game:start");
+    if (activate) await startSelectedTurn(harness);
 
     return { host, players, states, startedEvents };
   }
 
-  it("el equipo activo puede pasar el turno y el rival no (S4, D42)", async () => {
-    const { host, players, states } = await playingGame();
+  it("only the selected descriptor can start a pending turn", async () => {
+    const { players, states } = await playingGame(2, false);
     const active = await waitFor(
       () => players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE"),
       "active",
@@ -61,15 +69,34 @@ describe("contrato cliente-servidor", () => {
       "rival",
     );
 
-    const ended = new Promise<{ reason: string; pointsDelta: number }>((resolve) => {
-      host.once("turn:ended", resolve);
-    });
-
-    await expect(emitAck(rival.client, "turn:pass")).resolves.toMatchObject({
+    const before = JSON.stringify(harness.deps.registry.all());
+    harness.socketServer.ticker.tick(harness.deps.registry.all()[0]!.id);
+    expect(JSON.stringify(harness.deps.registry.all())).toBe(before);
+    for (const state of states.values()) {
+      expect(state.turn?.word).toBeUndefined();
+      expect(state.turn?.taboo).toEqual([]);
+    }
+    await expect(emitAck(rival.client, "turn:start")).resolves.toMatchObject({
       error: { code: "NOT_ALLOWED" },
     });
-    await emitAck(active.client, "turn:pass");
-    await expect(ended).resolves.toMatchObject({ reason: "TIME", pointsDelta: 0 });
+    await expect(emitAck(active.client, "turn:start")).resolves.toMatchObject({
+      error: { code: "NOT_ALLOWED" },
+    });
+    expect(JSON.stringify(harness.deps.registry.all())).toBe(before);
+    const descriptor = await waitFor(
+      () => players.find(({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER"),
+      "descriptor",
+    );
+    await expect(emitAck(descriptor.client, "turn:skip")).resolves.toMatchObject({
+      error: { code: "TURN_NOT_ACTIVE" },
+    });
+    await startSelectedTurn(harness);
+    expect(states.get(descriptor.playerId)?.turn?.status).toBe("active");
+    const started = JSON.stringify(harness.deps.registry.all());
+    await expect(emitAck(descriptor.client, "turn:start")).resolves.toMatchObject({
+      error: { code: "INVALID_STATE" },
+    });
+    expect(JSON.stringify(harness.deps.registry.all())).toBe(started);
   });
 
   it("Aceptar y pasar carta sigue siendo solo del descriptor (S4, D38)", async () => {
@@ -105,6 +132,81 @@ describe("contrato cliente-servidor", () => {
     expect(startedEvents.size).toBe(players.length);
     for (const event of startedEvents.values()) {
       expect(JSON.stringify(event)).not.toContain(descriptor?.turn?.word);
+    }
+  });
+
+  it("lets only other teams ban the current card and deduct one point", async () => {
+    const { players, states } = await playingGame(3);
+    await waitFor(
+      () => players.every(({ playerId }) => states.get(playerId)?.turn !== undefined) || undefined,
+      "all three teams have the active card state",
+    );
+    const descriptor = players.find(
+      ({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER",
+    )!;
+    const guesser = players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE")!;
+    const initial = states.get(descriptor.playerId)!.turn!;
+    for (const { playerId } of players) {
+      const state = states.get(playerId)!;
+      if (state.me.role === "ACTIVE") {
+        expect(state.turn?.word).toBeUndefined();
+        expect(state.turn?.taboo).toEqual([]);
+      } else {
+        expect(state.turn?.word).toBe(initial.word);
+        expect(state.turn?.taboo).toEqual(initial.taboo);
+      }
+    }
+
+    for (const player of [descriptor, guesser]) {
+      const before = JSON.stringify(harness.deps.registry.all());
+      await expect(
+        emitAck(player.client, "turn:reportViolation", {
+          reason: "TABOO_WORD",
+          tabooWord: initial.taboo[0],
+        }),
+      ).resolves.toMatchObject({ error: { code: "NOT_ALLOWED" } });
+      expect(JSON.stringify(harness.deps.registry.all())).toBe(before);
+    }
+
+    const rivalTeams = new Set(
+      players
+        .filter(({ playerId }) => states.get(playerId)?.me.role === "RIVAL")
+        .map(({ playerId }) => states.get(playerId)!.me.teamId),
+    );
+    expect(rivalTeams.size).toBe(2);
+    for (const rivalTeamId of rivalTeams) {
+      const active = states.get(descriptor.playerId)!.turn!;
+      await emitAck(guesser.client, "turn:guess", { guess: active.word });
+      const card = await waitFor(() => {
+        const turn = states.get(descriptor.playerId)?.turn;
+        return turn?.word !== active.word ? turn : undefined;
+      }, "next card after scoring");
+      const before = harness.deps.registry.all()[0]!;
+      const bannedCard = before.currentTurn!.card;
+      const rival = players.find(
+        ({ playerId }) => states.get(playerId)?.me.teamId === rivalTeamId,
+      )!;
+      await expect(
+        emitAck(rival.client, "turn:reportViolation", {
+          reason: "TABOO_WORD",
+          tabooWord: card.taboo[0],
+        }),
+      ).resolves.toMatchObject({ pointsDelta: -1, teamScore: 0 });
+      const after = harness.deps.registry.all()[0]!;
+      expect(after.discardedCardIds).toContain(bannedCard.id);
+      expect(after.deck.cards.remaining.some((candidate) => candidate.id === bannedCard.id)).toBe(
+        false,
+      );
+      expect(after.passedCards.some(({ card }) => card.id === bannedCard.id)).toBe(false);
+      expect(after.currentTurn?.card.id).not.toBe(bannedCard.id);
+      expect(after.currentTurn?.descriptorId).toBe(initial.descriptorId);
+      expect(after.currentTurn?.deadlineAt.getTime()).toBe(initial.deadlineAt);
+      await waitFor(
+        () => states.get(descriptor.playerId)?.turn?.word !== card.word || undefined,
+        "next card after banning",
+      );
+      expect(states.get(guesser.playerId)?.turn?.word).toBeUndefined();
+      expect(states.get(guesser.playerId)?.turn?.taboo).toEqual([]);
     }
   });
 

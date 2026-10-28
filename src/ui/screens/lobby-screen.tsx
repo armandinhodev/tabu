@@ -14,16 +14,7 @@ import { useGame } from "@/ui/providers/game-provider";
 
 /** 04 — Sala de espera (y 11 en desktop): código, equipos y arranque (§6.3). */
 export function LobbyScreen() {
-  const {
-    state,
-    busy,
-    assignTeam,
-    autoTeams,
-    startGame,
-    leaveGame,
-    goTo,
-    connection,
-  } = useGame();
+  const { state, busy, assignTeam, autoTeams, startGame, leaveGame, goTo, connection } = useGame();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   if (state === null) {
@@ -54,7 +45,7 @@ export function LobbyScreen() {
           <CodeBadge code={state.code} />
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-caption uppercase text-fg-muted">Equipos</h2>
+            <h2 className="text-caption text-fg-muted uppercase">Equipos</h2>
             <div className="grid gap-3 md:grid-cols-2">
               {state.teams.map((team) => (
                 <TeamPanel
@@ -69,7 +60,7 @@ export function LobbyScreen() {
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-caption uppercase text-fg-muted">Sin equipo</h2>
+            <h2 className="text-caption text-fg-muted uppercase">Sin equipo</h2>
             {state.waitingPlayers.length === 0 ? (
               <p className="rounded-lg border border-dashed border-line px-4 py-5 text-body-sm text-fg-subtle">
                 Todos eligieron equipo.
@@ -97,18 +88,18 @@ export function LobbyScreen() {
       </div>
 
       <StickyFooter>
-        <Button block disabled={busy || !canStart} onClick={startGame}>
-          Comenzar partida
-        </Button>
+        {state.me.isHost ? (
+          <Button block disabled={busy || !canStart} onClick={startGame}>
+            Comenzar partida
+          </Button>
+        ) : null}
         <p className="text-center text-body-sm text-fg-subtle">
           {state.me.isHost
             ? canStart
               ? "Todo listo para arrancar"
               : state.waitingPlayers.length > 0 && !state.settings.randomTeams
                 ? "Todos tienen que elegir equipo antes de arrancar"
-                : "Cada equipo necesita al menos " +
-                  state.settings.minPlayersPerTeam +
-                  " jugadores"
+                : "Cada equipo necesita al menos " + state.settings.minPlayersPerTeam + " jugadores"
             : "Solo el host puede comenzar la partida"}
         </p>
       </StickyFooter>

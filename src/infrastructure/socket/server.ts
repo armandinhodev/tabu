@@ -14,7 +14,7 @@ import { joinGame } from "../../application/use-cases/join-game";
 import { assignTeam, autoAssignTeams } from "../../application/use-cases/team-assignment";
 import { startGame } from "../../application/use-cases/lobby";
 import { leaveGame, markDisconnected, reconnectPlayer } from "../../application/use-cases/session";
-import { guessWord, passTurn, reportViolation, skipTurn } from "../../application/use-cases/turn";
+import { guessWord, startTurn, reportViolation, skipTurn } from "../../application/use-cases/turn";
 import { logger } from "../config/logger";
 import {
   CLIENT_EVENTS,
@@ -198,21 +198,31 @@ export function attachSocketServer(
         if (game !== null) {
           snapshot(game);
           broadcaster.emitState(game);
+          if (
+            game.currentTurn?.status === "pending" &&
+            game.currentTurn.descriptorId === playerId
+          ) {
+            handOverDescriptor(gameId, playerId);
+          }
         }
       });
     });
 
-     socket.on(CLIENT_EVENTS.turnGuess, (payload, ack) => {
-       void run(socket, ack, () => {
-         const input = parsePayload(guessPayload, payload);
-         const { gameId, playerId } = requireBinding(socket);
-         const result = guessWord(deps, gameId, playerId, input);
+    socket.on(CLIENT_EVENTS.turnGuess, (payload, ack) => {
+      void run(socket, ack, () => {
+        const input = parsePayload(guessPayload, payload);
+        const { gameId, playerId } = requireBinding(socket);
+        const result = guessWord(deps, gameId, playerId, input);
 
-         if (result.correct) {
-           afterTurn(result.game, result.events);
-         }
+        if (result.correct) {
+          afterTurn(result.game, result.events);
+        }
 
-         return { correct: result.correct, pointsAwarded: result.pointsDelta, teamScore: result.teamScore };
+        return {
+          correct: result.correct,
+          pointsAwarded: result.pointsDelta,
+          teamScore: result.teamScore,
+        };
       });
     });
 
@@ -237,10 +247,10 @@ export function attachSocketServer(
       });
     });
 
-    socket.on(CLIENT_EVENTS.turnPass, (ack) => {
+    socket.on(CLIENT_EVENTS.turnStart, (ack) => {
       void run(socket, ack, () => {
         const { gameId, playerId } = requireBinding(socket);
-        const result = passTurn(deps, gameId, playerId);
+        const result = startTurn(deps, gameId, playerId);
 
         afterTurn(result.game, result.events);
       });
@@ -309,7 +319,7 @@ export function attachSocketServer(
     }
 
     try {
-      const next = reassignDescriptor(game);
+      const next = reassignDescriptor(game, deps.rng);
 
       deps.registry.save(next);
       snapshot(next);

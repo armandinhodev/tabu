@@ -6,6 +6,7 @@ import {
   delay,
   emitAck,
   makeSocketHarness,
+  startSelectedTurn,
   nextEvent,
   waitFor,
   type SocketHarness,
@@ -26,13 +27,14 @@ interface PlayingRoom {
   readonly states: Map<string, GameStateView>;
 }
 
-async function playingRoom(harness: SocketHarness): Promise<PlayingRoom> {
+async function playingRoom(harness: SocketHarness, activate = true): Promise<PlayingRoom> {
   const host = await harness.connect();
-  const created = await emitAck<{ code: string; gameId: string; playerId: string; playerToken: string }>(
-    host,
-    "game:create",
-    { playerName: "Host", deckId: harness.deckId },
-  );
+  const created = await emitAck<{
+    code: string;
+    gameId: string;
+    playerId: string;
+    playerToken: string;
+  }>(host, "game:create", { playerName: "Host", deckId: harness.deckId });
 
   const players: PlayerRef[] = [
     { client: host, playerId: created.playerId, playerToken: created.playerToken },
@@ -58,8 +60,9 @@ async function playingRoom(harness: SocketHarness): Promise<PlayingRoom> {
   }
 
   await emitAck(host, "game:autoTeams");
-  const started = nextEvent(host, "turn:started");
+  const started = activate ? nextEvent(host, "turn:started") : Promise.resolve();
   await emitAck(host, "game:start");
+  if (activate) await startSelectedTurn(harness);
   await started;
 
   return { gameId: created.gameId, players, states };
@@ -81,6 +84,28 @@ describe("gracia de desconexión del descriptor (S9)", () => {
 
   afterEach(async () => {
     await harness.close();
+  });
+
+  it("hands over a pending turn without starting the clock", async () => {
+    const room = await playingRoom(harness, false);
+    const descriptor = await descriptorOf(room);
+    descriptor.client.close();
+    await delay(GRACE_MS + 80);
+    const pending = harness.deps.registry.findById(room.gameId)!;
+    expect(pending.currentTurn?.status).toBe("pending");
+    expect(pending.currentTurn?.descriptorId).not.toBe(descriptor.playerId);
+    await startSelectedTurn(harness);
+    expect(harness.deps.registry.findById(room.gameId)?.currentTurn?.status).toBe("active");
+  });
+
+  it("hands over a pending turn when its descriptor explicitly leaves", async () => {
+    const room = await playingRoom(harness, false);
+    const descriptor = await descriptorOf(room);
+    await emitAck(descriptor.client, "game:leave");
+    const pending = harness.deps.registry.findById(room.gameId)!;
+    expect(pending.currentTurn?.status).toBe("pending");
+    expect(pending.currentTurn?.descriptorId).not.toBe(descriptor.playerId);
+    await startSelectedTurn(harness);
   });
 
   it("conserva el turno si el descriptor reconecta dentro de la gracia", async () => {
@@ -116,9 +141,11 @@ describe("gracia de desconexión del descriptor (S9)", () => {
     const live = harness.deps.registry.findById(room.gameId);
 
     expect(live?.currentTurn?.descriptorId).not.toBe(descriptor.playerId);
-    expect(live?.teams.some((team) =>
-      team.players.some((player) => player.id === live.currentTurn?.descriptorId),
-    )).toBe(true);
+    expect(
+      live?.teams.some((team) =>
+        team.players.some((player) => player.id === live.currentTurn?.descriptorId),
+      ),
+    ).toBe(true);
   });
 
   it("no toca el turno si reconecta alguien que no describía", async () => {

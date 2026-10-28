@@ -8,6 +8,7 @@ import { io as createClient, type Socket as ClientSocket } from "socket.io-clien
 import { GameRegistry } from "../../application/GameRegistry";
 import type { GameDeps } from "../../application/use-cases/common";
 import type { Card } from "../../domain/entities/Card";
+import type { GameStateView } from "../../application/dto/game-state";
 import { makeCard } from "../../domain/__fixtures__/game";
 import { GameId, PlayerId, TeamId, TurnId } from "../../domain/value-objects/PlayerId";
 import { InMemoryDeckRepository } from "../db/repositories/InMemoryDeckRepository";
@@ -17,6 +18,7 @@ import { attachSocketServer, type SocketServer } from "./server";
 
 export type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 export type AnyClient = ClientSocket;
+const latestStates = new WeakMap<TestClient, GameStateView>();
 
 export const NOW = new Date("2026-01-01T00:00:00.000Z");
 
@@ -54,14 +56,28 @@ export async function makeSocketHarness(
     language: "es",
     active: true,
     cards: options.cards ?? [
-       makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
-       makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
-       makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
-       makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
-       makeCard("general-005", "silla", ["mueble", "asiento", "patas", "respaldo", "sentar", "mesa"]),
-       makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
-       makeCard("general-007", "luna", ["noche", "cielo", "satelite", "brillar", "fase", "astronauta"]),
-       makeCard("general-008", "sol", ["dia", "estrella", "calor", "luz", "brillar", "amanecer"]),
+      makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
+      makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
+      makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
+      makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
+      makeCard("general-005", "silla", [
+        "mueble",
+        "asiento",
+        "patas",
+        "respaldo",
+        "sentar",
+        "mesa",
+      ]),
+      makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
+      makeCard("general-007", "luna", [
+        "noche",
+        "cielo",
+        "satelite",
+        "brillar",
+        "fase",
+        "astronauta",
+      ]),
+      makeCard("general-008", "sol", ["dia", "estrella", "calor", "luz", "brillar", "amanecer"]),
     ],
   });
 
@@ -118,6 +134,7 @@ export async function makeSocketHarness(
         reconnection: false,
       });
       clients.push(client);
+      client.on("game:state", (state) => latestStates.set(client, state));
       await new Promise<void>((resolve, reject) => {
         client.once("connect", () => resolve());
         client.once("connect_error", reject);
@@ -154,6 +171,37 @@ export function emitAck<T>(client: TestClient, event: string, payload?: unknown)
 
     socket.emit(event, payload, (response: T) => resolve(response));
   });
+}
+
+/** Existing socket scenarios explicitly activate their selected descriptor. */
+export async function startSelectedTurn(harness: SocketHarness): Promise<void> {
+  const descriptor = await waitFor(
+    () =>
+      harness.clients.find((client) => {
+        const state = latestStates.get(client);
+        return (
+          client.connected &&
+          harness.socketServer.sessions.bindingOf(client.id!) !== null &&
+          state?.turn?.status === "pending" &&
+          state.me.role === "DESCRIBER"
+        );
+      }),
+    "selected descriptor before activation",
+  );
+  const response = await emitAck(descriptor, "turn:start");
+  if (response !== null) {
+    throw new Error(`turn:start failed: ${JSON.stringify(response)}`);
+  }
+  await waitFor(
+    () =>
+      harness.clients
+        .filter(
+          (client) =>
+            client.connected && harness.socketServer.sessions.bindingOf(client.id!) !== null,
+        )
+        .every((client) => latestStates.get(client)?.turn?.status === "active") || undefined,
+    "all clients received active turn",
+  );
 }
 
 export function nextEvent<T>(client: TestClient, event: string): Promise<T> {

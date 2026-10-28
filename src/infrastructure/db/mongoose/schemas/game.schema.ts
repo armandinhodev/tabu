@@ -1,6 +1,9 @@
 import { Schema } from "mongoose";
 import { MAX_TABOO_WORDS } from "../../../../domain/value-objects/TabooWords";
-import { DEFAULT_SKIP_LIMIT, DEFAULT_TABOO_WORD_COUNT } from "../../../../domain/entities/GameSettings";
+import {
+  DEFAULT_SKIP_LIMIT,
+  DEFAULT_TABOO_WORD_COUNT,
+} from "../../../../domain/entities/GameSettings";
 
 export type GameStatusDocument = "waiting" | "playing" | "finished";
 export type TurnOutcomeDocument = "CORRECT" | "VIOLATION" | "TIME";
@@ -44,6 +47,7 @@ export interface GameTeamDocument {
   color: string;
   score: number;
   turnCursor: number;
+  descriptorQueue?: string[];
   players: GamePlayerDocument[];
 }
 
@@ -56,7 +60,7 @@ export interface GameTurnDocument {
   taboo: string[];
   startedAt: Date;
   deadlineAt: Date;
-  status: "active" | "ended";
+  status: "pending" | "active" | "ended";
   /** Cartas skipeadas dentro de este turno (S4). */
   skipsUsed?: number;
 }
@@ -134,7 +138,13 @@ const settingsSchema = new Schema<GameSettingsDocument>(
   {
     teamCount: { type: Number, required: true, min: 2, max: 4 },
     turnSeconds: { type: Number, required: true, min: 1 },
-    tabooWordCount: { type: Number, required: true, min: 1, max: 6, default: DEFAULT_TABOO_WORD_COUNT },
+    tabooWordCount: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 6,
+      default: DEFAULT_TABOO_WORD_COUNT,
+    },
     skipLimit: { type: Number, min: 0, max: 10, default: DEFAULT_SKIP_LIMIT },
     rounds: { type: Number, required: true, min: 1 },
     randomTeams: { type: Boolean, required: true },
@@ -162,6 +172,7 @@ const teamSchema = new Schema<GameTeamDocument>(
     color: { type: String, required: true, trim: true },
     score: { type: Number, required: true, min: 0 },
     turnCursor: { type: Number, required: true, min: 0, default: 0 },
+    descriptorQueue: { type: [String], default: undefined },
     players: { type: [playerSchema], required: true },
   },
   { _id: false, versionKey: false },
@@ -177,7 +188,7 @@ const turnSchema = new Schema<GameTurnDocument>(
     taboo: { type: [String], required: true },
     startedAt: { type: Date, required: true },
     deadlineAt: { type: Date, required: true },
-    status: { type: String, required: true, enum: ["active", "ended"] },
+    status: { type: String, required: true, enum: ["pending", "active", "ended"] },
     skipsUsed: { type: Number, required: true, min: 0, default: 0 },
   },
   { _id: false, versionKey: false },

@@ -1,5 +1,5 @@
 import type { Card } from "../entities/Card";
-import type { Game, PassedCard, TurnHistoryEntry } from "../entities/Game";
+import type { Game, TurnHistoryEntry } from "../entities/Game";
 import type { Player } from "../entities/Player";
 import type { Team } from "../entities/Team";
 import type { Turn, TurnOutcomeKind } from "../entities/Turn";
@@ -17,7 +17,7 @@ import type { DomainEvent, Mvp, Standing } from "../events/events";
 import { pointsForOutcome, scoreAfterOutcome } from "../policies/ScoringPolicy";
 import { nextDescriptor, nextTeam } from "../policies/TurnOrderPolicy";
 import type { Rng } from "../rng";
-import type { CardId, PlayerId, TurnId } from "../value-objects/PlayerId";
+import type { CardId, PlayerId, TeamId, TurnId } from "../value-objects/PlayerId";
 import { TabooWords } from "../value-objects/TabooWords";
 import { shuffleDeck } from "./DeckShuffler";
 
@@ -82,8 +82,12 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
 
   const teams: readonly Team[] = sourceTeams.map((team) => ({
     ...team,
+    descriptorQueue: [],
     players: team.players.map((player) => ({ ...player })),
   }));
+
+  const firstTeamIndex = Math.floor(ctx.rng() * teams.length);
+  const rotation = [...teams.slice(firstTeamIndex), ...teams.slice(0, firstTeamIndex)];
 
   const playing: Game = {
     ...game,
@@ -91,7 +95,7 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     teams,
     players: [],
     deck: { ...game.deck, cards: shuffleDeck(game.deck.cards, ctx.rng) },
-    turnOrder: teams.flatMap((team) => team.players.map((player) => player.id)),
+    turnOrder: rotation.flatMap((team) => team.players.map((player) => player.id)),
     currentTurn: null,
     turnHistory: [],
     discardedCardIds: [],
@@ -118,7 +122,7 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     throw new GameNotPlayingError(game.status);
   }
 
-  if (game.currentTurn !== null && game.currentTurn.status === "active") {
+  if (game.currentTurn !== null && game.currentTurn.status !== "ended") {
     throw new InvalidStateError("A turn is already active");
   }
 
@@ -128,27 +132,13 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
   }));
 
   const lastTeamId = game.currentTurn?.teamId ?? game.turnHistory.at(-1)?.teamId ?? null;
-  const team = nextTeam(teams, lastTeamId);
-  const selection = nextDescriptor(team);
+  const team = lastTeamId === null ? firstTeamOf(game) : nextTeam(teams, lastTeamId);
+  const selection = nextDescriptor(team, ctx.rng);
   const teamsWithDescriptor = teams.map((candidate) =>
     candidate.id === team.id ? selection.team : candidate,
   );
 
-  const passedIndex = game.passedCards.findIndex((entry) => entry.toTeamId === team.id);
-  const passedEntry = passedIndex >= 0 ? game.passedCards[passedIndex] : undefined;
-
-  let deck = game.deck.cards;
-  let passedCards: readonly PassedCard[] = game.passedCards;
-  let card: Card | null;
-
-  if (passedEntry !== undefined) {
-    card = passedEntry.card;
-    passedCards = game.passedCards.filter((_, index) => index !== passedIndex);
-  } else {
-    const drawn = deck.draw();
-    deck = drawn.deck;
-    card = drawn.card;
-  }
+  const { deck, passedCards, card } = drawForTeam(game, team.id);
 
   if (card === null) {
     return finishGame(
@@ -174,7 +164,7 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     card: activeCard,
     startedAt: ctx.now,
     deadlineAt: new Date(ctx.now.getTime() + game.settings.turnSeconds.toMilliseconds()),
-    status: "active",
+    status: "pending",
     skipsUsed: 0,
   };
 
@@ -186,6 +176,24 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     currentTurn: turn,
   };
 
+  return { game: next, events: [] };
+}
+
+/** Activation, not selection, establishes the authoritative turn clock. */
+export function activateTurn(game: Game, ctx: TransitionContext): TransitionResult {
+  if (game.status !== "playing") {
+    throw new GameNotPlayingError(game.status);
+  }
+  const pending = game.currentTurn;
+  if (pending === null || pending.status !== "pending") {
+    throw new InvalidStateError("The turn is not waiting to start");
+  }
+  const turn: Turn = {
+    ...pending,
+    status: "active",
+    startedAt: ctx.now,
+    deadlineAt: new Date(ctx.now.getTime() + game.settings.turnSeconds.toMilliseconds()),
+  };
   const started: DomainEvent = {
     type: "TurnStarted",
     gameId: game.id,
@@ -199,7 +207,7 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     turnSeconds: game.settings.turnSeconds.seconds,
   };
 
-  return { game: next, events: [started] };
+  return { game: { ...game, currentTurn: turn }, events: [started] };
 }
 
 /**
@@ -324,7 +332,7 @@ export function resolveTurn(
 
   const events: DomainEvent[] = [
     {
-      type: "TurnEnded",
+      type: kind === "TIME" ? "TurnEnded" : "CardResolved",
       gameId: game.id,
       turnId: turn.id,
       teamId: turn.teamId,
@@ -363,7 +371,33 @@ export function resolveTurn(
     currentTurn: null,
   };
 
-  const firstTeam = teams[0];
+  // Resolving a card does not end the team's timed round.
+  if (kind !== "TIME") {
+    const drawn = drawForTeam(nextGame, turn.teamId);
+
+    if (drawn.card !== null) {
+      return {
+        game: {
+          ...nextGame,
+          deck: { ...nextGame.deck, cards: drawn.deck },
+          passedCards: drawn.passedCards,
+          currentTurn: {
+            ...turn,
+            card: {
+              ...drawn.card,
+              taboo: TabooWords.create(
+                drawn.card.taboo.words.slice(0, game.settings.tabooWordCount),
+              ),
+            },
+          },
+        },
+        events,
+      };
+    }
+    // With no card available, use the existing round-limit and end-game rules.
+  }
+
+  const firstTeam = firstTeamOf(game);
   const roundComplete = firstTeam !== undefined && nextTeam(teams, turn.teamId).id === firstTeam.id;
 
   if (roundComplete) {
@@ -439,10 +473,10 @@ export function isTurnExpired(turn: Turn, now: Date): boolean {
  * Pasa el turno al siguiente descriptor conectado del mismo equipo, sin tocar
  * carta ni deadline: es la salida de S9 cuando el descriptor se desconecta.
  */
-export function reassignDescriptor(game: Game): Game {
+export function reassignDescriptor(game: Game, rng: Rng = () => 0): Game {
   const turn = game.currentTurn;
 
-  if (turn === null || turn.status !== "active") {
+  if (turn === null || turn.status === "ended") {
     throw new TurnNotActiveError();
   }
 
@@ -452,13 +486,11 @@ export function reassignDescriptor(game: Game): Game {
     throw new InvalidStateError(`Unknown team ${turn.teamId}`);
   }
 
-  const selection = nextDescriptor(team);
+  const selection = nextDescriptor(team, rng);
 
   return {
     ...game,
-    teams: game.teams.map((candidate) =>
-      candidate.id === team.id ? selection.team : candidate,
-    ),
+    teams: game.teams.map((candidate) => (candidate.id === team.id ? selection.team : candidate)),
     currentTurn: { ...turn, descriptorId: selection.descriptorId },
   };
 }
@@ -495,6 +527,31 @@ export function distributeUnassigned(
   }
 
   return { teams: working, players: [] };
+}
+
+function firstTeamOf(game: Game): Team {
+  const firstTeamId =
+    game.turnHistory[0]?.teamId ?? (game.round === 1 ? game.currentTurn?.teamId : undefined);
+  return (
+    game.teams.find((team) => team.id === firstTeamId) ??
+    game.teams.find((team) => team.players.some((player) => player.id === game.turnOrder[0])) ??
+    nextTeam(game.teams, null)
+  );
+}
+
+function drawForTeam(game: Game, teamId: TeamId) {
+  const passedIndex = game.passedCards.findIndex((entry) => entry.toTeamId === teamId);
+  const passedEntry = game.passedCards[passedIndex];
+
+  if (passedEntry !== undefined) {
+    return {
+      card: passedEntry.card,
+      deck: game.deck.cards,
+      passedCards: game.passedCards.filter((_, index) => index !== passedIndex),
+    };
+  }
+
+  return { ...game.deck.cards.draw(), passedCards: game.passedCards };
 }
 
 function standingsOf(teams: readonly Team[]): readonly Standing[] {

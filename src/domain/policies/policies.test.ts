@@ -43,6 +43,15 @@ describe("TurnOrderPolicy", () => {
   const teamC = makeTeam(2, [makePlayer("p5", "t3"), makePlayer("p6", "t3")]);
   const teams = [teamA, teamB, teamC];
 
+  it("randomizes descriptors without repeats until every teammate has described", () => {
+    const first = nextDescriptor(teamA, () => 0.99);
+    expect(first.descriptorId).toBe("p2");
+    const second = nextDescriptor(first.team, () => 0.99);
+    expect(second.descriptorId).toBe("p1");
+    const third = nextDescriptor(second.team, () => 0.99);
+    expect(["p1", "p2"]).toContain(third.descriptorId);
+  });
+
   it("rota por equipo en orden y vuelve al primero", () => {
     expect(nextTeam(teams, null).id).toBe(teamA.id);
     expect(nextTeam(teams, TeamId.from("t1")).id).toBe(teamB.id);
@@ -106,14 +115,15 @@ describe("PenaltyPolicy", () => {
     expect(violation.reportedBy).toBe("p3");
   });
 
-  it("acepta el autorreporte del descriptor", () => {
-    const violation = validateReport(
-      game,
-      turn,
-      { reason: "TABOO_WORD", tabooWord: "calor" },
-      { reporterId: PlayerId.from("p1"), at: NOW },
-    );
-    expect(violation.reason).toBe("TABOO_WORD");
+  it("rejects taboo-word reports from the descriptor", () => {
+    expect(() =>
+      validateReport(
+        game,
+        turn,
+        { reason: "TABOO_WORD", tabooWord: "calor" },
+        { reporterId: PlayerId.from("p1"), at: NOW },
+      ),
+    ).toThrow(NotAllowedError);
   });
 
   it("acepta gestos y sonidos del rival y del descriptor", () => {
