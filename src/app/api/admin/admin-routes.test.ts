@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   create: vi.fn(),
   get: vi.fn(),
+  update: vi.fn(),
+  archive: vi.fn(),
+  restore: vi.fn(),
   generate: vi.fn(),
   exclude: vi.fn(),
   replace: vi.fn(),
@@ -17,6 +20,9 @@ vi.mock("@/infrastructure/admin/runtime", () => ({
   listAdminDecks: mocks.list,
   createAdminDeck: mocks.create,
   getAdminDeck: mocks.get,
+  updateAdminDeck: mocks.update,
+  archiveAdminDeck: mocks.archive,
+  restoreAdminDeck: mocks.restore,
   queueGeneration: mocks.generate,
   setCardExcluded: mocks.exclude,
   queueReplacement: mocks.replace,
@@ -24,7 +30,8 @@ vi.mock("@/infrastructure/admin/runtime", () => ({
 }));
 
 import { GET as list, POST as create } from "./decks/route";
-import { GET as get } from "./decks/[deckId]/route";
+import { GET as get, PATCH as update, DELETE as archive } from "./decks/[deckId]/route";
+import { POST as restore } from "./decks/[deckId]/restore/route";
 import { POST as generate } from "./decks/[deckId]/generate/route";
 import { PATCH as exclude } from "./decks/[deckId]/cards/[cardId]/route";
 import { POST as replace } from "./decks/[deckId]/cards/[cardId]/replace/route";
@@ -43,6 +50,18 @@ const request = (method = "GET", body?: unknown) =>
           body: JSON.stringify(body),
         }),
   });
+const deckRequest = (method = "GET", body?: unknown) =>
+  new Request(`http://localhost/api/admin/decks/${deckId}`, {
+    method,
+    ...(body === undefined
+      ? {}
+      : {
+          headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+          body: JSON.stringify(body),
+        }),
+  });
+const listRequest = (query: string) =>
+  new Request(`http://localhost/api/admin/decks${query}`, { method: "GET" });
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -165,5 +184,108 @@ describe("administrative HTTP boundary", () => {
       error: "Ya existe un mazo con ese nombre.",
       code: "name_taken",
     });
+  });
+
+  it("hides the archived decks by default and returns them on request", async () => {
+    mocks.list.mockResolvedValue([{ id: deckId, name: "Sports" }]);
+
+    await list(listRequest(""));
+    expect(mocks.list).toHaveBeenLastCalledWith(false);
+
+    await list(listRequest("?includeArchived=true"));
+    expect(mocks.list).toHaveBeenLastCalledWith(true);
+
+    await list(listRequest("?includeArchived=false"));
+    expect(mocks.list).toHaveBeenLastCalledWith(false);
+  });
+
+  it("rejects an invalid archived filter instead of ignoring it", async () => {
+    const response = await list(listRequest("?includeArchived=maybe"));
+
+    expect(response.status).toBe(400);
+    expect(mocks.list).not.toHaveBeenCalled();
+  });
+
+  it("edits the deck metadata through the public route", async () => {
+    mocks.update.mockResolvedValue({ id: deckId, name: "Nuevo", theme: "Tema" });
+
+    const response = await update(deckRequest("PATCH", { name: "Nuevo", theme: "Tema" }), context);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: { id: deckId, name: "Nuevo", theme: "Tema" },
+    });
+    expect(mocks.update).toHaveBeenCalledWith(deckId, { name: "Nuevo", theme: "Tema" });
+  });
+
+  it("rejects an invalid metadata payload before writing", async () => {
+    expect((await update(deckRequest("PATCH", {}), context)).status).toBe(400);
+    expect((await update(deckRequest("PATCH", { name: "  " }), context)).status).toBe(400);
+    expect((await update(deckRequest("PATCH", { name: "x".repeat(81) }), context)).status).toBe(
+      400,
+    );
+    expect((await update(deckRequest("PATCH", { theme: "y".repeat(201) }), context)).status).toBe(
+      400,
+    );
+    expect(
+      (await update(deckRequest("PATCH", { name: "Nuevo", extra: true }), context)).status,
+    ).toBe(400);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("archives the deck with a delete and restores it with the restore route", async () => {
+    mocks.archive.mockResolvedValue({
+      id: deckId,
+      name: "Sports",
+      archivedAt: "2026-10-29T12:00:00.000Z",
+    });
+    mocks.restore.mockResolvedValue({ id: deckId, name: "Sports" });
+
+    const archived = await archive(deckRequest("DELETE"), context);
+    expect(archived.status).toBe(200);
+    expect(await archived.json()).toEqual({
+      data: { id: deckId, name: "Sports", archivedAt: "2026-10-29T12:00:00.000Z" },
+    });
+    expect(mocks.archive).toHaveBeenCalledWith(deckId);
+
+    const restored = await restore(deckRequest("POST"), context);
+    expect(restored.status).toBe(200);
+    expect(mocks.restore).toHaveBeenCalledWith(deckId);
+  });
+
+  it("answers the archived conflict with a safe Spanish message", async () => {
+    mocks.archive.mockRejectedValue({
+      status: 409,
+      code: "deck_archived",
+      message: "internal details",
+    });
+
+    const response = await archive(deckRequest("DELETE"), context);
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body).toEqual({
+      error: "Este mazo está archivado. Restáuralo para volver a usarlo.",
+      code: "deck_archived",
+    });
+    expect(JSON.stringify(body)).not.toContain("internal details");
+  });
+
+  it("denies the deck management endpoints before invoking the data service", async () => {
+    mocks.guard.mockImplementation(() => Response.json({ error: "Unauthorized" }, { status: 401 }));
+
+    const results = await Promise.all([
+      update(deckRequest("PATCH", { name: "Nuevo" }), context),
+      archive(deckRequest("DELETE"), context),
+      restore(deckRequest("POST"), context),
+    ]);
+
+    for (const response of results) {
+      expect(response.status).toBe(401);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+    }
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.archive).not.toHaveBeenCalled();
+    expect(mocks.restore).not.toHaveBeenCalled();
   });
 });

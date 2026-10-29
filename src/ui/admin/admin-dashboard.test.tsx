@@ -42,13 +42,29 @@ const card = {
   manualOverride: false,
   issues: ["dictionary_unknown"],
 };
+type CatalogDeck = {
+  id: string;
+  name: string;
+  theme: string;
+  cards: Array<typeof card>;
+  archivedAt?: string;
+};
+
 const deck = { id: "deck-1", name: "General", theme: "General", cards: [card] };
+const archivedDeck = {
+  id: "deck-2",
+  name: "Oculto",
+  theme: "General",
+  cards: [card],
+  archivedAt: "2026-10-29T12:00:00.000Z",
+};
 let authenticated: boolean;
 let configured: boolean;
 let requests: { url: string; method: string; body: unknown }[];
 let jobPayload: Record<string, unknown>;
 let deferJobResponse: boolean;
 let resolveJobResponse: ((response: Response) => void) | null;
+let catalog: CatalogDeck[];
 
 function jobRequests(): number {
   return requests.filter((request) => request.url.includes("/api/admin/jobs/")).length;
@@ -61,6 +77,7 @@ beforeEach(() => {
   jobPayload = { id: "job-1", status: "completed", processed: 5, requested: 5 };
   deferJobResponse = false;
   resolveJobResponse = null;
+  catalog = [deck];
   sessionStorage.clear();
   socketMock.handlers = null;
   socketMock.subscribe.mockClear();
@@ -77,7 +94,12 @@ beforeEach(() => {
         });
       if (url === "/api/admin/decks" && method === "POST")
         return Response.json({ data: { ...deck, id: "deck-2", name: "Sports" } });
-      if (url === "/api/admin/decks") return Response.json({ data: [deck] });
+      if (url === "/api/admin/decks" || url === "/api/admin/decks?includeArchived=true") {
+        const visible = url.includes("includeArchived=true")
+          ? catalog
+          : catalog.filter((item) => item.archivedAt === undefined);
+        return Response.json({ data: visible });
+      }
       if (url.includes("/jobs/")) {
         if (deferJobResponse) {
           return new Promise<Response>((resolve) => {
@@ -85,6 +107,12 @@ beforeEach(() => {
           });
         }
         return Response.json({ data: jobPayload });
+      }
+      const detail = /^\/api\/admin\/decks\/([^/?]+)$/.exec(url);
+      if (detail) {
+        return Response.json({
+          data: catalog.find((item) => item.id === detail[1]) ?? deck,
+        });
       }
       return Response.json({ data: deck });
     }),
@@ -496,5 +524,118 @@ describe("AdminDashboard", () => {
     );
 
     await waitFor(() => expect(screen.queryByText(/cartas/)).not.toBeInTheDocument());
+  });
+
+  it("shows the archived decks only when the filter is enabled", async () => {
+    catalog = [deck, archivedDeck];
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "jaula" });
+    expect(screen.queryAllByText("Archivado")).toHaveLength(0);
+
+    fireEvent.click(screen.getByLabelText("Mostrar archivados"));
+
+    await waitFor(
+      () =>
+        expect(requests).toContainEqual({
+          url: "/api/admin/decks?includeArchived=true",
+          method: "GET",
+          body: null,
+        }),
+      { timeout: 5000 },
+    );
+    expect(
+      (await screen.findAllByText("Archivado", undefined, { timeout: 5000 })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("archives the selected deck after the confirmation and clears the selection", async () => {
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("button", { name: "Archivar mazo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar archivado" }));
+
+    await waitFor(
+      () =>
+        expect(requests).toContainEqual({
+          url: "/api/admin/decks/deck-1",
+          method: "DELETE",
+          body: null,
+        }),
+      { timeout: 5000 },
+    );
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "jaula" })).toBeNull(), {
+      timeout: 5000,
+    });
+  });
+
+  it("restores an archived deck and keeps the same selection", async () => {
+    catalog = [archivedDeck];
+    render(<AdminDashboard />);
+
+    fireEvent.click(await screen.findByLabelText("Mostrar archivados"));
+    await screen.findByRole("heading", { name: "Oculto" });
+    fireEvent.click(screen.getByRole("button", { name: "Restaurar mazo" }));
+
+    await waitFor(
+      () =>
+        expect(requests).toContainEqual({
+          url: "/api/admin/decks/deck-2/restore",
+          method: "POST",
+          body: null,
+        }),
+      { timeout: 5000 },
+    );
+  });
+
+  it("disables the card actions of an archived deck", async () => {
+    catalog = [archivedDeck];
+    render(<AdminDashboard />);
+
+    fireEvent.click(await screen.findByLabelText("Mostrar archivados"));
+    await screen.findByRole("heading", { name: "jaula" });
+    expect(screen.getByRole("button", { name: "Habilitar de todos modos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reemplazar con Flash" })).toBeDisabled();
+  });
+
+  it("does not reconnect the socket while filtering or editing the deck", async () => {
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "jaula" });
+    const subscriptions = socketMock.subscribe.mock.calls.length;
+
+    fireEvent.click(screen.getByLabelText("Mostrar archivados"));
+    fireEvent.change(screen.getByLabelText("Nombre a editar"), { target: { value: "Nuevo" } });
+
+    await waitFor(
+      () =>
+        expect(requests).toContainEqual({
+          url: "/api/admin/decks?includeArchived=true",
+          method: "GET",
+          body: null,
+        }),
+      { timeout: 5000 },
+    );
+    expect(socketMock.subscribe.mock.calls).toHaveLength(subscriptions);
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("edits the name and the theme of the selected deck", async () => {
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.change(screen.getByLabelText("Nombre a editar"), { target: { value: "Nuevo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(
+      () =>
+        expect(requests).toContainEqual({
+          url: "/api/admin/decks/deck-1",
+          method: "PATCH",
+          body: { name: "Nuevo", theme: "General" },
+        }),
+      { timeout: 5000 },
+    );
   });
 });

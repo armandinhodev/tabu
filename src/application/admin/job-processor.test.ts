@@ -466,6 +466,26 @@ describe("processClaimedJob (budget and recovery)", () => {
 });
 
 describe("processClaimedJob (guards)", () => {
+  it("fails a legacy job of an archived deck without calling the provider", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    decks.seed({
+      id: "deck-1",
+      name: "General",
+      theme: "Objetos",
+      archivedAt: "2026-10-29T11:00:00.000Z",
+    });
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    // Falla terminal: no vuelve a la cola y no llama al proveedor.
+    expect(provider.batchCalls).toHaveLength(0);
+    expect(jobs.released).toEqual([]);
+    expect(jobs.completed).toEqual([]);
+    expect(jobs.failed).toHaveLength(1);
+    expect(jobs.failed[0]?.error).toContain("archived");
+    expect(decks.decks.get("deck-1")?.cards).toHaveLength(0);
+  });
+
   it("publishes nothing when the lease was lost", async () => {
     const { decks, jobs, provider, deps } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });

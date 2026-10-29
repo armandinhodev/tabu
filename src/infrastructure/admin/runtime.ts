@@ -48,6 +48,14 @@ export const DEFAULT_ADMIN_LIMITS: AdminJobLimits = {
 /** Espera entre reclamos cuando no hay trabajo. */
 export const DEFAULT_ADMIN_POLL_INTERVAL_MS = 2_000;
 
+/**
+ * Espera entre pasadas de la recuperación acotada de admisiones.
+ *
+ * La recuperación vive con el worker: una admisión que nunca se activó no
+ * deja el mazo bloqueado para siempre.
+ */
+export const ADMIN_RECOVERY_INTERVAL_MS = 30_000;
+
 export interface AdminRuntimeOptions {
   /** Clave del proveedor. Si no se pasa, se lee `DEEPSEEK_API_KEY`. */
   readonly apiKey?: string | undefined;
@@ -149,8 +157,8 @@ function runtime(): AdminRuntime {
 }
 
 /** Lista los mazos administrables. */
-export async function listAdminDecks(): Promise<readonly ManagedDeck[]> {
-  return runtime().service.listDecks();
+export async function listAdminDecks(includeArchived = false): Promise<readonly ManagedDeck[]> {
+  return runtime().service.listDecks(includeArchived);
 }
 
 /** Devuelve un mazo administrable. Falla con 404 si no existe. */
@@ -165,6 +173,32 @@ export async function createAdminDeck(input: {
   language?: AdminLanguage;
 }): Promise<ManagedDeck> {
   return runtime().service.createDeck(input);
+}
+
+/**
+ * Edita el nombre y/o la temática de un mazo administrable.
+ *
+ * La edición sólo afecta las generaciones futuras: las cartas no se
+ * regeneran.
+ */
+export async function updateAdminDeck(
+  id: string,
+  input: { name?: string | undefined; theme?: string | undefined },
+): Promise<ManagedDeck> {
+  return runtime().service.updateDeck(id, input);
+}
+
+/**
+ * Archiva un mazo administrable. No borra nada: conserva cartas, hallazgos,
+ * historial y el id público.
+ */
+export async function archiveAdminDeck(id: string): Promise<ManagedDeck> {
+  return runtime().service.archiveDeck(id);
+}
+
+/** Restaura un mazo archivado con el mismo id estable. */
+export async function restoreAdminDeck(id: string): Promise<ManagedDeck> {
+  return runtime().service.restoreDeck(id);
 }
 
 /** Encola la generación de un lote de cartas. Falla con 409 si hay un trabajo activo. */
@@ -200,8 +234,21 @@ export function startAdminWorker(): AdminWorkerHandle {
 
   current.worker.start();
 
+  // La recuperación acotada corre junto al worker: una admisión abandonada no
+  // deja el mazo reservado para siempre.
+  const timer = setInterval(() => {
+    void current.service.recoverStaleAdmissions().catch((error: unknown) => {
+      logger.warn("admin admission recovery failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+  }, ADMIN_RECOVERY_INTERVAL_MS);
+
+  (timer as unknown as { unref?: () => void }).unref?.();
+
   return {
     stop: async () => {
+      clearInterval(timer);
       await current.worker.stop();
     },
   };

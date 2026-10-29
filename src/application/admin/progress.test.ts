@@ -216,4 +216,74 @@ describe("withProgressPublishing", () => {
     expect(saved).toBe(true);
     expect(onError).toHaveBeenCalledTimes(1);
   });
+
+  it("does not publish a pending admission and publishes it once it is activated", async () => {
+    const jobs = new FakeJobStore();
+    const published: AdminJob[] = [];
+
+    const store = withProgressPublishing(jobs, { publish: (job) => published.push(job) });
+
+    const pending = await store.insert({
+      id: "job-2",
+      deckId: "deck-2",
+      kind: "generate",
+      requested: 5,
+      limits: { maxCalls: 20, maxAttempts: 3, batchSize: 5, leaseMs: 60_000 },
+      now: "2026-10-29T12:00:00.000Z",
+      admissionPending: true,
+    });
+
+    // Una admisión pendiente todavía no es un estado durable ejecutable.
+    expect(published).toEqual([]);
+
+    const activated = await store.activate({
+      jobId: pending.id,
+      now: "2026-10-29T12:00:05.000Z",
+    });
+
+    expect(activated).toBe(true);
+    expect(published).toHaveLength(1);
+    expect(published[0]?.id).toBe("job-2");
+  });
+
+  it("publishes a rejected admission as a terminal state", async () => {
+    const jobs = new FakeJobStore();
+    const published: AdminJob[] = [];
+
+    const store = withProgressPublishing(jobs, { publish: (job) => published.push(job) });
+
+    const pending = await store.insert({
+      id: "job-3",
+      deckId: "deck-3",
+      kind: "generate",
+      requested: 5,
+      limits: { maxCalls: 20, maxAttempts: 3, batchSize: 5, leaseMs: 60_000 },
+      now: "2026-10-29T12:00:00.000Z",
+      admissionPending: true,
+    });
+
+    const rejected = await store.rejectPending({
+      jobId: pending.id,
+      error: "The generation job admission was rejected",
+      now: "2026-10-29T12:00:10.000Z",
+    });
+
+    expect(rejected).toBe(true);
+    expect(published.at(-1)).toMatchObject({ id: "job-3", status: "failed" });
+  });
+
+  it("forwards the expired admission lookup without publishing anything", async () => {
+    const jobs = new FakeJobStore();
+    const published: AdminJob[] = [];
+
+    const store = withProgressPublishing(jobs, { publish: (job) => published.push(job) });
+
+    const admissions = await store.findExpiredAdmissions({
+      before: "2026-10-29T12:00:00.000Z",
+      limit: 20,
+    });
+
+    expect(admissions).toEqual([]);
+    expect(published).toEqual([]);
+  });
 });

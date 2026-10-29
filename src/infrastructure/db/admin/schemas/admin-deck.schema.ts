@@ -56,6 +56,17 @@ export interface AdminDeckDocument {
   /** Id del documento público que recibe la proyección jugable. */
   publicDeckId: string;
   activeJob?: AdminDeckFenceDocument;
+  /**
+   * Momento del archivado. El mazo archivado conserva todo: sólo deja de
+   * ser jugable y de admitir trabajos.
+   */
+  archivedAt?: Date;
+  /**
+   * Marca interna de los mazos que participan del índice único de nombres.
+   * Los mazos anteriores al archivado no la tienen: el índice se construye
+   * sin tocar las filas existentes.
+   */
+  nameReserved?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -118,6 +129,8 @@ export const adminDeckSchema = new Schema<AdminDeckDocument>(
       ),
       required: false,
     },
+    archivedAt: { type: Date, required: false },
+    nameReserved: { type: Boolean, required: false },
   },
   {
     collection: "adminDecks",
@@ -127,3 +140,16 @@ export const adminDeckSchema = new Schema<AdminDeckDocument>(
 );
 
 adminDeckSchema.index({ createdAt: 1 });
+
+/**
+ * Los nombres reservados son únicos entre sí.
+ *
+ * El índice es parcial: sólo alcanza a las filas con `nameReserved`. Los
+ * mazos anteriores (y los que sólo se les editó la temática) quedan fuera, así
+ * el índice se construye sin borrar ni deduplicar filas existentes. La
+ * comprobación previa cubre los nombres antiguos y los mazos sembrados.
+ */
+adminDeckSchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { nameReserved: true } },
+);

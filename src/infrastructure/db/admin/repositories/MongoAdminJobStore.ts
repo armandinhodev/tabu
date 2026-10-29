@@ -4,6 +4,7 @@ import type {
   ClaimedJob,
   JobCheckpoint,
   NewJobInput,
+  PendingAdmission,
   ProviderUsage,
 } from "../../../../application/admin/ports";
 import type { AdminJob } from "../../../../application/admin/types";
@@ -32,6 +33,9 @@ export class MongoAdminJobStore implements AdminJobStore {
         status: "queued",
         // El índice único y disperso impide dos trabajos activos por mazo.
         activeKey: input.deckId,
+        // Una admisión pendiente todavía no es ejecutable: el worker no la
+        // reclama hasta que se activa.
+        ...(input.admissionPending === true ? { admissionPending: true } : {}),
         ...(input.targetCardId === undefined ? {} : { targetCardId: input.targetCardId }),
         requested: input.requested,
         processed: 0,
@@ -75,6 +79,84 @@ export class MongoAdminJobStore implements AdminJobStore {
     return document === null ? null : toManagedJob(document);
   }
 
+  /**
+   * Activa una admisión pendiente. Sólo se activa un trabajo que sigue en
+   * cola y pendiente: una activación tardía, después de un rechazo o de una
+   * expiración, falla y no deja el trabajo ejecutable.
+   */
+  async activate(input: { jobId: string; now: string }): Promise<boolean> {
+    assertMongoAvailable();
+
+    const result = await AdminJobModel.updateOne(
+      {
+        _id: input.jobId,
+        status: "queued",
+        admissionPending: true,
+      },
+      {
+        $set: { updatedAt: new Date(input.now) },
+        $unset: { admissionPending: "" },
+      },
+    ).exec();
+
+    return result.matchedCount > 0;
+  }
+
+  /**
+   * Termina una admisión pendiente y libera su clave activa. Nunca toca un
+   * trabajo ya activado, reclamado o terminado.
+   */
+  async rejectPending(input: {
+    jobId: string;
+    error: string;
+    now: string;
+    before?: string;
+  }): Promise<boolean> {
+    assertMongoAvailable();
+
+    const result = await AdminJobModel.updateOne(
+      {
+        _id: input.jobId,
+        status: "queued",
+        admissionPending: true,
+        ...(input.before === undefined ? {} : { createdAt: { $lte: new Date(input.before) } }),
+      },
+      {
+        $set: {
+          status: "failed",
+          error: input.error,
+          finishedAt: new Date(input.now),
+          updatedAt: new Date(input.now),
+        },
+        $unset: { activeKey: "", admissionPending: "", leaseOwner: "", leaseExpiresAt: "" },
+      },
+    ).exec();
+
+    return result.matchedCount > 0;
+  }
+
+  /** Admisiones pendientes lo bastante viejas como para estar abandonadas. */
+  async findExpiredAdmissions(input: {
+    before: string;
+    limit: number;
+  }): Promise<readonly PendingAdmission[]> {
+    assertMongoAvailable();
+
+    const documents = await AdminJobModel.find({
+      status: "queued",
+      admissionPending: true,
+      createdAt: { $lte: new Date(input.before) },
+    })
+      .sort({ createdAt: 1 })
+      .limit(input.limit)
+      .exec();
+
+    return documents.map((document) => ({
+      jobId: String(document._id),
+      deckId: document.deckId,
+    }));
+  }
+
   async claimNext(input: {
     owner: string;
     leaseMs: number;
@@ -87,7 +169,12 @@ export class MongoAdminJobStore implements AdminJobStore {
 
     const document = await AdminJobModel.findOneAndUpdate(
       {
-        $or: [{ status: "queued" }, { status: "running", leaseExpiresAt: { $lte: now } }],
+        $or: [
+          // Los trabajos antiguos, sin la marca de admisión, siguen siendo
+          // reclamables: la marca sólo aparece en los trabajos nuevos.
+          { status: "queued", admissionPending: { $ne: true } },
+          { status: "running", leaseExpiresAt: { $lte: now } },
+        ],
       },
       {
         $set: {

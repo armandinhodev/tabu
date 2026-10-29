@@ -76,6 +76,9 @@ export function toManagedDeck(document: AdminDeckDocument): ManagedDeck {
     publicDeckId: document.publicDeckId,
     createdAt: document.createdAt.toISOString(),
     updatedAt: document.updatedAt.toISOString(),
+    // El archivado sólo aparece cuando el mazo está archivado: un mazo
+    // activo no lleva el campo.
+    ...(document.archivedAt === undefined ? {} : { archivedAt: document.archivedAt.toISOString() }),
   };
 }
 

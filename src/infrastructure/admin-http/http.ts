@@ -46,6 +46,7 @@ export async function adminResponse(
       provider_unavailable: "Configura DEEPSEEK_API_KEY en el servidor para generar cartas.",
       mongo_unavailable: "MongoDB no está disponible. Actualiza antes de reintentar.",
       job_in_progress: "Este mazo ya tiene una generación o un reemplazo en curso.",
+      deck_archived: "Este mazo está archivado. Restáuralo para volver a usarlo.",
     };
     const code =
       typeof error === "object" &&

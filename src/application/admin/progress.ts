@@ -4,6 +4,7 @@ import type {
   ClaimedJob,
   JobCheckpoint,
   NewJobInput,
+  PendingAdmission,
   ProviderUsage,
 } from "./ports";
 import type { AdminJob } from "./types";
@@ -103,7 +104,11 @@ export function withProgressPublishing(
   return {
     async insert(input: NewJobInput): Promise<AdminJob> {
       const job = await store.insert(input);
-      publish(job);
+      // A pending admission is not a durable state yet: publishing it would
+      // show a job that is not claimable. It is published when it activates.
+      if (input.admissionPending !== true) {
+        publish(job);
+      }
       return job;
     },
     findById(id: string): Promise<AdminJob | null> {
@@ -111,6 +116,31 @@ export function withProgressPublishing(
     },
     findActiveByDeck(deckId: string): Promise<AdminJob | null> {
       return store.findActiveByDeck(deckId);
+    },
+    async activate(input: { readonly jobId: string; readonly now: string }): Promise<boolean> {
+      const activated = await store.activate(input);
+      if (activated) {
+        await publishDurable(input.jobId);
+      }
+      return activated;
+    },
+    async rejectPending(input: {
+      readonly jobId: string;
+      readonly error: string;
+      readonly now: string;
+      readonly before?: string;
+    }): Promise<boolean> {
+      const rejected = await store.rejectPending(input);
+      if (rejected) {
+        await publishDurable(input.jobId);
+      }
+      return rejected;
+    },
+    findExpiredAdmissions(input: {
+      readonly before: string;
+      readonly limit: number;
+    }): Promise<readonly PendingAdmission[]> {
+      return store.findExpiredAdmissions(input);
     },
     async claimNext(input: {
       readonly owner: string;

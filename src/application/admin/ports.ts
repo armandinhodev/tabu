@@ -74,6 +74,31 @@ export interface NewJobInput {
   readonly targetCardId?: string;
   readonly limits: AdminJobLimits;
   readonly now: string;
+  /**
+   * Internal admission flag: the job stays out of the claim queue until it is
+   * activated. It coordinates the deck reservation with the job and never
+   * travels in the public DTO.
+   */
+  readonly admissionPending?: boolean;
+}
+
+/**
+ * Fence de un mazo cuyo lease venció.
+ *
+ * Puede quedar huérfano si el proceso se cayó entre la reserva y el reclamo:
+ * la recuperación lo libera sólo cuando su trabajo ya no existe o terminó.
+ */
+export interface ExpiredDeckFence {
+  readonly deckId: string;
+  readonly jobId: string;
+  readonly token: number;
+  readonly leaseExpiresAt: string;
+}
+
+/** Trabajo que quedó esperando su activación y puede seguir pendiente. */
+export interface PendingAdmission {
+  readonly jobId: string;
+  readonly deckId: string;
 }
 
 /** Checkpoint persistido: evita repetir trabajo al reiniciar. */
@@ -149,9 +174,45 @@ export interface SpellChecker {
 
 /** Persistencia de mazos administrables. */
 export interface AdminDeckStore {
+  /** Every managed deck, archived ones included. The service owns the filter. */
   list(): Promise<readonly ManagedDeck[]>;
   findById(id: string): Promise<ManagedDeck | null>;
   create(input: CreateDeckInput): Promise<ManagedDeck>;
+  /**
+   * Edits the name and/or the theme. Fails with 409 when the deck has an
+   * active job and with 409 when the new name is already reserved.
+   */
+  updateMetadata(input: {
+    readonly deckId: string;
+    readonly name?: string | undefined;
+    readonly theme?: string | undefined;
+    readonly now: string;
+  }): Promise<ManagedDeck>;
+  /**
+   * Archives the deck without deleting anything. Fails with 409 when the deck
+   * has an active job. Archiving an archived deck keeps it archived.
+   */
+  archiveDeck(input: { readonly deckId: string; readonly now: string }): Promise<ManagedDeck>;
+  /**
+   * Restores the deck under the same stable id. Fails with 409 when the deck
+   * has an active job. Restoring a deck that is not archived changes nothing.
+   */
+  restoreDeck(input: { readonly deckId: string; readonly now: string }): Promise<ManagedDeck>;
+  /**
+   * Reserves a non archived deck without an active job for a pending job.
+   * `false` means the deck is archived or already reserved.
+   */
+  reserveDeck(input: {
+    readonly deckId: string;
+    readonly jobId: string;
+    readonly leaseExpiresAt: string;
+    readonly now: string;
+  }): Promise<boolean>;
+  /** Decks whose reservation lease expired: they may need a bounded recovery. */
+  findExpiredFences(input: {
+    readonly now: string;
+    readonly limit: number;
+  }): Promise<readonly ExpiredDeckFence[]>;
   /**
    * Activa o desactiva una carta. Falla con 409 si el mazo tiene un trabajo
    * activo y con 404 si la carta no existe.
@@ -221,7 +282,33 @@ export interface AdminJobStore {
   findById(id: string): Promise<AdminJob | null>;
   /** Trabajo en cola o en curso del mazo, si hay. */
   findActiveByDeck(deckId: string): Promise<AdminJob | null>;
-  /** Reclama el trabajo más viejo disponible con un lease y un token nuevos. */
+  /**
+   * Activates a pending admission: the job only becomes claimable while it is
+   * queued and still pending. `false` means it was already rejected, expired
+   * or activated.
+   */
+  activate(input: { readonly jobId: string; readonly now: string }): Promise<boolean>;
+  /**
+   * Terminates a pending admission and releases its active key. It never
+   * touches an activated, claimed or finished job.
+   */
+  rejectPending(input: {
+    readonly jobId: string;
+    readonly error: string;
+    readonly now: string;
+    /** Only reject admissions created at or before this instant. */
+    readonly before?: string;
+  }): Promise<boolean>;
+  /** Pending admissions that are old enough to be considered abandoned. */
+  findExpiredAdmissions(input: {
+    readonly before: string;
+    readonly limit: number;
+  }): Promise<readonly PendingAdmission[]>;
+  /**
+   * Reclama el trabajo más viejo disponible con un lease y un token nuevos.
+   * Los trabajos con admisión pendiente quedan fuera: todavía no son
+   * ejecutables. Los trabajos viejos sin la marca siguen siendo reclamables.
+   */
   claimNext(input: {
     readonly owner: string;
     readonly leaseMs: number;

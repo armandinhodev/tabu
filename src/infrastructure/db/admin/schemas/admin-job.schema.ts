@@ -17,6 +17,12 @@ export interface AdminJobDocument {
    * garantiza un solo trabajo activo por mazo.
    */
   activeKey?: string;
+  /**
+   * Admisión interna: el trabajo está esperando su activación y todavía no es
+   * ejecutable. Los trabajos anteriores al archivado no tienen la marca y
+   * siguen siendo reclamables.
+   */
+  admissionPending?: boolean;
   targetCardId?: string;
   requested: number;
   processed: number;
@@ -54,6 +60,7 @@ export const adminJobSchema = new Schema<AdminJobDocument>(
       default: "queued",
     },
     activeKey: { type: String, required: false },
+    admissionPending: { type: Boolean, required: false },
     targetCardId: { type: String, required: false },
     requested: { type: Number, required: true },
     processed: { type: Number, required: true, default: 0 },

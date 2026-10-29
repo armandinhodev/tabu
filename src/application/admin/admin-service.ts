@@ -8,10 +8,12 @@ import type {
   AdminClock,
   GenerationProvider,
 } from "./ports";
-import type { AdminJob, AdminLanguage, ManagedCard, ManagedDeck } from "./types";
+import type { AdminJob, AdminJobKind, AdminLanguage, ManagedCard, ManagedDeck } from "./types";
 import { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
+import { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "./deck-limits";
 
 export { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
+export { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "./deck-limits";
 
 /** Reintentos extra para recuperar un lote corto. */
 export const MAX_BATCH_RETRIES = 2;
@@ -19,9 +21,20 @@ export const MAX_BATCH_RETRIES = 2;
 /** Duración del lease por defecto. */
 export const DEFAULT_LEASE_MS = 60_000;
 
-/** Longitudes máximas de los datos del panel. */
-export const MAX_DECK_NAME_LENGTH = 80;
-export const MAX_DECK_THEME_LENGTH = 200;
+/**
+ * Lease of a pending admission. The deck reservation is bounded: if the
+ * request crashes, the reservation expires and the bounded recovery frees it.
+ */
+export const ADMISSION_LEASE_MS = 60_000;
+
+/**
+ * Age after which a pending admission is considered abandoned. The recovery
+ * rejects it and releases its reservation.
+ */
+export const ADMISSION_TIMEOUT_MS = 60_000;
+
+/** Upper bound of the bounded recovery: one pass never scans the whole base. */
+export const RECOVERY_BATCH_LIMIT = 20;
 
 /**
  * Presupuesto persistido de un trabajo.
@@ -63,13 +76,23 @@ export interface CreateDeckCommand {
 
 /**
  * Casos de uso del panel. Son la única puerta de entrada: las rutas HTTP del
- * servidor delegan acá y traduzcan `AdminError` a un status HTTP.
+ * servidor delegan acá y traducan `AdminError` a un status HTTP.
  */
 export class AdminService {
   constructor(private readonly deps: AdminServiceDeps) {}
 
-  async listDecks(): Promise<readonly ManagedDeck[]> {
-    return this.deps.decks.list();
+  /**
+   * Lists the managed decks. Archived decks stay hidden unless they are
+   * explicitly requested: the default catalog never changes.
+   */
+  async listDecks(includeArchived = false): Promise<readonly ManagedDeck[]> {
+    const decks = await this.deps.decks.list();
+
+    if (includeArchived) {
+      return decks;
+    }
+
+    return decks.filter((deck) => deck.archivedAt === undefined);
   }
 
   async getDeck(id: string): Promise<ManagedDeck> {
@@ -126,6 +149,97 @@ export class AdminService {
     });
   }
 
+  /**
+   * Edits the name and/or the theme of a managed deck.
+   *
+   * The edit only affects future generations: the stored cards are never
+   * regenerated and their findings stay untouched.
+   */
+  async updateDeck(
+    id: string,
+    command: { readonly name?: string | undefined; readonly theme?: string | undefined },
+  ): Promise<ManagedDeck> {
+    const hasName = command.name !== undefined;
+    const hasTheme = command.theme !== undefined;
+
+    if (!hasName && !hasTheme) {
+      throw adminInvalid("The deck name or the deck theme is required");
+    }
+
+    const name = hasName ? (command.name ?? "").trim() : undefined;
+    const theme = hasTheme ? (command.theme ?? "").trim() : undefined;
+
+    if (name !== undefined) {
+      if (name.length === 0) {
+        throw adminInvalid("The deck name is required");
+      }
+
+      if (name.length > MAX_DECK_NAME_LENGTH) {
+        throw adminInvalid(`The deck name cannot exceed ${MAX_DECK_NAME_LENGTH} characters`);
+      }
+    }
+
+    if (theme !== undefined) {
+      if (theme.length === 0) {
+        throw adminInvalid("The deck theme is required");
+      }
+
+      if (theme.length > MAX_DECK_THEME_LENGTH) {
+        throw adminInvalid(`The deck theme cannot exceed ${MAX_DECK_THEME_LENGTH} characters`);
+      }
+    }
+
+    await this.getDeck(id);
+    await this.recoverStaleAdmissions();
+    await this.assertNoActiveJob(id);
+
+    const updated = await this.deps.decks.updateMetadata({
+      deckId: id,
+      ...(name === undefined ? {} : { name }),
+      ...(theme === undefined ? {} : { theme }),
+      now: this.now(),
+    });
+
+    await this.deps.decks.publishProjection({ deckId: id, now: this.now() });
+
+    return updated;
+  }
+
+  /**
+   * Archives a managed deck without deleting anything.
+   *
+   * Cards, findings, history and the public id are preserved. The playable
+   * projection becomes an empty tombstone under the same public id, so a stale
+   * publication can never resurrect the deck.
+   */
+  async archiveDeck(id: string): Promise<ManagedDeck> {
+    await this.getDeck(id);
+    await this.recoverStaleAdmissions();
+    await this.assertNoActiveJob(id);
+
+    const archived = await this.deps.decks.archiveDeck({ deckId: id, now: this.now() });
+
+    await this.deps.decks.publishProjection({ deckId: id, now: this.now() });
+
+    return archived;
+  }
+
+  /**
+   * Restores an archived managed deck under the same stable id. Only the
+   * eligible cards go back to the playable projection.
+   */
+  async restoreDeck(id: string): Promise<ManagedDeck> {
+    await this.getDeck(id);
+    await this.recoverStaleAdmissions();
+    await this.assertNoActiveJob(id);
+
+    const restored = await this.deps.decks.restoreDeck({ deckId: id, now: this.now() });
+
+    await this.deps.decks.publishProjection({ deckId: id, now: this.now() });
+
+    return restored;
+  }
+
   /** Encola la generación de un lote de cartas. */
   async queueGeneration(deckId: string, count: number): Promise<AdminJob> {
     if (!Number.isInteger(count) || count < 1 || count > MAX_GENERATION_COUNT) {
@@ -136,16 +250,16 @@ export class AdminService {
       throw adminUnavailable("provider_unavailable", "The generation provider is not configured");
     }
 
-    await this.getDeck(deckId);
+    const deck = await this.getDeck(deckId);
+    this.assertDeckIsNotArchived(deck);
+
+    await this.recoverStaleAdmissions();
     await this.assertNoActiveJob(deckId);
 
-    return this.deps.jobs.insert({
-      id: this.deps.ids.next(),
-      deckId,
+    return this.admitJob(deckId, {
       kind: "generate",
       requested: count,
       limits: jobLimitsFor(count, this.deps.limits),
-      now: this.now(),
     });
   }
 
@@ -156,22 +270,22 @@ export class AdminService {
     }
 
     const deck = await this.getDeck(deckId);
+    this.assertDeckIsNotArchived(deck);
+
     const card = deck.cards.find((candidate) => candidate.id === cardId);
 
     if (card === undefined) {
       throw adminNotFound(`No card with id "${cardId}" in the deck`);
     }
 
+    await this.recoverStaleAdmissions();
     await this.assertNoActiveJob(deckId);
 
-    return this.deps.jobs.insert({
-      id: this.deps.ids.next(),
-      deckId,
+    return this.admitJob(deckId, {
       kind: "replace",
       requested: 1,
       targetCardId: cardId,
       limits: jobLimitsFor(1, this.deps.limits),
-      now: this.now(),
     });
   }
 
@@ -181,6 +295,8 @@ export class AdminService {
    */
   async setCardExcluded(deckId: string, cardId: string, excluded: boolean): Promise<ManagedCard> {
     const deck = await this.getDeck(deckId);
+    this.assertDeckIsNotArchived(deck);
+
     const card = deck.cards.find((candidate) => candidate.id === cardId);
 
     if (card === undefined) {
@@ -196,6 +312,7 @@ export class AdminService {
       );
     }
 
+    await this.recoverStaleAdmissions();
     await this.assertNoActiveJob(deckId);
 
     const updated = await this.deps.decks.setCardExcluded({
@@ -217,6 +334,169 @@ export class AdminService {
     return updatedCard;
   }
 
+  /**
+   * Bounded recovery of the admission protocol.
+   *
+   * Two cases are repaired, and nothing else:
+   *
+   * - a pending admission that never got activated is rejected and its deck
+   *   reservation is released;
+   * - a deck reservation whose lease expired is released only when its job is
+   *   missing or already terminal. A queued or running job keeps its
+   *   reservation even when the lease expired.
+   *
+   * It runs from authorized mutations and from the worker retry, never from a
+   * read.
+   */
+  async recoverStaleAdmissions(): Promise<void> {
+    const now = this.now();
+    const cutoff = new Date(Date.parse(now) - ADMISSION_TIMEOUT_MS).toISOString();
+
+    const admissions = await this.deps.jobs.findExpiredAdmissions({
+      before: cutoff,
+      limit: RECOVERY_BATCH_LIMIT,
+    });
+
+    for (const admission of admissions) {
+      const rejected = await this.deps.jobs.rejectPending({
+        jobId: admission.jobId,
+        error: "The job admission expired before it was activated",
+        now,
+        before: cutoff,
+      });
+
+      if (!rejected) {
+        // The job was activated in the meantime: its reservation is not ours.
+        continue;
+      }
+
+      await this.deps.decks.releaseDeck({
+        deckId: admission.deckId,
+        jobId: admission.jobId,
+        token: 0,
+      });
+    }
+
+    const fences = await this.deps.decks.findExpiredFences({ now, limit: RECOVERY_BATCH_LIMIT });
+
+    for (const fence of fences) {
+      const job = await this.deps.jobs.findById(fence.jobId);
+
+      if (job !== null && (job.status === "queued" || job.status === "running")) {
+        // The job is still alive: its reservation is not stale.
+        continue;
+      }
+
+      await this.deps.decks.releaseDeck({
+        deckId: fence.deckId,
+        jobId: fence.jobId,
+        token: fence.token,
+      });
+    }
+  }
+
+  /**
+   * Admits a job in three crash safe steps.
+   *
+   * The job is inserted pending (the unique active key is still the authority
+   * against a second active job), the deck is reserved with token zero and
+   * only then the job is activated. A pending job is never claimable, so a
+   * crash between the steps cannot leave an orphan runnable job.
+   */
+  private async admitJob(
+    deckId: string,
+    input: {
+      readonly kind: AdminJobKind;
+      readonly requested: number;
+      readonly targetCardId?: string;
+      readonly limits: AdminJobLimits;
+    },
+  ): Promise<AdminJob> {
+    const now = this.now();
+
+    const job = await this.deps.jobs.insert({
+      id: this.deps.ids.next(),
+      deckId,
+      kind: input.kind,
+      requested: input.requested,
+      ...(input.targetCardId === undefined ? {} : { targetCardId: input.targetCardId }),
+      limits: input.limits,
+      now,
+      admissionPending: true,
+    });
+
+    try {
+      const reserved = await this.deps.decks.reserveDeck({
+        deckId,
+        jobId: job.id,
+        leaseExpiresAt: new Date(Date.parse(now) + ADMISSION_LEASE_MS).toISOString(),
+        now,
+      });
+
+      if (!reserved) {
+        throw await this.describeReservationFailure(deckId);
+      }
+
+      const activated = await this.deps.jobs.activate({ jobId: job.id, now });
+
+      if (!activated) {
+        throw adminConflict("job_not_admitted", "The generation job could not be admitted");
+      }
+
+      return job;
+    } catch (error) {
+      await this.rejectAdmission(deckId, job.id, now);
+      throw error;
+    }
+  }
+
+  /**
+   * Rejects a pending admission and releases its reservation.
+   *
+   * The job becomes terminal BEFORE the reservation is released, and only the
+   * exact job and token are released. An unknown outcome keeps the rows: the
+   * caller reports the original failure.
+   */
+  private async rejectAdmission(deckId: string, jobId: string, now: string): Promise<void> {
+    try {
+      const rejected = await this.deps.jobs.rejectPending({
+        jobId,
+        error: "The generation job admission was rejected",
+        now,
+      });
+
+      if (!rejected) {
+        // The job was activated or already terminal: it is not ours to reject.
+        return;
+      }
+
+      await this.deps.decks.releaseDeck({ deckId, jobId, token: 0 });
+    } catch {
+      // Unknown outcome: the rows are preserved and nothing is deleted blindly.
+    }
+  }
+
+  /** Explains why the deck could not be reserved for a new job. */
+  private async describeReservationFailure(deckId: string): Promise<AdminError> {
+    const deck = await this.deps.decks.findById(deckId);
+
+    if (deck === null) {
+      return adminNotFound(`No managed deck with id "${deckId}"`);
+    }
+
+    if (deck.archivedAt !== undefined) {
+      return adminConflict("deck_archived", "The deck is archived and cannot queue new jobs");
+    }
+
+    return adminConflict("job_in_progress", "The deck already has a running generation job");
+  }
+
+  private assertDeckIsNotArchived(deck: ManagedDeck): void {
+    if (deck.archivedAt !== undefined) {
+      throw adminConflict("deck_archived", "The deck is archived: restore it before queueing jobs");
+    }
+  }
+
   private async assertNoActiveJob(deckId: string): Promise<void> {
     const active = await this.deps.jobs.findActiveByDeck(deckId);
 
@@ -233,6 +513,10 @@ export class AdminService {
 /**
  * Proyección jugable del mazo: sólo las cartas no excluidas. Si no queda
  * ninguna, el mazo no es jugable (`active: false`).
+ *
+ * Un mazo archivado se publica siempre vacío: la proyección queda como un
+ * tumba con la misma revisión y el mismo id público, así una publicación
+ * vieja nunca lo resucita.
  */
 export function buildProjection(deck: ManagedDeck): {
   deckId: string;
@@ -243,6 +527,8 @@ export function buildProjection(deck: ManagedDeck): {
   revision: number;
   cards: readonly { id: string; word: string; taboo: readonly string[] }[];
 } {
+  const archived = deck.archivedAt !== undefined;
+
   return {
     deckId: deck.id,
     publicDeckId: deck.publicDeckId,
@@ -250,9 +536,11 @@ export function buildProjection(deck: ManagedDeck): {
     theme: deck.theme,
     language: deck.language,
     revision: deck.revision,
-    cards: deck.cards
-      .filter((card) => !card.excluded)
-      .map((card) => ({ id: card.id, word: card.word, taboo: [...card.taboo] })),
+    cards: archived
+      ? []
+      : deck.cards
+          .filter((card) => !card.excluded)
+          .map((card) => ({ id: card.id, word: card.word, taboo: [...card.taboo] })),
   };
 }
 

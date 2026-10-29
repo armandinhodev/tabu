@@ -13,17 +13,9 @@ import {
 } from "@/ui/lib/admin-socket";
 
 import { AdminLogin } from "./login/admin-login";
+import { DeckManagement, type AdminDeckView } from "./deck-management";
 
-type CardView = {
-  id: string;
-  word: string;
-  taboo: string[];
-  excluded: boolean;
-  manualOverride: boolean;
-  issues: string[];
-  candidates?: { word: string; recognized?: boolean; valid?: boolean; reason?: string }[];
-};
-type DeckView = { id: string; name: string; theme: string; cards: CardView[] };
+type DeckView = AdminDeckView;
 type JobView = {
   id: string;
   deckId?: string;
@@ -103,12 +95,19 @@ export function AdminDashboard() {
   const [count, setCount] = useState("5");
   const [onlyExcluded, setOnlyExcluded] = useState(false);
   const [activeTab, setActiveTab] = useState<"create" | "decks">("decks");
+  const [showArchived, setShowArchived] = useState(false);
   const tabRefs = useRef<Partial<Record<"create" | "decks", HTMLButtonElement | null>>>({});
   const [connection, setConnection] = useState<AdminConnectionState>("idle");
   const socketRef = useRef<AdminSocketClient | null>(null);
   const progressRef = useRef("");
   const reconnectRef = useRef(false);
   const appliedRef = useRef<{ id: string; updatedAt: string } | null>(null);
+  /**
+   * El catálogo elige un mazo solo cuando todavía no hubo una selección. Si el
+   * administrador archiva el mazo seleccionado, la selección se limpia y no
+   * vuelve a caer sola.
+   */
+  const selectionClearedRef = useRef(false);
 
   /**
    * Aplica el estado de un trabajo sin retroceder.
@@ -177,8 +176,13 @@ export function AdminDashboard() {
     const controller = new AbortController();
     async function load() {
       try {
+        // Los mazos archivados se piden sólo cuando el filtro está activo:
+        // el catálogo por defecto no cambia.
+        const catalogUrl = showArchived
+          ? "/api/admin/decks?includeArchived=true"
+          : "/api/admin/decks";
         const [catalog, detail] = await Promise.all([
-          api<DeckView[]>("/api/admin/decks", { signal: controller.signal }),
+          api<DeckView[]>(catalogUrl, { signal: controller.signal }),
           selectedId
             ? api<DeckView>(`/api/admin/decks/${encodeURIComponent(selectedId)}`, {
                 signal: controller.signal,
@@ -187,7 +191,9 @@ export function AdminDashboard() {
         ]);
         if (controller.signal.aborted) return;
         setDecks(catalog);
-        if (!selectedId && catalog[0]) setSelectedId(catalog[0].id);
+        if (selectedId === null && !selectionClearedRef.current) {
+          if (catalog[0]) setSelectedId(catalog[0].id);
+        }
         setDeck(detail);
       } catch (failure) {
         if (!controller.signal.aborted) reportError(failure);
@@ -195,7 +201,7 @@ export function AdminDashboard() {
     }
     void load();
     return () => controller.abort();
-  }, [auth, selectedId, refresh, reportError]);
+  }, [auth, selectedId, refresh, reportError, showArchived]);
 
   /**
    * El trabajo se lee una sola vez por HTTP: el progreso vivo llega por el
@@ -298,6 +304,33 @@ export function AdminDashboard() {
     rememberJob(next.id);
   }
 
+  /**
+   * El mazo recién archivado sale del catálogo cuando el filtro está apagado:
+   * la selección se limpia y el panel no queda apuntando a un mazo invisible.
+   */
+  function handleArchived(deckId: string) {
+    if (showArchived) {
+      return;
+    }
+
+    if (selectedId === deckId) {
+      selectionClearedRef.current = true;
+      setSelectedId(null);
+      setDeck(null);
+    }
+  }
+
+  /** El filtro de archivados recarga el catálogo y ajusta la selección. */
+  function toggleArchived(next: boolean) {
+    setShowArchived(next);
+
+    if (!next && deck?.archivedAt !== undefined) {
+      selectionClearedRef.current = true;
+      setSelectedId(null);
+      setDeck(null);
+    }
+  }
+
   async function create(event: FormEvent) {
     event.preventDefault();
     await act(async () => {
@@ -330,6 +363,7 @@ export function AdminDashboard() {
   const running = job?.status === "queued" || job?.status === "running";
   const cards = deck?.cards ?? [];
   const visibleCards = onlyExcluded ? cards.filter((card) => card.excluded) : cards;
+  const archived = deck?.archivedAt !== undefined;
 
   if (auth === "loading")
     return (
@@ -552,6 +586,14 @@ export function AdminDashboard() {
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="space-y-3" aria-label="Mazos administrados">
             <h2 className="font-display text-h3">Mazos</h2>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(event) => toggleArchived(event.target.checked)}
+              />
+              Mostrar archivados
+            </label>
             {decks.length === 0 && (
               <p className="text-fg-muted">
                 Todavía no hay mazos creados desde este panel. Los mazos originales del juego no se
@@ -564,6 +606,7 @@ export function AdminDashboard() {
                 type="button"
                 aria-pressed={selectedId === item.id}
                 onClick={() => {
+                  selectionClearedRef.current = false;
                   setSelectedId(item.id);
                   setDeck(null);
                 }}
@@ -573,6 +616,9 @@ export function AdminDashboard() {
                 <span className="mt-1 block text-body-sm text-fg-muted">
                   {item.cards?.length ?? 0} cartas
                 </span>
+                {item.archivedAt !== undefined && (
+                  <span className="mt-1 block text-body-sm text-warning">Archivado</span>
+                )}
               </button>
             ))}
             <Button variant="quiet" size="sm" onClick={() => setRefresh((value) => value + 1)}>
@@ -601,6 +647,14 @@ export function AdminDashboard() {
                     Solo excluidas
                   </label>
                 </div>
+                <DeckManagement
+                  deck={deck}
+                  busy={busy}
+                  running={running}
+                  api={api}
+                  act={act}
+                  onArchived={handleArchived}
+                />
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="space-y-2">
                     <span className="block text-body-sm text-fg-muted">Cantidad para generar</span>
@@ -611,13 +665,13 @@ export function AdminDashboard() {
                       step={1}
                       value={count}
                       onChange={(event) => setCount(event.target.value)}
-                      disabled={busy || running}
+                      disabled={busy || running || archived}
                       className="w-24"
                     />
                   </label>
                   <Button
                     variant="ghost"
-                    disabled={busy || running}
+                    disabled={busy || running || archived}
                     onClick={() =>
                       void act(async () => {
                         const amount = Number(count);
@@ -710,7 +764,9 @@ export function AdminDashboard() {
                     <Button
                       size="sm"
                       variant={card.excluded ? "caution" : "ghost"}
-                      disabled={busy || running || (card.excluded && card.taboo.length !== 6)}
+                      disabled={
+                        busy || running || archived || (card.excluded && card.taboo.length !== 6)
+                      }
                       onClick={() =>
                         void act(async () => {
                           await api(
@@ -729,7 +785,7 @@ export function AdminDashboard() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={busy || running}
+                      disabled={busy || running || archived}
                       onClick={() =>
                         void act(async () =>
                           trackJob(

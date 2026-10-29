@@ -1,10 +1,15 @@
 import { Types } from "mongoose";
 
-import { adminConflict, adminNotFound } from "../../../../application/admin/errors";
+import {
+  adminConflict,
+  adminNotFound,
+  adminUnavailable,
+} from "../../../../application/admin/errors";
 import { buildProjection } from "../../../../application/admin/admin-service";
 import type {
   AdminDeckStore,
   CreateDeckInput,
+  ExpiredDeckFence,
   JobFence,
 } from "../../../../application/admin/ports";
 import type { ManagedDeck } from "../../../../application/admin/types";
@@ -53,22 +58,284 @@ export class MongoAdminDeckStore implements AdminDeckStore {
       throw adminConflict("name_taken", "A deck with that name already exists");
     }
 
-    const now = new Date(input.now);
-    const document = await AdminDeckModel.create({
-      _id: input.id,
-      name: input.name,
-      theme: input.theme,
-      language: input.language,
-      revision: 1,
-      cards: [],
-      usedObjectives: [],
-      proposedWords: [],
-      publicDeckId: new Types.ObjectId().toString(),
-      createdAt: now,
-      updatedAt: now,
-    });
+    // El índice único de nombres tiene que existir antes de escribir: es lo
+    // que impide que dos creaciones simultáneas se quede con el mismo nombre.
+    await ensureNameIndex();
 
-    return toManagedDeck(document);
+    const now = new Date(input.now);
+
+    try {
+      const document = await AdminDeckModel.create({
+        _id: input.id,
+        name: input.name,
+        theme: input.theme,
+        language: input.language,
+        revision: 1,
+        cards: [],
+        usedObjectives: [],
+        proposedWords: [],
+        publicDeckId: new Types.ObjectId().toString(),
+        // La fila nueva entra en el índice de nombres reservados.
+        nameReserved: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      return toManagedDeck(document);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        throw adminConflict("name_taken", "A deck with that name already exists");
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Edita el nombre y/o la temática del mazo.
+   *
+   * La escritura es atómica y exige que el mazo no tenga un trabajo activo: un
+   * mazo con una generación en curso no se toca. La edición nunca regenera
+   * las cartas ni toca sus hallazgos.
+   */
+  async updateMetadata(input: {
+    deckId: string;
+    name?: string;
+    theme?: string;
+    now: string;
+  }): Promise<ManagedDeck> {
+    assertMongoAvailable();
+
+    const current = await AdminDeckModel.findById(input.deckId).exec();
+
+    if (current === null) {
+      throw adminNotFound(`No deck with id "${input.deckId}"`);
+    }
+
+    const renaming = input.name !== undefined && input.name !== current.name;
+
+    if (renaming) {
+      // El nombre queda reservado entre los mazos archivados y los sembrados.
+      await this.assertNameIsFree(input.name as string, {
+        excludeDeckId: input.deckId,
+        excludePublicDeckId: current.publicDeckId,
+      });
+      await ensureNameIndex();
+    }
+
+    try {
+      const document = await AdminDeckModel.findOneAndUpdate(
+        {
+          _id: input.deckId,
+          // Con un trabajo activo el mazo no se toca: la API responde 409.
+          "activeJob.jobId": { $exists: false },
+        },
+        {
+          $set: {
+            ...(input.name === undefined ? {} : { name: input.name }),
+            ...(input.theme === undefined ? {} : { theme: input.theme }),
+            // Sólo un renombrado entra en el índice de nombres reservados.
+            ...(renaming ? { nameReserved: true } : {}),
+            updatedAt: new Date(input.now),
+          },
+          $inc: { revision: 1 },
+        },
+        { new: true },
+      ).exec();
+
+      if (document !== null) {
+        return toManagedDeck(document);
+      }
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        throw adminConflict("name_taken", "A deck with that name already exists");
+      }
+
+      throw error;
+    }
+
+    const blocked = await AdminDeckModel.findById(input.deckId).exec();
+
+    if (blocked === null) {
+      throw adminNotFound(`No deck with id "${input.deckId}"`);
+    }
+
+    if (blocked.activeJob !== undefined) {
+      throw adminConflict("job_in_progress", "The deck already has a running generation job");
+    }
+
+    throw adminConflict("update_failed", "The deck could not be updated");
+  }
+
+  /**
+   * Archiva el mazo sin borrar nada: cartas, hallazgos, historial y el id
+   * público se conservan. La proyección jugable pasa a ser un tumba vacío.
+   */
+  async archiveDeck(input: { deckId: string; now: string }): Promise<ManagedDeck> {
+    assertMongoAvailable();
+
+    const document = await AdminDeckModel.findOneAndUpdate(
+      {
+        _id: input.deckId,
+        archivedAt: { $exists: false },
+        "activeJob.jobId": { $exists: false },
+      },
+      {
+        $set: { archivedAt: new Date(input.now), updatedAt: new Date(input.now) },
+        $inc: { revision: 1 },
+      },
+      { new: true },
+    ).exec();
+
+    if (document !== null) {
+      return toManagedDeck(document);
+    }
+
+    const current = await AdminDeckModel.findById(input.deckId).exec();
+
+    if (current === null) {
+      throw adminNotFound(`No deck with id "${input.deckId}"`);
+    }
+
+    if (current.archivedAt !== undefined) {
+      // Ya está archivado: la operación es idempotente y reintentar repara la
+      // proyección sin perder datos.
+      return toManagedDeck(current);
+    }
+
+    if (current.activeJob !== undefined) {
+      throw adminConflict("job_in_progress", "The deck already has a running generation job");
+    }
+
+    throw adminConflict("archive_failed", "The deck could not be archived");
+  }
+
+  /** Restaura el mazo con el mismo id estable. */
+  async restoreDeck(input: { deckId: string; now: string }): Promise<ManagedDeck> {
+    assertMongoAvailable();
+
+    const document = await AdminDeckModel.findOneAndUpdate(
+      {
+        _id: input.deckId,
+        archivedAt: { $exists: true },
+        "activeJob.jobId": { $exists: false },
+      },
+      {
+        $unset: { archivedAt: "" },
+        $set: { updatedAt: new Date(input.now) },
+        $inc: { revision: 1 },
+      },
+      { new: true },
+    ).exec();
+
+    if (document !== null) {
+      return toManagedDeck(document);
+    }
+
+    const current = await AdminDeckModel.findById(input.deckId).exec();
+
+    if (current === null) {
+      throw adminNotFound(`No deck with id "${input.deckId}"`);
+    }
+
+    if (current.archivedAt === undefined) {
+      // No estaba archivado: restaurar no cambia nada.
+      return toManagedDeck(current);
+    }
+
+    if (current.activeJob !== undefined) {
+      throw adminConflict("job_in_progress", "The deck already has a running generation job");
+    }
+
+    throw adminConflict("restore_failed", "The deck could not be restored");
+  }
+
+  /**
+   * Reserva el mazo para un trabajo que todavía no se puede ejecutar.
+   *
+   * Sólo un mazo no archivado y sin trabajo activo se puede reservar: la
+   * operación es atómica, así que dos admisiones simultáneas no toman el
+   * mismo mazo.
+   */
+  async reserveDeck(input: {
+    deckId: string;
+    jobId: string;
+    leaseExpiresAt: string;
+    now: string;
+  }): Promise<boolean> {
+    assertMongoAvailable();
+
+    const document = await AdminDeckModel.findOneAndUpdate(
+      {
+        _id: input.deckId,
+        archivedAt: { $exists: false },
+        "activeJob.jobId": { $exists: false },
+      },
+      {
+        $set: {
+          "activeJob.jobId": input.jobId,
+          "activeJob.token": 0,
+          "activeJob.leaseExpiresAt": new Date(input.leaseExpiresAt),
+          updatedAt: new Date(input.now),
+        },
+      },
+      { new: true },
+    ).exec();
+
+    return document !== null;
+  }
+
+  /** Mazos cuya reserva venció: la recuperación decide si hay que liberarla. */
+  async findExpiredFences(input: {
+    now: string;
+    limit: number;
+  }): Promise<readonly ExpiredDeckFence[]> {
+    assertMongoAvailable();
+
+    const documents = await AdminDeckModel.find({
+      "activeJob.leaseExpiresAt": { $lte: new Date(input.now) },
+    })
+      .sort({ createdAt: 1 })
+      .limit(input.limit)
+      .exec();
+
+    return documents.map((document) => ({
+      deckId: String(document._id),
+      jobId: document.activeJob?.jobId ?? "",
+      token: document.activeJob?.token ?? 0,
+      leaseExpiresAt: (document.activeJob?.leaseExpiresAt ?? new Date(input.now)).toISOString(),
+    }));
+  }
+
+  /**
+   * Comprueba que un nombre está libre. Cuentan todos los nombres guardados:
+   * los mazos administrables (archivados incluidos) y los mazos públicos (los
+   * sembrados y las proyecciones de los administrables).
+   */
+  private async assertNameIsFree(
+    name: string,
+    options: {
+      readonly excludeDeckId?: string;
+      readonly excludePublicDeckId?: string;
+    } = {},
+  ): Promise<void> {
+    const managed = await AdminDeckModel.findOne({
+      name,
+      ...(options.excludeDeckId === undefined ? {} : { _id: { $ne: options.excludeDeckId } }),
+    }).exec();
+
+    if (managed !== null) {
+      throw adminConflict("name_taken", "A deck with that name already exists");
+    }
+
+    const published = await DeckModel.findOne({
+      name,
+      ...publicIdFilter(options.excludePublicDeckId),
+    }).exec();
+
+    if (published !== null) {
+      throw adminConflict("name_taken", "A deck with that name already exists");
+    }
   }
 
   async setCardExcluded(input: {
@@ -87,6 +354,8 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         "cards.id": input.cardId,
         // Con un trabajo activo el mazo no se toca: la API responde 409.
         "activeJob.jobId": { $exists: false },
+        // Un mazo archivado no cambia sus cartas hasta restaurarlo.
+        archivedAt: { $exists: false },
       },
       {
         $set: {
@@ -114,6 +383,13 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         throw adminConflict("job_in_progress", "The deck already has a running generation job");
       }
 
+      if (deck.archivedAt !== undefined) {
+        throw adminConflict(
+          "deck_archived",
+          "The deck is archived: restore it before changing its cards",
+        );
+      }
+
       throw adminNotFound(`No card with id "${input.cardId}" in the deck`);
     }
 
@@ -139,6 +415,8 @@ export class MongoAdminDeckStore implements AdminDeckStore {
     const document = await AdminDeckModel.findOneAndUpdate(
       {
         _id: input.deckId,
+        // Un mazo archivado no admite trabajos.
+        archivedAt: { $exists: false },
         $or: [
           // El mazo está libre.
           { "activeJob.jobId": { $exists: false } },
@@ -215,6 +493,8 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         "activeJob.jobId": input.fence.jobId,
         "activeJob.token": input.fence.token,
         "activeJob.leaseExpiresAt": { $gt: now },
+        // Un mazo archivado no recibe cartas nuevas.
+        archivedAt: { $exists: false },
         // Idempotencia: si la carta ya está, no se agrega dos veces.
         "cards.id": { $ne: input.card.id },
       },
@@ -267,6 +547,8 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         "activeJob.jobId": input.fence.jobId,
         "activeJob.token": input.fence.token,
         "activeJob.leaseExpiresAt": { $gt: now },
+        // Un mazo archivado no cambia sus cartas hasta restaurarlo.
+        archivedAt: { $exists: false },
         "cards.id": input.cardId,
       },
       {
@@ -370,5 +652,36 @@ export class MongoAdminDeckStore implements AdminDeckStore {
 
       throw error;
     }
+  }
+}
+
+/**
+ * Hace existir el índice único de nombres reservados antes de una escritura.
+ *
+ * El índice es parcial: sólo entra en él las filas con la marca de nombre
+ * reservado. Los mazos anteriores no se tocan y el índice se construye sin
+ * borrar ni deduplicar nada.
+ */
+async function ensureNameIndex(): Promise<void> {
+  try {
+    await AdminDeckModel.init();
+  } catch {
+    throw adminUnavailable("mongo_unavailable", "The database is not available");
+  }
+}
+
+/**
+ * Excluye la proyección propia del mazo de la comprobación de nombres: al
+ * renombrar, el mazo se excluye a sí mismo y no colisiona consigo mismo.
+ */
+function publicIdFilter(publicDeckId: string | undefined): Record<string, unknown> {
+  if (publicDeckId === undefined) {
+    return {};
+  }
+
+  try {
+    return { _id: { $ne: new Types.ObjectId(publicDeckId) } };
+  } catch {
+    return {};
   }
 }

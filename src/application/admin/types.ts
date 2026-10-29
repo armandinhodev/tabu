@@ -69,6 +69,12 @@ export interface ManagedDeck {
   readonly proposedWords: readonly string[];
   readonly createdAt: string;
   readonly updatedAt: string;
+  /**
+   * Momento del archivado. Sólo aparece cuando el mazo está archivado: un
+   * mazo activo no lleva el campo. Archivar conserva cartas, hallazgos,
+   * historial y el id público: nada se borra (S13).
+   */
+  readonly archivedAt?: string;
 }
 
 /** Trabajo persistido: el progreso nunca se pierde aunque el proceso caiga. */

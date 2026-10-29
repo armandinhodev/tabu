@@ -473,7 +473,9 @@ describe("Mongo admin stores", () => {
 
       const filter = spy.mock.calls[0]?.[0] as { $or: Record<string, unknown>[] };
       expect(filter.$or).toHaveLength(2);
-      expect(filter.$or[0]).toEqual({ status: "queued" });
+      // Los trabajos con admisión pendiente no son ejecutables todavía. Los
+      // trabajos antiguos, sin la marca, siguen siendo reclamables.
+      expect(filter.$or[0]).toEqual({ status: "queued", admissionPending: { $ne: true } });
 
       const update = spy.mock.calls[0]?.[1] as Record<string, Record<string, unknown>>;
       expect(update.$inc).toEqual({ fencingToken: 1 });

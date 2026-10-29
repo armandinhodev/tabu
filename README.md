@@ -84,6 +84,19 @@ La pestaña **Crear mazo** contiene el formulario de generación; **Mazos** perm
 cartas y pedir nuevas generaciones o reemplazos. El progreso en vivo se mantiene visible al
 cambiar de pestaña, y el formulario conserva los datos todavía no enviados.
 
+En **Mazos** también se edita el nombre y la temática del mazo (hasta 80 y 200 caracteres),
+se archiva y se restaura. El archivado es recuperable: no borra nada, conserva las cartas,
+los hallazgos de validación, el historial y el mismo identificador público, y el mazo deja de
+aceptar generaciones, reemplazos o cambios de cartas hasta restaurarlo. El catálogo muestra
+por defecto sólo los mazos activos; el filtro **Mostrar archivados** trae los archivados
+para poder seleccionarlos y restaurarlos. Editar, archivar y restaurar se rechazan mientras
+el mazo tiene una generación o un reemplazo en curso. Cambiar la temática afecta sólo a las
+generaciones futuras: las cartas guardadas no se regeneran.
+
+Encolar una generación reserva el mazo antes de publicar el trabajo. Si el proceso se cae en
+ese instante, la recuperación libera la reserva y descarta el trabajo pendiente: nunca queda
+un trabajo a medio ejecutar ni un mazo bloqueado para siempre.
+
 Configurar estas variables únicamente en el servidor, en `.env` o en el entorno del contenedor:
 
 | Variable               | Uso                                                               |

@@ -8,10 +8,12 @@ import type {
   AdminLogger,
   CreateDeckInput,
   DeckProjection,
+  ExpiredDeckFence,
   GenerationProvider,
   JobCheckpoint,
   JobFence,
   NewJobInput,
+  PendingAdmission,
   ProposedCard,
   ProviderResult,
   ProviderUsage,
@@ -148,6 +150,10 @@ interface FakeDeck {
   proposedWords: string[];
   createdAt: string;
   updatedAt: string;
+  /** Set only when the deck is archived: an active deck has no such field. */
+  archivedAt?: string;
+  /** Internal marker of the rows that take part in the unique name index. */
+  nameReserved?: boolean;
   activeJob?: { jobId: string; token: number; leaseExpiresAt: string };
 }
 
@@ -169,6 +175,7 @@ export class FakeDeckStore implements AdminDeckStore {
       proposedWords: [...(partial.proposedWords ?? [])],
       createdAt: partial.createdAt ?? "2026-10-29T00:00:00.000Z",
       updatedAt: partial.updatedAt ?? "2026-10-29T00:00:00.000Z",
+      ...(partial.archivedAt === undefined ? {} : { archivedAt: partial.archivedAt }),
     };
 
     this.decks.set(deck.id, deck);
@@ -185,6 +192,12 @@ export class FakeDeckStore implements AdminDeckStore {
   }
 
   async create(input: CreateDeckInput): Promise<ManagedDeck> {
+    const taken = [...this.decks.values()].some((deck) => deck.name === input.name);
+
+    if (taken) {
+      throw adminConflict("name_taken", "a deck with that name already exists");
+    }
+
     return this.seed({
       id: input.id,
       name: input.name,
@@ -193,6 +206,134 @@ export class FakeDeckStore implements AdminDeckStore {
       createdAt: input.now,
       updatedAt: input.now,
     });
+  }
+
+  async updateMetadata(input: {
+    deckId: string;
+    name?: string;
+    theme?: string;
+    now: string;
+  }): Promise<ManagedDeck> {
+    const deck = this.decks.get(input.deckId);
+
+    if (deck === undefined) {
+      throw adminNotFound("deck not found");
+    }
+
+    if (deck.activeJob !== undefined) {
+      throw adminConflict("job_in_progress", "the deck has a running job");
+    }
+
+    if (input.name !== undefined && input.name !== deck.name) {
+      const taken = [...this.decks.values()].some(
+        (other) => other.id !== deck.id && other.name === input.name,
+      );
+
+      if (taken) {
+        throw adminConflict("name_taken", "a deck with that name already exists");
+      }
+
+      deck.name = input.name;
+      deck.nameReserved = true;
+    }
+
+    if (input.theme !== undefined) {
+      deck.theme = input.theme;
+    }
+
+    deck.revision += 1;
+    deck.updatedAt = input.now;
+
+    return deck;
+  }
+
+  async archiveDeck(input: { deckId: string; now: string }): Promise<ManagedDeck> {
+    const deck = this.decks.get(input.deckId);
+
+    if (deck === undefined) {
+      throw adminNotFound("deck not found");
+    }
+
+    if (deck.archivedAt !== undefined) {
+      return deck;
+    }
+
+    if (deck.activeJob !== undefined) {
+      throw adminConflict("job_in_progress", "the deck has a running job");
+    }
+
+    deck.archivedAt = input.now;
+    deck.revision += 1;
+    deck.updatedAt = input.now;
+
+    return deck;
+  }
+
+  async restoreDeck(input: { deckId: string; now: string }): Promise<ManagedDeck> {
+    const deck = this.decks.get(input.deckId);
+
+    if (deck === undefined) {
+      throw adminNotFound("deck not found");
+    }
+
+    if (deck.archivedAt === undefined) {
+      return deck;
+    }
+
+    if (deck.activeJob !== undefined) {
+      throw adminConflict("job_in_progress", "the deck has a running job");
+    }
+
+    delete deck.archivedAt;
+    deck.revision += 1;
+    deck.updatedAt = input.now;
+
+    return deck;
+  }
+
+  async reserveDeck(input: {
+    deckId: string;
+    jobId: string;
+    leaseExpiresAt: string;
+    now: string;
+  }): Promise<boolean> {
+    const deck = this.decks.get(input.deckId);
+
+    if (deck === undefined || deck.archivedAt !== undefined || deck.activeJob !== undefined) {
+      return false;
+    }
+
+    deck.activeJob = { jobId: input.jobId, token: 0, leaseExpiresAt: input.leaseExpiresAt };
+
+    return true;
+  }
+
+  async findExpiredFences(input: {
+    now: string;
+    limit: number;
+  }): Promise<readonly ExpiredDeckFence[]> {
+    const fences: ExpiredDeckFence[] = [];
+
+    for (const deck of this.decks.values()) {
+      const active = deck.activeJob;
+
+      if (active === undefined || active.leaseExpiresAt > input.now) {
+        continue;
+      }
+
+      fences.push({
+        deckId: deck.id,
+        jobId: active.jobId,
+        token: active.token,
+        leaseExpiresAt: active.leaseExpiresAt,
+      });
+
+      if (fences.length >= input.limit) {
+        break;
+      }
+    }
+
+    return fences;
   }
 
   async setCardExcluded(input: {
@@ -243,6 +384,11 @@ export class FakeDeckStore implements AdminDeckStore {
     const deck = this.decks.get(input.deckId);
 
     if (deck === undefined) {
+      return false;
+    }
+
+    if (deck.archivedAt !== undefined) {
+      // Un mazo archivado no se puede reclamar: no se le escriben cartas.
       return false;
     }
 
@@ -305,7 +451,11 @@ export class FakeDeckStore implements AdminDeckStore {
   }): Promise<ManagedDeck | null> {
     const deck = this.decks.get(input.deckId);
 
-    if (deck === undefined || !ownsFence(deck, input.fence, input.now)) {
+    if (
+      deck === undefined ||
+      deck.archivedAt !== undefined ||
+      !ownsFence(deck, input.fence, input.now)
+    ) {
       return null;
     }
 
@@ -335,7 +485,11 @@ export class FakeDeckStore implements AdminDeckStore {
   }): Promise<ManagedDeck | null> {
     const deck = this.decks.get(input.deckId);
 
-    if (deck === undefined || !ownsFence(deck, input.fence, input.now)) {
+    if (
+      deck === undefined ||
+      deck.archivedAt !== undefined ||
+      !ownsFence(deck, input.fence, input.now)
+    ) {
       return null;
     }
 
@@ -356,7 +510,11 @@ export class FakeDeckStore implements AdminDeckStore {
   async releaseDeck(input: { deckId: string; jobId: string; token: number }): Promise<void> {
     const deck = this.decks.get(input.deckId);
 
-    if (deck === undefined || deck.activeJob?.jobId !== input.jobId) {
+    if (
+      deck === undefined ||
+      deck.activeJob?.jobId !== input.jobId ||
+      deck.activeJob.token !== input.token
+    ) {
       return;
     }
 
@@ -387,6 +545,8 @@ interface FakeJobRecord {
   owner?: string;
   leaseExpiresAt?: string;
   token?: number;
+  /** Internal admission flag: a pending job is never claimable. */
+  admissionPending?: boolean;
 }
 
 /** Almacén de trabajos en memoria con leases y tokens de fencing. */
@@ -404,6 +564,12 @@ export class FakeJobStore implements AdminJobStore {
   }
 
   async insert(input: NewJobInput): Promise<AdminJob> {
+    const active = await this.findActiveByDeck(input.deckId);
+
+    if (active !== null) {
+      throw adminConflict("job_in_progress", "the deck already has a running job");
+    }
+
     const job: AdminJob = {
       id: input.id,
       deckId: input.deckId,
@@ -425,7 +591,7 @@ export class FakeJobStore implements AdminJobStore {
       updatedAt: input.now,
     };
 
-    this.jobs.set(job.id, { job });
+    this.jobs.set(job.id, { job, admissionPending: input.admissionPending === true });
 
     return job;
   }
@@ -447,12 +613,91 @@ export class FakeJobStore implements AdminJobStore {
     return null;
   }
 
+  async activate(input: { jobId: string; now: string }): Promise<boolean> {
+    const record = this.jobs.get(input.jobId);
+
+    if (
+      record === undefined ||
+      record.admissionPending !== true ||
+      record.job.status !== "queued"
+    ) {
+      return false;
+    }
+
+    record.admissionPending = false;
+    record.job = { ...record.job, updatedAt: input.now };
+
+    return true;
+  }
+
+  async rejectPending(input: {
+    jobId: string;
+    error: string;
+    now: string;
+    before?: string;
+  }): Promise<boolean> {
+    const record = this.jobs.get(input.jobId);
+
+    if (
+      record === undefined ||
+      record.admissionPending !== true ||
+      record.job.status !== "queued"
+    ) {
+      return false;
+    }
+
+    if (input.before !== undefined && record.job.createdAt > input.before) {
+      return false;
+    }
+
+    record.admissionPending = false;
+    record.job = {
+      ...record.job,
+      status: "failed",
+      error: input.error,
+      updatedAt: input.now,
+    };
+    this.failed.push({ id: input.jobId, error: input.error });
+
+    return true;
+  }
+
+  async findExpiredAdmissions(input: {
+    before: string;
+    limit: number;
+  }): Promise<readonly PendingAdmission[]> {
+    const admissions: PendingAdmission[] = [];
+
+    for (const record of this.jobs.values()) {
+      if (record.admissionPending !== true || record.job.status !== "queued") {
+        continue;
+      }
+
+      if (record.job.createdAt > input.before) {
+        continue;
+      }
+
+      admissions.push({ jobId: record.job.id, deckId: record.job.deckId });
+
+      if (admissions.length >= input.limit) {
+        break;
+      }
+    }
+
+    return admissions;
+  }
+
   async claimNext(input: {
     owner: string;
     leaseMs: number;
     now: string;
   }): Promise<{ job: AdminJob; fence: JobFence } | null> {
     for (const record of this.jobs.values()) {
+      if (record.admissionPending === true) {
+        // Una admisión pendiente todavía no es ejecutable.
+        continue;
+      }
+
       const expired = record.leaseExpiresAt !== undefined && record.leaseExpiresAt <= input.now;
       const claimable =
         record.job.status === "queued" || (record.job.status === "running" && expired);

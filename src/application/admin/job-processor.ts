@@ -79,6 +79,26 @@ export async function processClaimedJob(
     return;
   }
 
+  if (deck.archivedAt !== undefined) {
+    // Un trabajo en cola puede apuntar a un mazo archivado (así ocurre con los
+    // trabajos viejos, que no conocían el archivado). Falla de forma terminal:
+    // no se llama al proveedor y no vuelve a la cola en un bucle.
+    deps.log.warn("admin job failed", { jobId: job.id, reason: "deck_archived" });
+    await deps.jobs.fail({
+      jobId: job.id,
+      owner: fence.owner,
+      token: fence.token,
+      error: "The managed deck is archived",
+      now: deps.clock.now().toISOString(),
+    });
+    await deps.decks.releaseDeck({
+      deckId: job.deckId,
+      jobId: job.id,
+      token: fence.token,
+    });
+    return;
+  }
+
   // El trabajo tiene que seguir siendo nuestro antes de tocar el mazo.
   const owned = await deps.jobs.heartbeat({
     jobId: job.id,
