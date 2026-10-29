@@ -126,11 +126,11 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
-  it("paginates cards in fifty-card pages without reconnecting progress", async () => {
+  it("paginates cards in twenty-card pages without reconnecting progress", async () => {
     catalog = [
       {
         ...deck,
-        cards: Array.from({ length: 101 }, (_, index) => ({
+        cards: Array.from({ length: 41 }, (_, index) => ({
           ...card,
           id: `card-${index + 1}`,
           word: `Word ${index + 1}`,
@@ -139,15 +139,15 @@ describe("AdminDashboard", () => {
     ];
     render(<AdminDashboard />);
     expect(await screen.findByRole("heading", { name: "Word 1" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Word 51" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Word 21" })).not.toBeInTheDocument();
     expect(screen.getByText("Página 1 de 3")).toBeVisible();
     expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
-    expect(screen.getByRole("heading", { name: "Word 51" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Word 21" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Word 1" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
-    expect(screen.getByRole("heading", { name: "Word 101" })).toBeVisible();
-    expect(screen.getByText("Mostrando 101–101 de 101 cartas")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Word 41" })).toBeVisible();
+    expect(screen.getByText("Mostrando 41–41 de 41 cartas")).toBeVisible();
     expect(screen.getByRole("button", { name: "Siguiente" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Anterior" }));
     expect(screen.getByText("Página 2 de 3")).toBeVisible();
@@ -158,11 +158,11 @@ describe("AdminDashboard", () => {
     catalog = [
       {
         ...deck,
-        cards: Array.from({ length: 51 }, (_, index) => ({
+        cards: Array.from({ length: 21 }, (_, index) => ({
           ...card,
           id: `card-${index}`,
           word: `Word ${index}`,
-          excluded: index === 50,
+          excluded: index === 20,
         })),
       },
       { ...deck, id: "other", name: "Other deck" },
@@ -173,7 +173,7 @@ describe("AdminDashboard", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Solo excluidas" }));
     expect(screen.getByText("Página 1 de 1")).toBeVisible();
     expect(screen.getByText("Mostrando 1–1 de 1 cartas")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Word 50" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Word 20" })).toBeVisible();
     fireEvent.click(screen.getByRole("checkbox", { name: "Solo excluidas" }));
     expect(screen.getByText("Página 1 de 2")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));

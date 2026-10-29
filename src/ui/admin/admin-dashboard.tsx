@@ -384,7 +384,7 @@ export function AdminDashboard() {
   const running = job?.status === "queued" || job?.status === "running";
   const cards = deck?.cards ?? [];
   const filteredCards = onlyExcluded ? cards.filter((card) => card.excluded) : cards;
-  const cardsPerPage = 50;
+  const cardsPerPage = 20;
   const totalPages = Math.max(1, Math.ceil(filteredCards.length / cardsPerPage));
   const currentPage = Math.min(cardsPage, totalPages);
   const pageStart = (currentPage - 1) * cardsPerPage;

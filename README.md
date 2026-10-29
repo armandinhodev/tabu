@@ -153,7 +153,7 @@ siguen excluyendo cartas dudosas: aumentar la cantidad no omite esa validación.
 iniciales grandes tienen un límite de respuesta de hasta 20000 tokens y un timeout de 45 segundos;
 los completados individuales conservan el presupuesto pequeño. El lease se renueva entre cartas.
 
-El listado de cartas muestra 50 por página, con controles **Anterior/Siguiente** y contadores.
+El listado de cartas muestra 20 por página, con controles **Anterior/Siguiente** y contadores.
 El filtro **Solo excluidas** se aplica antes de paginar; cambiar el mazo o el filtro vuelve a
 la primera página. Las acciones de las cartas y el progreso en vivo siguen disponibles.
 
