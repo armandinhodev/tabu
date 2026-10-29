@@ -51,6 +51,8 @@ export interface ManagedCard {
 
 /** Mazo administrable y su proyección jugable. */
 export interface ManagedDeck {
+  /** Absent means disabled; applies only to future card generation. */
+  readonly allowProperNames?: boolean;
   readonly id: string;
   readonly name: string;
   readonly theme: string;

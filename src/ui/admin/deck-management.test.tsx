@@ -46,6 +46,36 @@ function renderManagement(overrides: Partial<DeckManagementProps> = {}) {
 }
 
 describe("DeckManagement", () => {
+  it("loads an enabled option and can turn it off", async () => {
+    const { api } = renderManagement({ deck: { ...deck, allowProperNames: true } });
+    const checkbox = screen.getByRole("checkbox", { name: "Permitir nombres propios y títulos" });
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith(
+        "/api/admin/decks/deck-1",
+        expect.objectContaining({
+          body: JSON.stringify({ name: "General", theme: "Objetos", allowProperNames: false }),
+        }),
+      ),
+    );
+  });
+  it("edits the default-off proper-name option", async () => {
+    const { api } = renderManagement();
+    const checkbox = screen.getByRole("checkbox", { name: "Permitir nombres propios y títulos" });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith(
+        "/api/admin/decks/deck-1",
+        expect.objectContaining({
+          body: JSON.stringify({ name: "General", theme: "Objetos", allowProperNames: true }),
+        }),
+      ),
+    );
+  });
   it("edits the name and the theme with the application limits", async () => {
     const { api } = renderManagement();
 

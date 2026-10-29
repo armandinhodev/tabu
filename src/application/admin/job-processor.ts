@@ -208,6 +208,7 @@ async function runGeneration(
 
     const result = await requestBatch(deps, job, fence, state, {
       theme: current.theme,
+      ...(current.allowProperNames ? { allowProperNames: true } : {}),
       count,
       excludedObjectives: current.usedObjectives,
       ...(signal === undefined ? {} : { signal }),
@@ -236,6 +237,7 @@ async function runGeneration(
         id: `${job.id}-${state.processed}`,
         index: state.processed,
         theme: current.theme,
+        ...(current.allowProperNames ? { allowProperNames: true } : {}),
         objective,
         proposed,
         previousWords: [],
@@ -317,6 +319,7 @@ async function runReplacement(
 
   const result = await requestBatch(deps, job, fence, state, {
     theme: deck.theme,
+    ...(deck.allowProperNames ? { allowProperNames: true } : {}),
     count: 1,
     excludedObjectives: deck.usedObjectives,
     ...(signal === undefined ? {} : { signal }),
@@ -349,6 +352,7 @@ async function runReplacement(
     id: target.id,
     index: 0,
     theme: deck.theme,
+    ...(deck.allowProperNames ? { allowProperNames: true } : {}),
     objective,
     proposed,
     previousWords: [],
@@ -391,6 +395,7 @@ async function buildCard(
   state: JobState,
   input: {
     id: string;
+    allowProperNames?: boolean;
     index: number;
     theme: string;
     objective: string;
@@ -402,6 +407,7 @@ async function buildCard(
   let evaluated = evaluateCard(
     {
       objective: input.objective,
+      ...(input.allowProperNames ? { allowProperNames: true } : {}),
       candidates: input.proposed.candidates,
       previouslyProposed: input.previousWords,
     },
@@ -417,6 +423,7 @@ async function buildCard(
     await renewLease(deps, job, fence);
 
     const completion = await requestCompletion(deps, job, fence, state, {
+      ...(input.allowProperNames ? { allowProperNames: true } : {}),
       objective: input.objective,
       theme: input.theme,
       previousWords: previous,
@@ -430,6 +437,7 @@ async function buildCard(
     evaluated = evaluateCard(
       {
         objective: input.objective,
+        ...(input.allowProperNames ? { allowProperNames: true } : {}),
         candidates: [...previous, ...completion.candidates],
         previouslyProposed: input.previousWords,
       },
@@ -461,6 +469,7 @@ async function requestBatch(
   input: {
     theme: string;
     count: number;
+    allowProperNames?: boolean;
     excludedObjectives: readonly string[];
     signal?: AbortSignal;
   },
@@ -471,6 +480,7 @@ async function requestBatch(
   await reserveCall(deps, job, fence, state, true);
 
   const result = await deps.provider.proposeCards({
+    ...(input.allowProperNames ? { allowProperNames: true } : {}),
     theme: input.theme,
     count: input.count,
     excludedObjectives: input.excludedObjectives,
@@ -491,6 +501,7 @@ async function requestCompletion(
     theme: string;
     previousWords: readonly string[];
     selected: readonly string[];
+    allowProperNames?: boolean;
     rejected: readonly string[];
     signal?: AbortSignal;
   },
@@ -498,6 +509,7 @@ async function requestCompletion(
   await reserveCall(deps, job, fence, state, false);
 
   const result = await deps.provider.proposeCandidates({
+    ...(input.allowProperNames ? { allowProperNames: true } : {}),
     objective: input.objective,
     theme: input.theme,
     previousWords: input.previousWords,

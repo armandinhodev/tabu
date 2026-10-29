@@ -9,13 +9,18 @@ export const dynamic = "force-dynamic";
 
 const input = z
   .object({
+    allowProperNames: z.boolean().optional(),
     name: z.string().trim().min(1).max(MAX_DECK_NAME_LENGTH).optional(),
     theme: z.string().trim().min(1).max(MAX_DECK_THEME_LENGTH).optional(),
   })
   .strict()
-  .refine((value) => value.name !== undefined || value.theme !== undefined, {
-    message: "The deck name or the deck theme is required",
-  });
+  .refine(
+    (value) =>
+      value.name !== undefined || value.theme !== undefined || value.allowProperNames !== undefined,
+    {
+      message: "The deck name or the deck theme is required",
+    },
+  );
 
 export async function GET(
   request: Request,

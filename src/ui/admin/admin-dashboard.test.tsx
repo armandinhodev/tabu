@@ -126,6 +126,29 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it("opts into proper-name objectives when creating a deck", async () => {
+    render(<AdminDashboard />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Crear mazo" }));
+    const form = screen.getByRole("tabpanel", { name: "Crear mazo" });
+    const checkbox = within(form).getByRole("checkbox", {
+      name: "Permitir nombres propios y títulos",
+    });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Series" } });
+    fireEvent.change(screen.getByLabelText("Temática e indicaciones"), {
+      target: { value: "Series" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Crear y generar" }));
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        url: "/api/admin/decks",
+        method: "POST",
+        body: { name: "Series", theme: "Series", allowProperNames: true },
+      }),
+    );
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
   it.each([800, 1200])(
     "submits %i cards from creation without splitting the browser request",
     async (count) => {

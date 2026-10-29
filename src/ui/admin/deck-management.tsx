@@ -19,6 +19,7 @@ export type AdminCardView = {
 
 /** Mazo administrable tal como lo ve el panel. */
 export type AdminDeckView = {
+  allowProperNames?: boolean;
   id: string;
   name: string;
   theme: string;
@@ -57,12 +58,14 @@ export function DeckManagement({ deck, busy, running, api, act, onArchived }: De
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [allowProperNames, setAllowProperNames] = useState(false);
 
   useEffect(() => {
     setName(deck?.name ?? "");
     setTheme(deck?.theme ?? "");
     setConfirming(false);
-  }, [deck?.id, deck?.name, deck?.theme]);
+    setAllowProperNames(deck?.allowProperNames ?? false);
+  }, [deck?.id, deck?.name, deck?.theme, deck?.allowProperNames]);
 
   if (deck === null) {
     return null;
@@ -79,7 +82,13 @@ export function DeckManagement({ deck, busy, running, api, act, onArchived }: De
       await api(`/api/admin/decks/${encodeURIComponent(current.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), theme: theme.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          theme: theme.trim(),
+          ...(allowProperNames || current.allowProperNames !== undefined
+            ? { allowProperNames }
+            : {}),
+        }),
       });
     });
   }
@@ -128,6 +137,15 @@ export function DeckManagement({ deck, busy, running, api, act, onArchived }: De
             required
             disabled={locked}
           />
+        </label>
+        <label className="flex items-center gap-2 md:col-span-2">
+          <input
+            type="checkbox"
+            checked={allowProperNames}
+            onChange={(event) => setAllowProperNames(event.target.checked)}
+            disabled={locked}
+          />
+          <span>Permitir nombres propios y títulos</span>
         </label>
         <p className="text-body-sm text-fg-muted md:col-span-2">
           La nueva temática se aplica a las próximas generaciones. Las cartas actuales no se

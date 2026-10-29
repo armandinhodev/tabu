@@ -81,6 +81,26 @@ describe.skipIf(mongoUri === undefined)("admin deck CRUD against a real Mongo", 
     }
   }
 
+  it("persists the optional proper-name mode and preserves legacy absence and existing cards", async () => {
+    const { service } = build();
+    const legacy = await service.createDeck({ name: "Legacy", theme: "General" });
+    expect(await service.getDeck(legacy.id)).not.toHaveProperty("allowProperNames");
+    const deck = await service.createDeck({
+      name: "Series",
+      theme: "Series",
+      allowProperNames: true,
+    });
+    expect(await service.getDeck(deck.id)).toHaveProperty("allowProperNames", true);
+    const cards = JSON.stringify(deck.cards);
+    await service.updateDeck(deck.id, { allowProperNames: false });
+    expect(await service.getDeck(deck.id)).toHaveProperty("allowProperNames", false);
+    expect((await AdminDeckModel.findById(deck.id).lean())?.allowProperNames).toBe(false);
+    expect(JSON.stringify((await service.getDeck(deck.id)).cards)).toBe(cards);
+    await service.archiveDeck(deck.id);
+    await service.restoreDeck(deck.id);
+    expect(await service.getDeck(deck.id)).toHaveProperty("allowProperNames", false);
+  });
+
   it("archives the deck keeping the public document as an empty tombstone", async () => {
     const { service, decks } = build();
     const created = await service.createDeck({ name: "Cocina", theme: "Comidas" });

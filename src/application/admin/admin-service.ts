@@ -69,6 +69,7 @@ export interface AdminServiceDeps {
 }
 
 export interface CreateDeckCommand {
+  readonly allowProperNames?: boolean | undefined;
   readonly name: string;
   readonly theme: string;
   readonly language?: AdminLanguage;
@@ -116,6 +117,9 @@ export class AdminService {
   }
 
   async createDeck(command: CreateDeckCommand): Promise<ManagedDeck> {
+    if (command.allowProperNames !== undefined && typeof command.allowProperNames !== "boolean") {
+      throw adminInvalid("The proper-name option must be a boolean");
+    }
     const name = command.name.trim();
     const theme = command.theme.trim();
     const language: AdminLanguage = command.language ?? "es";
@@ -145,6 +149,9 @@ export class AdminService {
       name,
       theme,
       language,
+      ...(command.allowProperNames === undefined
+        ? {}
+        : { allowProperNames: command.allowProperNames }),
       now: this.now(),
     });
   }
@@ -157,12 +164,19 @@ export class AdminService {
    */
   async updateDeck(
     id: string,
-    command: { readonly name?: string | undefined; readonly theme?: string | undefined },
+    command: {
+      readonly name?: string | undefined;
+      readonly theme?: string | undefined;
+      readonly allowProperNames?: boolean | undefined;
+    },
   ): Promise<ManagedDeck> {
     const hasName = command.name !== undefined;
     const hasTheme = command.theme !== undefined;
 
-    if (!hasName && !hasTheme) {
+    if (command.allowProperNames !== undefined && typeof command.allowProperNames !== "boolean") {
+      throw adminInvalid("The proper-name option must be a boolean");
+    }
+    if (!hasName && !hasTheme && command.allowProperNames === undefined) {
       throw adminInvalid("The deck name or the deck theme is required");
     }
 
@@ -197,6 +211,9 @@ export class AdminService {
       deckId: id,
       ...(name === undefined ? {} : { name }),
       ...(theme === undefined ? {} : { theme }),
+      ...(command.allowProperNames === undefined
+        ? {}
+        : { allowProperNames: command.allowProperNames }),
       now: this.now(),
     });
 

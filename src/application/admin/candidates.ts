@@ -51,6 +51,7 @@ export interface EvaluatedCard {
 }
 
 export interface EvaluateCardInput {
+  readonly allowProperNames?: boolean;
   readonly objective: string;
   readonly candidates: readonly string[];
   /** Palabras ya propuestas en el mazo (normalizadas): nunca se reutilizan. */
@@ -70,6 +71,10 @@ export interface EvaluateCardInput {
 export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): EvaluatedCard {
   const objective = input.objective.normalize("NFC").trim();
   const objectiveKey = normalizeWord(objective);
+  // Components are extracted independently of title punctuation and accents.
+  const components = new Set(
+    input.allowProperNames ? (objectiveKey.match(/[\p{L}\p{M}\p{N}]+/gu) ?? []) : [],
+  );
   const blocked = new Set((input.previouslyProposed ?? []).map(normalizeWord));
   const seen = new Set<string>();
   const evaluated: AdminCandidate[] = [];
@@ -88,7 +93,7 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
       continue;
     }
 
-    if (key === objectiveKey) {
+    if (key === objectiveKey || components.has(key)) {
       evaluated.push({
         word,
         recognized: spell.isRecognized(word),
@@ -140,14 +145,18 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
     .map((candidate) => candidate.word)
     .slice(0, SELECTED_TABOO_WORDS);
 
-  const objectiveStructural = isSingleWord(objective);
+  // Opt-in titles may contain spaces, numbers and ordinary title punctuation,
+  // but must contain a letter and must not contain controls or markup.
+  const objectiveStructural = input.allowProperNames
+    ? /\p{L}/u.test(objective) && /^[\p{L}\p{M}\p{N} \p{Pd}'’":;,.!?¡¿()&]+$/u.test(objective)
+    : isSingleWord(objective);
   const objectiveRecognized = objectiveStructural && spell.isRecognized(objective);
 
   const issues: CardIssue[] = [];
 
   if (!objectiveStructural) {
     issues.push("malformed_objective");
-  } else if (!objectiveRecognized) {
+  } else if (!objectiveRecognized && !input.allowProperNames) {
     issues.push("unknown_objective");
   }
 

@@ -70,6 +70,9 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         name: input.name,
         theme: input.theme,
         language: input.language,
+        ...(input.allowProperNames === undefined
+          ? {}
+          : { allowProperNames: input.allowProperNames }),
         revision: 1,
         cards: [],
         usedObjectives: [],
@@ -99,6 +102,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
    * las cartas ni toca sus hallazgos.
    */
   async updateMetadata(input: {
+    allowProperNames?: boolean;
     deckId: string;
     name?: string;
     theme?: string;
@@ -132,6 +136,9 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         },
         {
           $set: {
+            ...(input.allowProperNames === undefined
+              ? {}
+              : { allowProperNames: input.allowProperNames }),
             ...(input.name === undefined ? {} : { name: input.name }),
             ...(input.theme === undefined ? {} : { theme: input.theme }),
             // Sólo un renombrado entra en el índice de nombres reservados.

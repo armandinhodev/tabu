@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const input = z
   .object({
+    allowProperNames: z.boolean().optional(),
     name: z.string().trim().min(1).max(100),
     theme: z.string().trim().min(1).max(500),
   })

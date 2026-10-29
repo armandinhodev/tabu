@@ -65,6 +65,9 @@ export function toManagedCard(document: AdminCardDocument): ManagedCard {
 /** Convierte un mazo del documento al DTO. */
 export function toManagedDeck(document: AdminDeckDocument): ManagedDeck {
   return {
+    ...(document.allowProperNames === undefined
+      ? {}
+      : { allowProperNames: document.allowProperNames }),
     id: String(document._id),
     name: document.name,
     theme: document.theme,

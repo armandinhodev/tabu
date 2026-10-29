@@ -168,6 +168,7 @@ export async function getAdminDeck(id: string): Promise<ManagedDeck> {
 
 /** Crea un mazo administrable vacío. */
 export async function createAdminDeck(input: {
+  allowProperNames?: boolean | undefined;
   name: string;
   theme: string;
   language?: AdminLanguage;
@@ -183,7 +184,11 @@ export async function createAdminDeck(input: {
  */
 export async function updateAdminDeck(
   id: string,
-  input: { name?: string | undefined; theme?: string | undefined },
+  input: {
+    name?: string | undefined;
+    theme?: string | undefined;
+    allowProperNames?: boolean | undefined;
+  },
 ): Promise<ManagedDeck> {
   return runtime().service.updateDeck(id, input);
 }

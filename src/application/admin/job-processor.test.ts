@@ -99,6 +99,50 @@ function build() {
 }
 
 describe("processClaimedJob (batch flow)", () => {
+  it.each(["generate", "replace"] as const)(
+    "threads proper-name mode through %s and completion",
+    async (kind) => {
+      const { decks, provider, deps, claim } = build();
+      const deck = decks.seed({
+        id: "deck-1",
+        name: "Series",
+        theme: "Series",
+        ...{ allowProperNames: true },
+      });
+      deck.cards.push({
+        id: "old-card",
+        word: "fuego",
+        taboo: SIX_WORDS,
+        excluded: false,
+        manualOverride: false,
+        issues: [],
+        candidates: [],
+        createdAt: deck.createdAt,
+        updatedAt: deck.updatedAt,
+      });
+      provider.batchQueue.push([
+        { objective: "Juego de tronos", candidates: SIX_WORDS.slice(0, 3) },
+      ]);
+      provider.completionQueue.push(SIX_WORDS.slice(3));
+      await processClaimedJob(
+        deps,
+        claim(
+          buildJob({
+            kind,
+            requested: 1,
+            ...(kind === "replace" ? { targetCardId: "old-card" } : {}),
+          }),
+        ),
+      );
+      expect(provider.batchCalls[0]).toHaveProperty("allowProperNames", true);
+      expect(provider.completionCalls[0]).toHaveProperty("allowProperNames", true);
+      expect(deck.cards.find((card) => card.word === "Juego de tronos")).toMatchObject({
+        excluded: false,
+        issues: [],
+        taboo: SIX_WORDS,
+      });
+    },
+  );
   it.each([
     [50, 1],
     [51, 2],

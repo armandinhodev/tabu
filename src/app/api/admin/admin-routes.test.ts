@@ -69,6 +69,40 @@ beforeEach(() => {
 });
 
 describe("administrative HTTP boundary", () => {
+  it.each([true, false])(
+    "accepts the proper-name boolean %s on create and option-only edits",
+    async (allowProperNames) => {
+      mocks.create.mockResolvedValue({ id: deckId, allowProperNames });
+      mocks.update.mockResolvedValue({ id: deckId, allowProperNames });
+      const created = await create(
+        request("POST", { name: "Series", theme: "Series", allowProperNames }),
+      );
+      expect(created.status).toBe(201);
+      expect(await created.json()).toEqual({ data: { id: deckId, allowProperNames } });
+      expect(mocks.create).toHaveBeenCalledWith({
+        name: "Series",
+        theme: "Series",
+        allowProperNames,
+      });
+      const updated = await update(deckRequest("PATCH", { allowProperNames }), context);
+      expect(updated.status).toBe(200);
+      expect(await updated.json()).toEqual({ data: { id: deckId, allowProperNames } });
+      expect(mocks.update).toHaveBeenCalledWith(deckId, { allowProperNames });
+    },
+  );
+
+  it.each(["true", 1, null])(
+    "rejects non-boolean proper-name option %s before writing",
+    async (allowProperNames) => {
+      expect(
+        (await create(request("POST", { name: "Series", theme: "Series", allowProperNames })))
+          .status,
+      ).toBe(400);
+      expect((await update(deckRequest("PATCH", { allowProperNames }), context)).status).toBe(400);
+      expect(mocks.create).not.toHaveBeenCalled();
+      expect(mocks.update).not.toHaveBeenCalled();
+    },
+  );
   it.each([51, 800, 1200])("accepts a generation request for %i cards", async (count) => {
     mocks.generate.mockResolvedValue({ id: "job-1", status: "queued", requested: count });
     const response = await generate(request("POST", { count }), context);

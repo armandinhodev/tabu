@@ -92,6 +92,7 @@ export function AdminDashboard() {
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
+  const [allowProperNames, setAllowProperNames] = useState(false);
   const [count, setCount] = useState("5");
   const [onlyExcluded, setOnlyExcluded] = useState(false);
   const [activeTab, setActiveTab] = useState<"create" | "decks">("decks");
@@ -343,13 +344,18 @@ export function AdminDashboard() {
       const created = await api<DeckView>("/api/admin/decks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), theme: theme.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          theme: theme.trim(),
+          ...(allowProperNames ? { allowProperNames: true } : {}),
+        }),
       });
       setSelectedId(created.id);
       setDeck(created);
       setActiveTab("decks");
       setName("");
       setTheme("");
+      setAllowProperNames(false);
       trackJob(
         await api<JobView>(`/api/admin/decks/${encodeURIComponent(created.id)}/generate`, {
           method: "POST",
@@ -525,6 +531,15 @@ export function AdminDashboard() {
               disabled={busy}
               placeholder="Ejemplo: deportes para público general, sin nombres propios"
             />
+          </label>
+          <label className="flex items-center gap-2 md:col-span-2">
+            <input
+              type="checkbox"
+              checked={allowProperNames}
+              onChange={(event) => setAllowProperNames(event.target.checked)}
+              disabled={busy}
+            />
+            <span>Permitir nombres propios y títulos</span>
           </label>
           <p className="text-body-sm text-fg-muted md:col-span-2">
             La generación consume la API configurada en el servidor. Se procesa en lotes de hasta{" "}

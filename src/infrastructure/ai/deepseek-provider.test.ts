@@ -52,6 +52,29 @@ function promptOf(calls: { init: RequestInit }[]): string {
 }
 
 describe("createDeepSeekProvider", () => {
+  it("changes objective instructions only for an enabled deck and excludes title components", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+    await provider.proposeCards({
+      theme: "Series",
+      count: 1,
+      excludedObjectives: [],
+      ...{ allowProperNames: true },
+    });
+    expect(promptOf(calls)).toContain("nombres propios y títulos");
+    expect(promptOf(calls)).not.toContain("de cuatro a doce letras");
+    expect(promptOf(calls)).toContain("partes del objetivo");
+    calls.length = 0;
+    await provider.proposeCandidates({
+      theme: "Series",
+      objective: "Juego de tronos",
+      previousWords: [],
+      selected: [],
+      rejected: [],
+      ...{ allowProperNames: true },
+    });
+    expect(promptOf(calls)).toContain("partes del objetivo");
+  });
   it("preserves an explicit output-token override for initial and completion requests", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
     const provider = createDeepSeekProvider({

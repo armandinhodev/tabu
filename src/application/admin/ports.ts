@@ -37,6 +37,7 @@ export interface ClaimedJob {
 
 /** Datos para crear un mazo administrable. */
 export interface CreateDeckInput {
+  readonly allowProperNames?: boolean;
   readonly id: string;
   readonly name: string;
   readonly theme: string;
@@ -146,6 +147,7 @@ export interface GenerationProvider {
    * prohibidas de cada carta.
    */
   proposeCards(input: {
+    readonly allowProperNames?: boolean;
     readonly theme: string;
     readonly count: number;
     /** Objetivos ya usados en el mazo (normalizados): hay que evitarlos. */
@@ -157,6 +159,7 @@ export interface GenerationProvider {
    * usa cuando la carta todavía no tiene seis palabras válidas.
    */
   proposeCandidates(input: {
+    readonly allowProperNames?: boolean;
     readonly objective: string;
     readonly theme: string;
     /** Propuestas anteriores de ESA carta (incluye las descartadas). */
@@ -183,6 +186,7 @@ export interface AdminDeckStore {
    * active job and with 409 when the new name is already reserved.
    */
   updateMetadata(input: {
+    readonly allowProperNames?: boolean;
     readonly deckId: string;
     readonly name?: string | undefined;
     readonly theme?: string | undefined;

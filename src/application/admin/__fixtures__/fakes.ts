@@ -77,11 +77,13 @@ export class FakeSpellChecker implements SpellChecker {
 export class FakeProvider implements GenerationProvider {
   available = true;
   readonly batchCalls: {
+    allowProperNames?: boolean;
     theme: string;
     count: number;
     excludedObjectives: readonly string[];
   }[] = [];
   readonly completionCalls: {
+    allowProperNames?: boolean;
     objective: string;
     previousWords: readonly string[];
     selected: readonly string[];
@@ -94,12 +96,14 @@ export class FakeProvider implements GenerationProvider {
   completionError: unknown = null;
 
   async proposeCards(input: {
+    allowProperNames?: boolean;
     theme: string;
     count: number;
     excludedObjectives: readonly string[];
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
     this.batchCalls.push({
+      ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       theme: input.theme,
       count: input.count,
       excludedObjectives: [...input.excludedObjectives],
@@ -115,6 +119,7 @@ export class FakeProvider implements GenerationProvider {
   }
 
   async proposeCandidates(input: {
+    allowProperNames?: boolean;
     objective: string;
     previousWords: readonly string[];
     selected: readonly string[];
@@ -122,6 +127,7 @@ export class FakeProvider implements GenerationProvider {
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ candidates: readonly string[] }>> {
     this.completionCalls.push({
+      ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       objective: input.objective,
       previousWords: [...input.previousWords],
       selected: [...input.selected],
@@ -139,6 +145,7 @@ export class FakeProvider implements GenerationProvider {
 }
 
 interface FakeDeck {
+  allowProperNames?: boolean;
   id: string;
   name: string;
   theme: string;
@@ -164,6 +171,9 @@ export class FakeDeckStore implements AdminDeckStore {
 
   seed(partial: Partial<ManagedDeck> & { id: string; name: string; theme: string }): FakeDeck {
     const deck: FakeDeck = {
+      ...(partial.allowProperNames === undefined
+        ? {}
+        : { allowProperNames: partial.allowProperNames }),
       id: partial.id,
       name: partial.name,
       theme: partial.theme,
@@ -203,12 +213,14 @@ export class FakeDeckStore implements AdminDeckStore {
       name: input.name,
       theme: input.theme,
       language: input.language,
+      ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       createdAt: input.now,
       updatedAt: input.now,
     });
   }
 
   async updateMetadata(input: {
+    allowProperNames?: boolean;
     deckId: string;
     name?: string;
     theme?: string;
@@ -241,6 +253,9 @@ export class FakeDeckStore implements AdminDeckStore {
       deck.theme = input.theme;
     }
 
+    if (input.allowProperNames !== undefined) {
+      deck.allowProperNames = input.allowProperNames;
+    }
     deck.revision += 1;
     deck.updatedAt = input.now;
 
