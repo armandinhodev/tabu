@@ -522,44 +522,49 @@ describe("admin progress socket", () => {
     expect(events.map((event) => event.job.id)).toEqual(["job-b"]);
   }, 30_000);
 
-  it("refuses the snapshot when the credentials change while the read is pending", async () => {
-    let resolveJob!: (job: AdminJob | null) => void;
-    let markReadStarted!: () => void;
-    const readStarted = new Promise<void>((resolve) => {
-      markReadStarted = resolve;
-    });
-    const pending = new Promise<AdminJob | null>((resolve) => {
-      resolveJob = resolve;
-    });
+  it.each(["credential rotation", "session expiry"] as const)(
+    "refuses the pending snapshot after %s",
+    async (invalidation) => {
+      let resolveJob!: (job: AdminJob | null) => void;
+      let markReadStarted!: () => void;
+      const readStarted = new Promise<void>((resolve) => {
+        markReadStarted = resolve;
+      });
+      const pending = new Promise<AdminJob | null>((resolve) => {
+        resolveJob = resolve;
+      });
 
-    await harness.close();
-    harness = await startHarness({
-      getJob: () => {
-        markReadStarted();
-        return pending;
-      },
-    });
+      await harness.close();
+      harness = await startHarness({
+        getJob: () => {
+          markReadStarted();
+          return pending;
+        },
+      });
 
-    const config = readAdminConfig(process.env);
-    const token = createAdminSession(config!, harness.clock.now).token;
-    const admin = adminClient(harness, { token });
+      const config = readAdminConfig(process.env);
+      const token = createAdminSession(config!, harness.clock.now).token;
+      const admin = adminClient(harness, { token });
 
-    await waitForConnect(admin);
+      await waitForConnect(admin);
 
-    const ack = emitAck<AdminSubscribeAck>(admin, ADMIN_SUBSCRIBE_EVENT, { jobId: "job-1" });
+      const ack = emitAck<AdminSubscribeAck>(admin, ADMIN_SUBSCRIBE_EVENT, { jobId: "job-1" });
 
-    await readStarted;
+      await readStarted;
 
-    // The administrator credentials are rotated while the read is pending.
-    process.env.ADMIN_PASSWORD = "rotated-password";
+      // Preserve the independent verifier's deferred-read expiry probe.
+      if (invalidation === "credential rotation") process.env.ADMIN_PASSWORD = "rotated-password";
+      else harness.clock.now += 9 * 60 * 60 * 1000;
 
-    resolveJob(job({ id: "job-1", status: "running", processed: 1 }));
+      resolveJob(job({ id: "job-1", status: "running", processed: 1 }));
 
-    const response = await ack;
+      const response = await ack;
 
-    expect(response).toMatchObject({ ok: false, error: { code: "admin_unauthorized" } });
-    expect(JSON.stringify(response)).not.toContain("job-1");
-  }, 30_000);
+      expect(response).toMatchObject({ ok: false, error: { code: "admin_unauthorized" } });
+      expect(JSON.stringify(response)).not.toContain("job-1");
+    },
+    30_000,
+  );
 
   it("closes only its own namespace and leaves the shared server open", async () => {
     const config = readAdminConfig(process.env);
