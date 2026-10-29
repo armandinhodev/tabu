@@ -59,4 +59,31 @@ describe("parseEnv", () => {
 
     expect(Object.isFrozen(env)).toBe(true);
   });
+
+  it("keeps administration optional for the existing game server", () => {
+    const env = parseEnv(MINIMAL);
+
+    expect(env.ADMIN_USERNAME).toBeUndefined();
+    expect(env.ADMIN_PASSWORD).toBeUndefined();
+    expect(env.ADMIN_SESSION_SECRET).toBeUndefined();
+    expect(env.DEEPSEEK_API_KEY).toBeUndefined();
+    expect(env.PORT).toBe(3000);
+    expect(env.MONGODB_DB).toBe("tabu");
+  });
+
+  it("accepts server-only admin and generation configuration without changing secret bytes", () => {
+    const env = parseEnv({
+      ...MINIMAL,
+      ADMIN_USERNAME: "administrator",
+      ADMIN_PASSWORD: " password with spaces ",
+      ADMIN_SESSION_SECRET: "test-session-secret-that-is-at-least-32-characters",
+      DEEPSEEK_API_KEY: "test-provider-key",
+    });
+
+    expect(env.ADMIN_USERNAME).toBe("administrator");
+    expect(env.ADMIN_PASSWORD).toBe(" password with spaces ");
+    expect(env.ADMIN_SESSION_SECRET).toBe("test-session-secret-that-is-at-least-32-characters");
+    expect(env.DEEPSEEK_API_KEY).toBe("test-provider-key");
+    expect(Object.isFrozen(env)).toBe(true);
+  });
 });

@@ -40,6 +40,21 @@ export async function adminResponse(
     );
   } catch (error) {
     const failureStatus = safeStatus(error);
+    const knownCodes: Record<string, string> = {
+      name_taken: "Ya existe un mazo con ese nombre.",
+      not_enough_words: "La carta necesita seis prohibidas antes de poder habilitarse.",
+      provider_unavailable: "Configura DEEPSEEK_API_KEY en el servidor para generar cartas.",
+      mongo_unavailable: "MongoDB no está disponible. Actualiza antes de reintentar.",
+      job_in_progress: "Este mazo ya tiene una generación o un reemplazo en curso.",
+    };
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      Object.hasOwn(knownCodes, error.code)
+        ? error.code
+        : undefined;
     const messages: Record<number, string> = {
       400: "Revisa los datos ingresados.",
       401: "Inicia sesión para continuar.",
@@ -51,7 +66,7 @@ export async function adminResponse(
       503: "El servicio no está disponible. Revisa MongoDB y la configuración del servidor.",
     };
     return Response.json(
-      { error: messages[failureStatus] },
+      { error: code ? knownCodes[code] : messages[failureStatus], ...(code ? { code } : {}) },
       {
         status: failureStatus,
         headers: { "Cache-Control": "no-store" },

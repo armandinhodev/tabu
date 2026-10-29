@@ -45,6 +45,11 @@ async function main(): Promise<void> {
     },
   });
 
+  const { isAdminConfigured } = await import("./src/infrastructure/auth/admin-auth");
+  const adminWorker = isAdminConfigured()
+    ? await (await import("./src/infrastructure/admin/runtime")).startAdminWorker()
+    : null;
+
   let shuttingDown = false;
 
   const shutdown = async (signal: string): Promise<void> => {
@@ -56,6 +61,7 @@ async function main(): Promise<void> {
 
     try {
       await appServer.close();
+      await adminWorker?.stop();
       await runtime.dispose();
       process.exit(0);
     } catch (error) {

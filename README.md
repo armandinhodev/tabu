@@ -75,6 +75,41 @@ docker stop tabu-app
 La imagen incluye `tsx` y el árbol instalado del lockfile porque el servidor personalizado ejecuta
 TypeScript en producción. No usa `next start` ni el servidor standalone, que omitirían Socket.IO.
 
+### Panel de administración
+
+El panel está en `/admin`. Los mazos creados desde allí se administran por separado de los tres
+mazos originales; las partidas que ya comenzaron conservan sus cartas.
+
+Configurar estas variables únicamente en el servidor, en `.env` o en el entorno del contenedor:
+
+| Variable               | Uso                                                               |
+| ---------------------- | ----------------------------------------------------------------- |
+| `ADMIN_USERNAME`       | Usuario del administrador.                                        |
+| `ADMIN_PASSWORD`       | Contraseña larga y exclusiva para este panel.                     |
+| `ADMIN_SESSION_SECRET` | Secreto aleatorio de al menos 32 caracteres para firmar sesiones. |
+| `DEEPSEEK_API_KEY`     | Clave de DeepSeek para generar cartas y reemplazos.               |
+
+Sin las tres variables de acceso, la administración permanece deshabilitada; el juego sigue
+funcionando. Las claves nunca se envían al navegador. En producción, servir el panel mediante
+HTTPS para que el navegador envíe la cookie segura de sesión. Cambiar credenciales o secreto
+invalida las sesiones anteriores.
+
+Desde el panel se indica nombre, temática y cantidad de cartas (1–50 por trabajo). DeepSeek Flash
+propone hasta 12 candidatas ordenadas por objetivo, en lotes iniciales de cinco cartas. El servidor
+descarta frases y duplicados, verifica la ortografía sobre el texto original con `nspell` y conserva
+las primeras seis prohibidas válidas. No usa Jev, puntuaciones mínimas ni cortes de confianza.
+
+Las cartas dudosas o incompletas quedan excluidas automáticamente. El administrador puede ver
+las advertencias, habilitar explícitamente una carta con seis prohibidas o pedir un reemplazo
+automático. La habilitación manual no elimina los hallazgos del diccionario. Una palabra desconocida
+puede ser un regionalismo; el corrector no verifica significado ni garantiza calidad editorial.
+
+Generar y reemplazar consume la API de DeepSeek. Los trabajos se guardan en MongoDB, tienen
+límites de intentos y se procesan desde el servidor personalizado; no iniciar con `next start`.
+El panel muestra progreso y errores, y conserva lo completado si una llamada falla. Los reemplazos
+se solicitan por carta y no cambian las partidas en curso. Las pruebas automatizadas usan un
+proveedor simulado, no llamadas pagas.
+
 ### Si ves una pantalla en blanco con `invariant expected layout router to be mounted`
 
 Es un `.next` mezclado: `next build` y `next dev` escriben en la misma carpeta y el segundo arranque
