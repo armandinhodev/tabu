@@ -94,6 +94,20 @@ describe("GET /api/admin/auth", () => {
 });
 
 describe("POST /api/admin/auth", () => {
+  it("logs in through the public Host when Next uses the wildcard bind address", async () => {
+    stubAdminEnv();
+    const response = await POST(
+      new Request("http://0.0.0.0:3000/api/admin/auth", {
+        method: "POST",
+        headers: { host: "localhost:3000", origin: APP_ORIGIN, "content-type": "application/json" },
+        body: JSON.stringify({ username: ADMIN_USERNAME, password: ADMIN_PASSWORD }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ authenticated: true });
+    expect(sessionCookieHeaderOf(response)).toContain("HttpOnly");
+  });
+
   it("rejects a login without an origin header", async () => {
     stubAdminEnv();
 

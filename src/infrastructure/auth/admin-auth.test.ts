@@ -205,6 +205,50 @@ describe("admin session token", () => {
 });
 
 describe("same origin protection", () => {
+  it("uses the HTTP Host rather than Next's bind-address URL", () => {
+    for (const host of ["localhost:3000", "127.0.0.1:3000", "[::1]:3000"]) {
+      expect(
+        isSameOriginRequest(
+          buildRequest({
+            url: "http://0.0.0.0:3000/api/admin/auth",
+            headers: { host, origin: `http://${host}` },
+          }),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("does not trust forwarded hosts or the bind origin over the HTTP Host", () => {
+    for (const origin of ["http://evil.example", "http://0.0.0.0:3000", "https://localhost:3000"]) {
+      expect(
+        isSameOriginRequest(
+          buildRequest({
+            url: "http://0.0.0.0:3000/api/admin/auth",
+            headers: { host: "localhost:3000", origin, "x-forwarded-host": "evil.example" },
+          }),
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it("fails closed for malformed HTTP authorities", () => {
+    for (const host of [
+      "",
+      "user@localhost:3000",
+      "localhost:3000/path",
+      "localhost:3000,evil.example",
+      "localhost:3000?x",
+    ]) {
+      expect(
+        isSameOriginRequest(
+          buildRequest({
+            headers: { host, origin: APP_ORIGIN },
+          }),
+        ),
+      ).toBe(false);
+    }
+  });
+
   it("accepts only an origin equal to the request origin", () => {
     expect(isSameOriginRequest(buildRequest({ headers: { origin: APP_ORIGIN } }))).toBe(true);
   });

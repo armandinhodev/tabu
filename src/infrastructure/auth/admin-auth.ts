@@ -306,7 +306,20 @@ export function isSameOriginRequest(request: Request): boolean {
     return false;
   }
 
-  const expected = normalizeOrigin(request.url);
+  // Next's URL uses the listening hostname (often 0.0.0.0), not the public host.
+  // Forwarded authorities are deliberately not trusted without a proxy policy.
+  const host = request.headers.get("host");
+  let expected = normalizeOrigin(request.url);
+  if (host !== null) {
+    if (host.length === 0 || /[\s,/@\\?#]/u.test(host)) return false;
+    try {
+      const url = new URL(request.url);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+      expected = new URL(`${url.protocol}//${host}`).origin;
+    } catch {
+      return false;
+    }
+  }
   const provided = normalizeOrigin(header);
 
   return expected !== null && provided !== null && expected === provided;
