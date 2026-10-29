@@ -1,0 +1,172 @@
+import { Types } from "mongoose";
+
+import { AdminService } from "../../application/admin/admin-service";
+import type { AdminJobLimits } from "../../application/admin/ports";
+import type {
+  AdminJob,
+  AdminLanguage,
+  ManagedCard,
+  ManagedDeck,
+} from "../../application/admin/types";
+import { logger } from "../config/logger";
+import { createDeepSeekProvider } from "../ai/deepseek-provider";
+import { MongoAdminDeckStore } from "../db/admin/repositories/MongoAdminDeckStore";
+import { MongoAdminJobStore } from "../db/admin/repositories/MongoAdminJobStore";
+import { loadSpanishSpellChecker } from "../spelling/spanish-spell-checker";
+import { AdminWorker } from "./worker";
+
+/**
+ * Fachada del panel de administración.
+ *
+ * El servidor la usa así:
+ *
+ * ```ts
+ * const adminWorker = startAdminWorker();      // después de crear el runtime
+ * ...
+ * await adminWorker.stop();                    // antes de cerrar Mongo
+ * ```
+ *
+ * El worker nunca arranca solo: ni al importar el módulo ni durante el build
+ * de Next.
+ */
+
+/**
+ * Límites base de los trabajos administrativos. El presupuesto de llamadas e
+ * intentos se calcula POR TRABAJO a partir de la cantidad pedida (ver
+ * `jobLimitsFor`): lotes normales + reintentos de lote corto + un completion
+ * por carta como máximo.
+ */
+export const DEFAULT_ADMIN_LIMITS: AdminJobLimits = {
+  maxCalls: 20,
+  maxAttempts: 3,
+  batchSize: 5,
+  leaseMs: 60_000,
+};
+
+/** Espera entre reclamos cuando no hay trabajo. */
+export const DEFAULT_ADMIN_POLL_INTERVAL_MS = 2_000;
+
+export interface AdminRuntimeOptions {
+  /** Clave del proveedor. Si no se pasa, se lee `DEEPSEEK_API_KEY`. */
+  readonly apiKey?: string | undefined;
+  /** Límites de los trabajos. */
+  readonly limits?: AdminJobLimits;
+  /** Espera entre reclamos. */
+  readonly pollIntervalMs?: number;
+}
+
+export interface AdminWorkerHandle {
+  stop(): Promise<void>;
+}
+
+interface AdminRuntime {
+  readonly service: AdminService;
+  readonly worker: AdminWorker;
+}
+
+let options: AdminRuntimeOptions = {};
+let instance: AdminRuntime | null = null;
+
+/** Configura el runtime administrativo (lo llama el servidor al arrancar). */
+export function configureAdminRuntime(next: AdminRuntimeOptions): void {
+  options = { ...options, ...next };
+  instance = null;
+}
+
+/** Descarta el runtime configurado (lo usan los tests). */
+export function resetAdminRuntime(): void {
+  options = {};
+  instance = null;
+}
+
+function runtime(): AdminRuntime {
+  if (instance !== null) {
+    return instance;
+  }
+
+  const apiKey = options.apiKey ?? process.env.DEEPSEEK_API_KEY ?? "";
+  const limits = options.limits ?? DEFAULT_ADMIN_LIMITS;
+  const decks = new MongoAdminDeckStore();
+  const jobs = new MongoAdminJobStore();
+  const provider = createDeepSeekProvider({ apiKey });
+  const clock = { now: (): Date => new Date() };
+  const ids = { next: (): string => new Types.ObjectId().toString() };
+
+  const service = new AdminService({ decks, jobs, provider, clock, ids, limits });
+
+  const worker = new AdminWorker({
+    jobs,
+    decks,
+    provider,
+    loadSpell: loadSpanishSpellChecker,
+    clock,
+    ids,
+    log: logger,
+    limits,
+    owner: `admin-worker-${process.pid}`,
+    pollIntervalMs: options.pollIntervalMs ?? DEFAULT_ADMIN_POLL_INTERVAL_MS,
+  });
+
+  instance = { service, worker };
+
+  return instance;
+}
+
+/** Lista los mazos administrables. */
+export async function listAdminDecks(): Promise<readonly ManagedDeck[]> {
+  return runtime().service.listDecks();
+}
+
+/** Devuelve un mazo administrable. Falla con 404 si no existe. */
+export async function getAdminDeck(id: string): Promise<ManagedDeck> {
+  return runtime().service.getDeck(id);
+}
+
+/** Crea un mazo administrable vacío. */
+export async function createAdminDeck(input: {
+  name: string;
+  theme: string;
+  language?: AdminLanguage;
+}): Promise<ManagedDeck> {
+  return runtime().service.createDeck(input);
+}
+
+/** Encola la generación de un lote de cartas. Falla con 409 si hay un trabajo activo. */
+export async function queueGeneration(deckId: string, input: { count: number }): Promise<AdminJob> {
+  return runtime().service.queueGeneration(deckId, input.count);
+}
+
+/** Excluye o incluye una carta a mano. */
+export async function setCardExcluded(
+  deckId: string,
+  cardId: string,
+  excluded: boolean,
+): Promise<ManagedCard> {
+  return runtime().service.setCardExcluded(deckId, cardId, excluded);
+}
+
+/** Encola el reemplazo de una carta por un objetivo nuevo. */
+export async function queueReplacement(deckId: string, cardId: string): Promise<AdminJob> {
+  return runtime().service.queueReplacement(deckId, cardId);
+}
+
+/** Devuelve el estado de un trabajo. Falla con 404 si no existe. */
+export async function getAdminJob(id: string): Promise<AdminJob> {
+  return runtime().service.getJob(id);
+}
+
+/**
+ * Arranca el worker administrativo. Devuelve el manejador para detenerlo:
+ * hay que detenerlo antes de cerrar la conexión de Mongo.
+ */
+export function startAdminWorker(): AdminWorkerHandle {
+  const current = runtime();
+
+  current.worker.start();
+
+  return {
+    stop: async () => {
+      await current.worker.stop();
+    },
+  };
+}
