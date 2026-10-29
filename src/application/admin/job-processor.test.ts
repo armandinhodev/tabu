@@ -99,15 +99,20 @@ function build() {
 }
 
 describe("processClaimedJob (batch flow)", () => {
-  it.each(["generate", "replace"] as const)(
-    "threads proper-name mode through %s and completion",
-    async (kind) => {
+  it.each([
+    ["generate", true],
+    ["replace", true],
+    ["generate", false],
+    ["replace", false],
+  ] as const)(
+    "threads proper-name mode through %s and completion when enabled=%s",
+    async (kind, allowProperNames) => {
       const { decks, provider, deps, claim } = build();
       const deck = decks.seed({
         id: "deck-1",
         name: "Series",
         theme: "Series",
-        ...{ allowProperNames: true },
+        allowProperNames,
       });
       deck.cards.push({
         id: "old-card",
@@ -134,11 +139,16 @@ describe("processClaimedJob (batch flow)", () => {
           }),
         ),
       );
-      expect(provider.batchCalls[0]).toHaveProperty("allowProperNames", true);
-      expect(provider.completionCalls[0]).toHaveProperty("allowProperNames", true);
+      if (allowProperNames) {
+        expect(provider.batchCalls[0]).toHaveProperty("allowProperNames", true);
+        expect(provider.completionCalls[0]).toHaveProperty("allowProperNames", true);
+      } else {
+        expect(provider.batchCalls[0]).not.toHaveProperty("allowProperNames");
+        expect(provider.completionCalls[0]).not.toHaveProperty("allowProperNames");
+      }
       expect(deck.cards.find((card) => card.word === "Juego de tronos")).toMatchObject({
-        excluded: false,
-        issues: [],
+        excluded: !allowProperNames,
+        issues: allowProperNames ? [] : ["malformed_objective"],
         taboo: SIX_WORDS,
       });
     },
