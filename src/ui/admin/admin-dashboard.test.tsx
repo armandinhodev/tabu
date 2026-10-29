@@ -126,6 +126,61 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it("paginates cards in fifty-card pages without reconnecting progress", async () => {
+    catalog = [
+      {
+        ...deck,
+        cards: Array.from({ length: 101 }, (_, index) => ({
+          ...card,
+          id: `card-${index + 1}`,
+          word: `Word ${index + 1}`,
+        })),
+      },
+    ];
+    render(<AdminDashboard />);
+    expect(await screen.findByRole("heading", { name: "Word 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Word 51" })).not.toBeInTheDocument();
+    expect(screen.getByText("Página 1 de 3")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    expect(screen.getByRole("heading", { name: "Word 51" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Word 1" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    expect(screen.getByRole("heading", { name: "Word 101" })).toBeVisible();
+    expect(screen.getByText("Mostrando 101–101 de 101 cartas")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Siguiente" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Anterior" }));
+    expect(screen.getByText("Página 2 de 3")).toBeVisible();
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("filters before paginating and resets the page when the filter or deck changes", async () => {
+    catalog = [
+      {
+        ...deck,
+        cards: Array.from({ length: 51 }, (_, index) => ({
+          ...card,
+          id: `card-${index}`,
+          word: `Word ${index}`,
+          excluded: index === 50,
+        })),
+      },
+      { ...deck, id: "other", name: "Other deck" },
+    ];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "Word 0" });
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Solo excluidas" }));
+    expect(screen.getByText("Página 1 de 1")).toBeVisible();
+    expect(screen.getByText("Mostrando 1–1 de 1 cartas")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Word 50" })).toBeVisible();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Solo excluidas" }));
+    expect(screen.getByText("Página 1 de 2")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    fireEvent.click(screen.getByRole("button", { name: /Other deck/ }));
+    expect(await screen.findByRole("heading", { name: "jaula" })).toBeVisible();
+    expect(screen.getByText("Página 1 de 1")).toBeVisible();
+  });
   it("clears a permanently deleted deck even when archived decks are visible", async () => {
     catalog = [archivedDeck];
     render(<AdminDashboard />);

@@ -95,6 +95,8 @@ export function AdminDashboard() {
   const [allowProperNames, setAllowProperNames] = useState(false);
   const [count, setCount] = useState("5");
   const [onlyExcluded, setOnlyExcluded] = useState(false);
+  const [cardsPage, setCardsPage] = useState(1);
+  useEffect(() => setCardsPage(1), [selectedId, onlyExcluded]);
   const [activeTab, setActiveTab] = useState<"create" | "decks">("decks");
   const [showArchived, setShowArchived] = useState(false);
   const tabRefs = useRef<Partial<Record<"create" | "decks", HTMLButtonElement | null>>>({});
@@ -381,7 +383,12 @@ export function AdminDashboard() {
 
   const running = job?.status === "queued" || job?.status === "running";
   const cards = deck?.cards ?? [];
-  const visibleCards = onlyExcluded ? cards.filter((card) => card.excluded) : cards;
+  const filteredCards = onlyExcluded ? cards.filter((card) => card.excluded) : cards;
+  const cardsPerPage = 50;
+  const totalPages = Math.max(1, Math.ceil(filteredCards.length / cardsPerPage));
+  const currentPage = Math.min(cardsPage, totalPages);
+  const pageStart = (currentPage - 1) * cardsPerPage;
+  const visibleCards = filteredCards.slice(pageStart, pageStart + cardsPerPage);
   const archived = deck?.archivedAt !== undefined;
 
   if (auth === "loading")
@@ -736,6 +743,39 @@ export function AdminDashboard() {
                 No hay cartas para mostrar. El progreso se actualiza automáticamente durante la
                 generación.
               </p>
+            )}
+            {deck && filteredCards.length > 0 && (
+              <nav
+                aria-label="Paginación de cartas"
+                className="flex flex-wrap items-center justify-between gap-3"
+              >
+                <p className="text-body-sm text-fg-muted" aria-live="polite">
+                  Mostrando {pageStart + 1}–
+                  {Math.min(pageStart + cardsPerPage, filteredCards.length)} de{" "}
+                  {filteredCards.length} cartas
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    onClick={() => setCardsPage(currentPage - 1)}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-body-sm">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCardsPage(currentPage + 1)}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </nav>
             )}
             <div className="grid gap-4 xl:grid-cols-2">
               {visibleCards.map((card) => (
