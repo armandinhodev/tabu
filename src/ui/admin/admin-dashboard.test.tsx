@@ -13,6 +13,25 @@ vi.mock("./login/admin-login", () => ({
   ),
 }));
 
+interface AdminSocketHandlersMock {
+  onJob: (job: unknown) => void;
+  onState?: (state: string) => void;
+  onError?: (message: string) => void;
+}
+
+const socketMock = vi.hoisted(() => ({
+  handlers: null as AdminSocketHandlersMock | null,
+  subscribe: vi.fn(),
+  disconnect: vi.fn(),
+}));
+
+vi.mock("@/ui/lib/admin-socket", () => ({
+  createAdminSocket: vi.fn((handlers: AdminSocketHandlersMock) => {
+    socketMock.handlers = handlers;
+    return { subscribe: socketMock.subscribe, disconnect: socketMock.disconnect };
+  }),
+}));
+
 import { AdminDashboard } from "./admin-dashboard";
 
 const card = {
@@ -27,12 +46,25 @@ const deck = { id: "deck-1", name: "General", theme: "General", cards: [card] };
 let authenticated: boolean;
 let configured: boolean;
 let requests: { url: string; method: string; body: unknown }[];
+let jobPayload: Record<string, unknown>;
+let deferJobResponse: boolean;
+let resolveJobResponse: ((response: Response) => void) | null;
+
+function jobRequests(): number {
+  return requests.filter((request) => request.url.includes("/api/admin/jobs/")).length;
+}
 
 beforeEach(() => {
   authenticated = true;
   configured = true;
   requests = [];
+  jobPayload = { id: "job-1", status: "completed", processed: 5, requested: 5 };
+  deferJobResponse = false;
+  resolveJobResponse = null;
   sessionStorage.clear();
+  socketMock.handlers = null;
+  socketMock.subscribe.mockClear();
+  socketMock.disconnect.mockClear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -46,10 +78,14 @@ beforeEach(() => {
       if (url === "/api/admin/decks" && method === "POST")
         return Response.json({ data: { ...deck, id: "deck-2", name: "Sports" } });
       if (url === "/api/admin/decks") return Response.json({ data: [deck] });
-      if (url.includes("/jobs/"))
-        return Response.json({
-          data: { id: "job-1", status: "completed", processed: 5, requested: 5 },
-        });
+      if (url.includes("/jobs/")) {
+        if (deferJobResponse) {
+          return new Promise<Response>((resolve) => {
+            resolveJobResponse = resolve;
+          });
+        }
+        return Response.json({ data: jobPayload });
+      }
       return Response.json({ data: deck });
     }),
   );
@@ -57,6 +93,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -138,5 +175,182 @@ describe("AdminDashboard", () => {
 
     expect(await screen.findByRole("heading", { name: "jaula" })).toBeInTheDocument();
     expect(sessionStorage.getItem("tabu:admin-job")).toBeNull();
+  });
+
+  it("subscribes to the remembered job and shows the progress pushed by the socket", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    await waitFor(() => expect(socketMock.subscribe).toHaveBeenCalledWith("job-1"));
+
+    socketMock.handlers?.onJob({
+      id: "job-1",
+      deckId: "deck-1",
+      kind: "generate",
+      status: "running",
+      requested: 5,
+      processed: 3,
+      inputTokens: 1,
+      outputTokens: 2,
+      updatedAt: "2026-10-29T12:00:30.000Z",
+    });
+
+    expect(await screen.findByText(/3\/5 cartas/)).toBeInTheDocument();
+  });
+
+  it("does not poll the job API while the socket delivers the progress", async () => {
+    jobPayload = { id: "job-1", status: "running", processed: 2, requested: 5 };
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    await waitFor(() => expect(socketMock.subscribe).toHaveBeenCalledWith("job-1"));
+    const before = jobRequests();
+
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+
+    expect(jobRequests()).toBe(before);
+  });
+
+  it("refreshes the deck when the progress advances", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    await waitFor(() => expect(socketMock.subscribe).toHaveBeenCalledWith("job-1"));
+    const before = requests.filter((request) => request.url === "/api/admin/decks").length;
+
+    socketMock.handlers?.onJob({
+      id: "job-1",
+      deckId: "deck-1",
+      kind: "generate",
+      status: "running",
+      requested: 5,
+      processed: 1,
+      inputTokens: 1,
+      outputTokens: 2,
+      updatedAt: "2026-10-29T12:00:30.000Z",
+    });
+
+    await waitFor(() =>
+      expect(
+        requests.filter((request) => request.url === "/api/admin/decks").length,
+      ).toBeGreaterThan(before),
+    );
+  });
+
+  it("shows the reconnecting state without dropping the tracked job", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    socketMock.handlers?.onState?.("reconnecting");
+
+    expect(await screen.findByText(/Reconectando/)).toBeInTheDocument();
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("refreshes the deck and the job after a reconnection", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    const before = requests.filter((request) => request.url === "/api/admin/decks").length;
+
+    socketMock.handlers?.onState?.("reconnecting");
+    socketMock.handlers?.onState?.("connected");
+
+    await waitFor(() =>
+      expect(
+        requests.filter((request) => request.url === "/api/admin/decks").length,
+      ).toBeGreaterThan(before),
+    );
+  });
+
+  it("clears the private panel and disconnects when the session is no longer valid", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    socketMock.handlers?.onState?.("unauthorized");
+
+    expect(await screen.findByText("Login required")).toBeInTheDocument();
+    await waitFor(() => expect(socketMock.disconnect).toHaveBeenCalled());
+    expect(screen.queryByRole("heading", { name: "jaula" })).not.toBeInTheDocument();
+  });
+
+  it("disconnects the admin socket when the administrator logs out", async () => {
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+
+    await waitFor(() => expect(socketMock.disconnect).toHaveBeenCalled());
+  });
+
+  it("disconnects the admin socket when the panel is unmounted", async () => {
+    const view = render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    view.unmount();
+
+    await waitFor(() => expect(socketMock.disconnect).toHaveBeenCalled());
+  });
+
+  it("keeps the terminal state when the initial job read resolves after the socket update", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    deferJobResponse = true;
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    await waitFor(() => expect(socketMock.subscribe).toHaveBeenCalledWith("job-1"));
+
+    socketMock.handlers?.onJob({
+      id: "job-1",
+      deckId: "deck-1",
+      kind: "generate",
+      status: "completed",
+      requested: 5,
+      processed: 5,
+      inputTokens: 1,
+      outputTokens: 2,
+      updatedAt: "2026-10-29T12:05:00.000Z",
+    });
+
+    expect(await screen.findByText(/5\/5 cartas/)).toBeInTheDocument();
+
+    resolveJobResponse?.(
+      Response.json({
+        data: {
+          id: "job-1",
+          status: "running",
+          requested: 5,
+          processed: 1,
+          updatedAt: "2026-10-29T12:00:10.000Z",
+        },
+      }),
+    );
+
+    await waitFor(() => expect(screen.getByText(/5\/5 cartas/)).toBeInTheDocument());
+    expect(screen.queryByText(/1\/5 cartas/)).not.toBeInTheDocument();
+  });
+
+  it("ignores a late job read after the administrator logs out", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    deferJobResponse = true;
+    render(<AdminDashboard />);
+
+    await screen.findByRole("heading", { name: "Administración de mazos" });
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    expect(await screen.findByText("Login required")).toBeInTheDocument();
+
+    resolveJobResponse?.(
+      Response.json({
+        data: { id: "job-1", status: "running", requested: 5, processed: 1 },
+      }),
+    );
+
+    await waitFor(() => expect(screen.queryByText(/cartas/)).not.toBeInTheDocument());
   });
 });

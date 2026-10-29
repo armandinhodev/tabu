@@ -115,6 +115,13 @@ El panel muestra progreso y errores, y conserva lo completado si una llamada fal
 se solicitan por carta y no cambian las partidas en curso. Las pruebas automatizadas usan un
 proveedor simulado, no llamadas pagas.
 
+El progreso del administrador se entrega por Socket.IO en el mismo puerto del servidor,
+en un canal privado autenticado con la cookie de sesión. No utiliza consultas periódicas
+desde el navegador: al conectar o reconectar recupera el estado guardado del trabajo y
+después recibe sus actualizaciones. Si la conexión se interrumpe, el trabajo continúa en
+MongoDB y el panel vuelve a sincronizarse al recuperar la conexión. El proxy debe permitir
+WebSocket; los sockets de las partidas permanecen separados del canal administrativo.
+
 ### Si ves una pantalla en blanco con `invariant expected layout router to be mounted`
 
 Es un `.next` mezclado: `next build` y `next dev` escriben en la misma carpeta y el segundo arranque

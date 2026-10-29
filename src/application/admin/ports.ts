@@ -284,6 +284,15 @@ export interface AdminJobStore {
   }): Promise<void>;
 }
 
+/**
+ * Publicador del progreso durable de un trabajo (S9).
+ *
+ * Se invoca SOLO después de que el estado quedó persistido: la base es la
+ * única fuente de verdad del progreso. Un fallo al publicar nunca cambia el
+ * resultado del trabajo.
+ */
+export type AdminProgressPublish = (job: AdminJob) => void;
+
 /** Reloj inyectable: el dominio nunca llama a `Date.now()` (S13). */
 export interface AdminClock {
   now(): Date;

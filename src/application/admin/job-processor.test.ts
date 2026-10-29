@@ -456,6 +456,20 @@ describe("processClaimedJob (guards)", () => {
     expect(stored?.inputTokens).toBe(11);
     expect(stored?.outputTokens).toBe(13);
   });
+
+  it("keeps the durable outcome unchanged when no progress publisher is configured", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    const stored = await jobs.findById("job-1");
+    expect(stored?.status).toBe("completed");
+    expect(stored?.processed).toBe(1);
+    expect(provider.batchCalls).toHaveLength(1);
+    expect(jobs.failed).toEqual([]);
+  });
 });
 
 export type { ManagedDeck };

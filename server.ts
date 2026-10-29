@@ -29,26 +29,38 @@ async function main(): Promise<void> {
   const { startAppServer } = await import("./src/infrastructure/server/app-server");
   const { createGameRuntime } = await import("./src/infrastructure/server/create-runtime");
   const { attachSocketServer } = await import("./src/infrastructure/socket/server");
+  const { attachAdminProgress } = await import("./src/infrastructure/socket/admin/progress");
+  const { configureAdminRuntime, getAdminJob, startAdminWorker } =
+    await import("./src/infrastructure/admin/runtime");
 
   const runtime = await createGameRuntime(env);
+  let adminProgress: ReturnType<typeof attachAdminProgress> | null = null;
   const appServer = await startAppServer({
     dev,
     hostname,
     port,
     socket: {
-      attach: (httpServer) =>
-        attachSocketServer(httpServer, {
+      attach: (httpServer) => {
+        const sockets = attachSocketServer(httpServer, {
           deps: runtime.deps,
           corsOrigin: env.SOCKET_CORS_ORIGIN,
           persist: runtime.persist,
-        }),
+        });
+        adminProgress = attachAdminProgress(sockets.io, { getJob: getAdminJob });
+        return {
+          ...sockets,
+          close: async () => {
+            adminProgress?.close();
+            await sockets.close();
+          },
+        };
+      },
     },
   });
 
   const { isAdminConfigured } = await import("./src/infrastructure/auth/admin-auth");
-  const adminWorker = isAdminConfigured()
-    ? await (await import("./src/infrastructure/admin/runtime")).startAdminWorker()
-    : null;
+  configureAdminRuntime({ onJobProgress: (job) => adminProgress?.publish(job) });
+  const adminWorker = isAdminConfigured() ? await startAdminWorker() : null;
 
   let shuttingDown = false;
 
@@ -60,8 +72,8 @@ async function main(): Promise<void> {
     logger.info("shutting down", { signal });
 
     try {
-      await appServer.close();
       await adminWorker?.stop();
+      await appServer.close();
       await runtime.dispose();
       process.exit(0);
     } catch (error) {

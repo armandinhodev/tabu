@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AdminJob } from "../../application/admin/types";
+import { withProgressPublishing } from "../../application/admin/progress";
 import {
   FakeClock,
   FakeDeckStore,
@@ -40,9 +41,13 @@ function queuedJob(overrides: Partial<AdminJob> = {}): AdminJob {
   };
 }
 
-function build() {
+function build(options: { readonly publish?: (job: AdminJob) => void } = {}) {
   const decks = new FakeDeckStore();
-  const jobs = new FakeJobStore();
+  const store = new FakeJobStore();
+  const jobs =
+    options.publish === undefined
+      ? store
+      : withProgressPublishing(store, { publish: options.publish });
   const provider = new FakeProvider();
   const clock = new FakeClock();
   const ids = new FakeIds();
@@ -61,7 +66,7 @@ function build() {
     pollIntervalMs: 5,
   };
 
-  return { decks, jobs, provider, clock, log, worker: new AdminWorker(deps) };
+  return { decks, jobs, store, provider, clock, log, worker: new AdminWorker(deps) };
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
@@ -86,14 +91,14 @@ describe("AdminWorker", () => {
   });
 
   it("claims a queued job and processes it", async () => {
-    const { worker, jobs, decks, provider } = build();
+    const { worker, store, decks, provider } = build();
     running.push(worker);
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    jobs.seed(queuedJob());
+    store.seed(queuedJob());
     provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
 
     worker.start();
-    await waitFor(() => jobs.completed.length === 1);
+    await waitFor(() => store.completed.length === 1);
     await worker.stop();
 
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(1);
@@ -102,9 +107,9 @@ describe("AdminWorker", () => {
   });
 
   it("stops claiming once it is stopped", async () => {
-    const { worker, jobs } = build();
+    const { worker, store } = build();
     running.push(worker);
-    const claimNext = vi.spyOn(jobs, "claimNext");
+    const claimNext = vi.spyOn(store, "claimNext");
 
     worker.start();
     await waitFor(() => claimNext.mock.calls.length > 0);
@@ -117,10 +122,10 @@ describe("AdminWorker", () => {
   });
 
   it("aborts the provider call in flight when it is stopped", async () => {
-    const { worker, jobs, decks, provider } = build();
+    const { worker, store, decks, provider } = build();
     running.push(worker);
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    jobs.seed(queuedJob());
+    store.seed(queuedJob());
 
     let started = 0;
 
@@ -139,29 +144,29 @@ describe("AdminWorker", () => {
 
     await worker.stop();
 
-    const stored = await jobs.findById("job-1");
+    const stored = await store.findById("job-1");
     expect(stored?.status).toBe("queued");
-    expect(jobs.failed).toEqual([]);
+    expect(store.failed).toEqual([]);
   });
 
   it("fails the job when the managed deck is gone and stops retrying it", async () => {
-    const { worker, jobs } = build();
+    const { worker, store } = build();
     running.push(worker);
-    jobs.seed(queuedJob());
+    store.seed(queuedJob());
 
     worker.start();
-    await waitFor(() => jobs.failed.length === 1);
+    await waitFor(() => store.failed.length === 1);
     await worker.stop();
 
-    const stored = await jobs.findById("job-1");
+    const stored = await store.findById("job-1");
     expect(stored?.status).toBe("failed");
-    expect(jobs.failed[0]?.error).toContain("no longer exists");
+    expect(store.failed[0]?.error).toContain("no longer exists");
   });
 
   it("logs a redacted error when the iteration fails", async () => {
-    const { worker, jobs, log } = build();
+    const { worker, store, log } = build();
     running.push(worker);
-    vi.spyOn(jobs, "claimNext").mockRejectedValue(
+    vi.spyOn(store, "claimNext").mockRejectedValue(
       new Error("mongodb://user:pass@host failed with sk-secret"),
     );
 
@@ -173,5 +178,46 @@ describe("AdminWorker", () => {
     expect(entry?.message).toBe("admin worker iteration failed");
     expect(JSON.stringify(entry)).not.toContain("sk-secret");
     expect(JSON.stringify(entry)).not.toContain("mongodb://");
+  });
+
+  it("publishes the durable progress of the job it processes", async () => {
+    const published: AdminJob[] = [];
+    const { worker, store, decks, provider } = build({
+      publish: (job) => published.push(job),
+    });
+    running.push(worker);
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    store.seed(queuedJob());
+    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+
+    worker.start();
+    await waitFor(() => store.completed.length === 1);
+    await worker.stop();
+
+    expect(published.map((job) => job.status)).toEqual(
+      expect.arrayContaining(["running", "completed"]),
+    );
+    expect(published.at(-1)).toMatchObject({ id: "job-1", status: "completed", processed: 1 });
+  });
+
+  it("completes the job once when the progress publisher fails", async () => {
+    const { worker, store, decks, provider } = build({
+      publish: () => {
+        throw new Error("socket closed");
+      },
+    });
+    running.push(worker);
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    store.seed(queuedJob());
+    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+
+    worker.start();
+    await waitFor(() => store.completed.length === 1);
+    await worker.stop();
+
+    const stored = await store.findById("job-1");
+    expect(stored?.status).toBe("completed");
+    expect(provider.batchCalls).toHaveLength(1);
+    expect(store.failed).toEqual([]);
   });
 });

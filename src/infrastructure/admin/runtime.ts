@@ -1,7 +1,8 @@
 import { Types } from "mongoose";
 
 import { AdminService } from "../../application/admin/admin-service";
-import type { AdminJobLimits } from "../../application/admin/ports";
+import type { AdminJobLimits, AdminJobStore } from "../../application/admin/ports";
+import { withProgressPublishing } from "../../application/admin/progress";
 import type {
   AdminJob,
   AdminLanguage,
@@ -53,6 +54,15 @@ export interface AdminRuntimeOptions {
   readonly limits?: AdminJobLimits;
   /** Espera entre reclamos. */
   readonly pollIntervalMs?: number;
+  /**
+   * Publica el progreso durable de los trabajos (S9).
+   *
+   * La enlaza el servidor con el canal de administración:
+   * `configureAdminRuntime({ onJobProgress: progress.publish })`. Se invoca
+   * SOLO después de que el estado quedó persistido y sus fallos nunca cambian
+   * el resultado de un trabajo.
+   */
+  readonly onJobProgress?: ((job: AdminJob) => void) | undefined;
 }
 
 export interface AdminWorkerHandle {
@@ -79,6 +89,31 @@ export function resetAdminRuntime(): void {
   instance = null;
 }
 
+/**
+ * Almacén de trabajos del proceso.
+ *
+ * Con `onJobProgress` configurado, el almacén publica el trabajo YA
+ * persistido: la base sigue siendo la única fuente de verdad y un fallo de
+ * notificación nunca cambia el resultado de un trabajo.
+ */
+function createJobStore(): AdminJobStore {
+  const store = new MongoAdminJobStore();
+  const publish = options.onJobProgress;
+
+  if (publish === undefined) {
+    return store;
+  }
+
+  return withProgressPublishing(store, {
+    publish,
+    onError: (error) => {
+      logger.warn("admin progress notification failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    },
+  });
+}
+
 function runtime(): AdminRuntime {
   if (instance !== null) {
     return instance;
@@ -87,7 +122,7 @@ function runtime(): AdminRuntime {
   const apiKey = options.apiKey ?? process.env.DEEPSEEK_API_KEY ?? "";
   const limits = options.limits ?? DEFAULT_ADMIN_LIMITS;
   const decks = new MongoAdminDeckStore();
-  const jobs = new MongoAdminJobStore();
+  const jobs = createJobStore();
   const provider = createDeepSeekProvider({ apiKey });
   const clock = { now: (): Date => new Date() };
   const ids = { next: (): string => new Types.ObjectId().toString() };

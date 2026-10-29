@@ -1,10 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
+import {
+  createAdminSocket,
+  type AdminConnectionState,
+  type AdminSocketClient,
+} from "@/ui/lib/admin-socket";
 
 import { AdminLogin } from "./login/admin-login";
 
@@ -21,12 +26,14 @@ type DeckView = { id: string; name: string; theme: string; cards: CardView[] };
 type JobView = {
   id: string;
   deckId?: string;
+  kind?: "generate" | "replace";
   status: "queued" | "running" | "completed" | "failed";
-  requested: number;
-  processed: number;
+  requested?: number;
+  processed?: number;
   error?: string;
   inputTokens?: number;
   outputTokens?: number;
+  updatedAt?: string;
 };
 
 class RequestFailure extends Error {
@@ -70,6 +77,15 @@ const jobLabels = {
   failed: "Fallido",
 };
 
+const connectionLabels: Record<AdminConnectionState, string> = {
+  idle: "Sin conexión",
+  connecting: "Conectando…",
+  connected: "Conectada",
+  reconnecting: "Reconectando…",
+  closed: "Cerrada",
+  unauthorized: "Sesión vencida",
+};
+
 export function AdminDashboard() {
   const [auth, setAuth] = useState<"loading" | "authorized" | "login">("loading");
   const [configured, setConfigured] = useState(false);
@@ -85,6 +101,38 @@ export function AdminDashboard() {
   const [theme, setTheme] = useState("");
   const [count, setCount] = useState("5");
   const [onlyExcluded, setOnlyExcluded] = useState(false);
+  const [connection, setConnection] = useState<AdminConnectionState>("idle");
+  const socketRef = useRef<AdminSocketClient | null>(null);
+  const progressRef = useRef("");
+  const reconnectRef = useRef(false);
+  const appliedRef = useRef<{ id: string; updatedAt: string } | null>(null);
+
+  /**
+   * Aplica el estado de un trabajo sin retroceder.
+   *
+   * La lectura HTTP inicial y las entregas del socket pasan por acá: si la
+   * respuesta HTTP llega tarde con un estado viejo, no puede pisar el
+   * progreso que ya llegó por el socket.
+   */
+  const applyJob = useCallback((next: JobView): boolean => {
+    const applied = appliedRef.current;
+
+    if (applied !== null && applied.id === next.id) {
+      if (next.updatedAt === undefined) {
+        // Sin marca de tiempo durable no se pisa un estado conocido.
+        return false;
+      }
+
+      if (applied.updatedAt !== "" && next.updatedAt < applied.updatedAt) {
+        return false;
+      }
+    }
+
+    appliedRef.current = { id: next.id, updatedAt: next.updatedAt ?? "" };
+    setJob(next);
+
+    return true;
+  }, []);
 
   const reportError = useCallback((failure: unknown) => {
     if (failure instanceof RequestFailure && failure.status === 401) {
@@ -124,22 +172,13 @@ export function AdminDashboard() {
   useEffect(() => {
     if (auth !== "authorized") return;
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
     async function load() {
       try {
-        const [catalog, detail, progress] = await Promise.all([
+        const [catalog, detail] = await Promise.all([
           api<DeckView[]>("/api/admin/decks", { signal: controller.signal }),
           selectedId
             ? api<DeckView>(`/api/admin/decks/${encodeURIComponent(selectedId)}`, {
                 signal: controller.signal,
-              })
-            : Promise.resolve(null),
-          jobId
-            ? api<JobView>(`/api/admin/jobs/${encodeURIComponent(jobId)}`, {
-                signal: controller.signal,
-              }).catch((failure) => {
-                if (failure instanceof RequestFailure && failure.status === 404) return null;
-                throw failure;
               })
             : Promise.resolve(null),
         ]);
@@ -147,23 +186,94 @@ export function AdminDashboard() {
         setDecks(catalog);
         if (!selectedId && catalog[0]) setSelectedId(catalog[0].id);
         setDeck(detail);
-        setJob(progress);
-        if (jobId && progress === null) {
-          rememberJob(null);
-          setJobId(null);
-        }
-        if (progress && ["queued", "running"].includes(progress.status))
-          timer = setTimeout(() => void load(), 1500);
       } catch (failure) {
         if (!controller.signal.aborted) reportError(failure);
       }
     }
     void load();
+    return () => controller.abort();
+  }, [auth, selectedId, refresh, reportError]);
+
+  /**
+   * El trabajo se lee una sola vez por HTTP: el progreso vivo llega por el
+   * socket de administración. No hay temporizadores de sondeo.
+   */
+  useEffect(() => {
+    if (auth !== "authorized" || jobId === null) return;
+    const controller = new AbortController();
+    api<JobView>(`/api/admin/jobs/${encodeURIComponent(jobId)}`, { signal: controller.signal })
+      .then((progress) => {
+        if (controller.signal.aborted) return;
+        applyJob(progress);
+      })
+      .catch((failure: unknown) => {
+        if (controller.signal.aborted) return;
+        if (failure instanceof RequestFailure && failure.status === 404) {
+          rememberJob(null);
+          setJobId(null);
+          setJob(null);
+          appliedRef.current = null;
+          return;
+        }
+        reportError(failure);
+      });
+    return () => controller.abort();
+  }, [auth, jobId, applyJob, reportError]);
+
+  /**
+   * Canal de progreso en vivo (S9). El socket es propio del panel: el juego no
+   * se ve afectado y se cierra al salir del panel o al cerrar sesión.
+   */
+  useEffect(() => {
+    if (auth !== "authorized") return;
+
+    const client = createAdminSocket({
+      onJob: (update) => {
+        if (!applyJob(update)) return;
+        // El refresco se dispara sólo cuando el progreso avanza de verdad:
+        // un evento repetido no genera una ráfaga de pedidos.
+        const key = `${update.id}:${update.status}:${update.processed}`;
+        if (key === progressRef.current) return;
+        progressRef.current = key;
+        setRefresh((value) => value + 1);
+      },
+      onState: (state) => {
+        setConnection(state);
+        if (state === "unauthorized") {
+          socketRef.current?.disconnect();
+          setJob(null);
+          setDeck(null);
+          setDecks([]);
+          appliedRef.current = null;
+          setAuth("login");
+          return;
+        }
+        if (state === "reconnecting") {
+          reconnectRef.current = true;
+          return;
+        }
+        if (state === "connected" && reconnectRef.current) {
+          // Tras reconectar el estado autoritativo viene del servidor.
+          reconnectRef.current = false;
+          setRefresh((value) => value + 1);
+        }
+      },
+      onError: (message) => setError(message),
+    });
+
+    socketRef.current = client;
+
     return () => {
-      controller.abort();
-      if (timer) clearTimeout(timer);
+      socketRef.current = null;
+      client.disconnect();
     };
-  }, [auth, selectedId, jobId, refresh, reportError]);
+  }, [applyJob, auth]);
+
+  useEffect(() => {
+    const client = socketRef.current;
+    if (client === null || jobId === null) return;
+    client.subscribe(jobId);
+  }, [auth, jobId]);
 
   async function act(action: () => Promise<void>) {
     if (busy) return;
@@ -267,11 +377,13 @@ export function AdminDashboard() {
                 });
                 if (!response.ok)
                   throw new RequestFailure(response.status, "No se pudo cerrar la sesión.");
+                socketRef.current?.disconnect();
                 rememberJob(null);
                 setJobId(null);
                 setJob(null);
                 setDeck(null);
                 setDecks([]);
+                appliedRef.current = null;
                 setAuth("login");
               })
             }
@@ -347,9 +459,14 @@ export function AdminDashboard() {
           aria-live="polite"
           className="rounded-lg border border-line bg-surface p-5"
         >
-          <p className="font-semibold">
-            {jobLabels[job.status]} · {job.processed ?? 0}/{job.requested ?? 0} cartas
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-semibold">
+              {jobLabels[job.status]} · {job.processed ?? 0}/{job.requested ?? 0} cartas
+            </p>
+            <p className="text-body-sm text-fg-muted" role="status">
+              Progreso en vivo: {connectionLabels[connection]}
+            </p>
+          </div>
           <progress
             className="mt-3 h-3 w-full"
             max={Math.max(job.requested ?? 1, 1)}
@@ -364,6 +481,15 @@ export function AdminDashboard() {
             </p>
           )}
         </section>
+      )}
+
+      {!job && connection === "reconnecting" && (
+        <p
+          role="status"
+          className="rounded-md border border-line bg-surface p-4 text-body-sm text-fg-muted"
+        >
+          Se perdió la conexión con el progreso del servidor: se reconecta sola.
+        </p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
