@@ -200,6 +200,26 @@ describe.skipIf(mongoUri === undefined)("admin deck CRUD against a real Mongo", 
     }
   });
 
+  it("finishes deletion when a failure happens after job history cleanup", async () => {
+    const { service } = build();
+    const deck = await service.createDeck({ name: "Retry final removal", theme: "General" });
+    await service.archiveDeck(deck.id);
+    const failure = vi.spyOn(AdminDeckModel, "deleteOne").mockImplementationOnce(() => {
+      throw new Error("simulated final removal failure");
+    });
+    try {
+      await expect(service.deleteDeckPermanently(deck.id)).rejects.toThrow(
+        "simulated final removal failure",
+      );
+    } finally {
+      failure.mockRestore();
+    }
+    expect((await AdminDeckModel.findById(deck.id).lean())?.deletionPending).toBe(true);
+    expect(await AdminJobModel.countDocuments({ deckId: deck.id })).toBe(0);
+    await service.deleteDeckPermanently(deck.id);
+    expect(await AdminDeckModel.findById(deck.id)).toBeNull();
+  });
+
   it("archives the deck keeping the public document as an empty tombstone", async () => {
     const { service, decks } = build();
     const created = await service.createDeck({ name: "Cocina", theme: "Comidas" });

@@ -144,6 +144,19 @@ describe("AdminDashboard", () => {
     expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
     expect(screen.getByRole("heading", { name: "Word 21" })).toBeVisible();
+    fireEvent.click(
+      within(screen.getByRole("heading", { name: "Word 21" }).closest("article")!).getByRole(
+        "button",
+        { name: "Habilitar de todos modos" },
+      ),
+    );
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        url: "/api/admin/decks/deck-1/cards/card-21",
+        method: "PATCH",
+        body: { excluded: false },
+      }),
+    );
     expect(screen.queryByRole("heading", { name: "Word 1" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
     expect(screen.getByRole("heading", { name: "Word 41" })).toBeVisible();
