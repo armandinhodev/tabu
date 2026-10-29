@@ -9,12 +9,9 @@ import type {
   GenerationProvider,
 } from "./ports";
 import type { AdminJob, AdminLanguage, ManagedCard, ManagedDeck } from "./types";
+import { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
 
-/** Máximo de cartas que se pueden pedir en un solo trabajo. */
-export const MAX_GENERATION_COUNT = 50;
-
-/** Cartas por lote inicial (una llamada al proveedor). */
-export const DEFAULT_BATCH_SIZE = 5;
+export { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
 
 /** Reintentos extra para recuperar un lote corto. */
 export const MAX_BATCH_RETRIES = 2;
@@ -34,10 +31,13 @@ export const MAX_DECK_THEME_LENGTH = 200;
  * - `maxCalls`: los intentos de lote más, como máximo, UN completion por
  *   carta (nunca se rellenan cartas con palabras inventadas).
  *
- * Para 50 cartas: 10 lotes normales, 12 intentos y 62 llamadas como techo.
+ * For 1200 cards: 24 normal batches, 26 attempts and at most 1226 calls.
  */
 export function jobLimitsFor(requested: number, base?: Partial<AdminJobLimits>): AdminJobLimits {
-  const batchSize = Math.max(1, base?.batchSize ?? DEFAULT_BATCH_SIZE);
+  const batchSize = Math.min(
+    DEFAULT_BATCH_SIZE,
+    Math.max(1, base?.batchSize ?? DEFAULT_BATCH_SIZE),
+  );
   const leaseMs = base?.leaseMs ?? DEFAULT_LEASE_MS;
   const batches = Math.ceil(requested / batchSize);
   const maxAttempts = batches + MAX_BATCH_RETRIES;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_GENERATION_COUNT } from "@/application/admin/generation-limits";
 
 import { queueGeneration } from "@/infrastructure/admin/runtime";
 import { adminBody, adminResponse } from "@/infrastructure/admin-http/http";
@@ -6,7 +7,7 @@ import { adminBody, adminResponse } from "@/infrastructure/admin-http/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const input = z.object({ count: z.number().int().min(1).max(50) }).strict();
+const input = z.object({ count: z.number().int().min(1).max(MAX_GENERATION_COUNT) }).strict();
 
 export async function POST(
   request: Request,

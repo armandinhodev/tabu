@@ -50,6 +50,21 @@ beforeEach(() => {
 });
 
 describe("administrative HTTP boundary", () => {
+  it.each([51, 800, 1200])("accepts a generation request for %i cards", async (count) => {
+    mocks.generate.mockResolvedValue({ id: "job-1", status: "queued", requested: count });
+    const response = await generate(request("POST", { count }), context);
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({
+      data: { id: "job-1", status: "queued", requested: count },
+    });
+    expect(mocks.generate).toHaveBeenCalledWith(deckId, { count });
+  });
+
+  it("rejects 1201 cards before calling the job service", async () => {
+    const response = await generate(request("POST", { count: 1201 }), context);
+    expect(response.status).toBe(400);
+    expect(mocks.generate).not.toHaveBeenCalled();
+  });
   it("denies every endpoint before invoking the data service", async () => {
     mocks.guard.mockImplementation(() => Response.json({ error: "Unauthorized" }, { status: 401 }));
     const results = await Promise.all([

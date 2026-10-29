@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "@/application/admin/generation-limits";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/ui/components/ui/button";
@@ -301,8 +302,11 @@ export function AdminDashboard() {
     event.preventDefault();
     await act(async () => {
       const amount = Number(count);
-      if (!Number.isInteger(amount) || amount < 1 || amount > 50)
-        throw new RequestFailure(400, "La cantidad debe ser un entero entre 1 y 50.");
+      if (!Number.isInteger(amount) || amount < 1 || amount > MAX_GENERATION_COUNT)
+        throw new RequestFailure(
+          400,
+          `La cantidad debe ser un entero entre 1 y ${MAX_GENERATION_COUNT}.`,
+        );
       const created = await api<DeckView>("/api/admin/decks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -469,7 +473,7 @@ export function AdminDashboard() {
             <Input
               type="number"
               min={1}
-              max={50}
+              max={MAX_GENERATION_COUNT}
               step={1}
               value={count}
               onChange={(event) => setCount(event.target.value)}
@@ -489,8 +493,9 @@ export function AdminDashboard() {
             />
           </label>
           <p className="text-body-sm text-fg-muted md:col-span-2">
-            La generación consume la API configurada en el servidor. Se procesa en lotes de cinco;
-            cada carta conserva hasta seis prohibidas de una sola palabra.
+            La generación consume la API configurada en el servidor. Se procesa en lotes de hasta{" "}
+            {DEFAULT_BATCH_SIZE} cartas; cada carta conserva hasta seis prohibidas de una sola
+            palabra.
           </p>
           <Button type="submit" disabled={busy || running || !name.trim() || !theme.trim()}>
             {busy ? "Enviando…" : "Crear y generar"}
@@ -602,7 +607,7 @@ export function AdminDashboard() {
                     <Input
                       type="number"
                       min={1}
-                      max={50}
+                      max={MAX_GENERATION_COUNT}
                       step={1}
                       value={count}
                       onChange={(event) => setCount(event.target.value)}
@@ -616,10 +621,14 @@ export function AdminDashboard() {
                     onClick={() =>
                       void act(async () => {
                         const amount = Number(count);
-                        if (!Number.isInteger(amount) || amount < 1 || amount > 50)
+                        if (
+                          !Number.isInteger(amount) ||
+                          amount < 1 ||
+                          amount > MAX_GENERATION_COUNT
+                        )
                           throw new RequestFailure(
                             400,
-                            "La cantidad debe ser un entero entre 1 y 50.",
+                            `La cantidad debe ser un entero entre 1 y ${MAX_GENERATION_COUNT}.`,
                           );
                         trackJob(
                           await api<JobView>(

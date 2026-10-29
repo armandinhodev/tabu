@@ -103,8 +103,9 @@ no con la dirección de escucha `HOST` (que puede ser `0.0.0.0`). El proxy debe 
 `Host` público y el protocolo original. No se confía en `X-Forwarded-Host`; no configurar un
 proxy que reescriba esos valores sin una política explícita de confianza y verificación.
 
-Desde el panel se indica nombre, temática y cantidad de cartas (1–50 por trabajo). DeepSeek Flash
-propone hasta 12 candidatas ordenadas por objetivo, en lotes iniciales de cinco cartas. El servidor
+Desde el panel se indica nombre, temática y cantidad de cartas (1–1200 por trabajo). DeepSeek Flash
+propone hasta 12 candidatas ordenadas por objetivo, en solicitudes de hasta 50 cartas. Por ejemplo,
+800 cartas requieren 16 lotes completos; el último lote pide solo la cantidad que falta. El servidor
 descarta frases y duplicados, verifica la ortografía sobre el texto original con `nspell` y conserva
 las primeras seis prohibidas válidas. No usa Jev, puntuaciones mínimas ni cortes de confianza.
 
@@ -118,6 +119,13 @@ límites de intentos y se procesan desde el servidor personalizado; no iniciar c
 El panel muestra progreso y errores, y conserva lo completado si una llamada falla. Los reemplazos
 se solicitan por carta y no cambian las partidas en curso. Las pruebas automatizadas usan un
 proveedor simulado, no llamadas pagas.
+
+Los lotes incompletos o con objetivos repetidos se recuperan con reintentos acotados; nunca se
+marca un trabajo como completado si faltan cartas. Los trabajos nuevos usan lotes de 50, mientras
+que los ya guardados conservan su tamaño de lote y su presupuesto. Los hallazgos del diccionario
+siguen excluyendo cartas dudosas: aumentar la cantidad no omite esa validación. Las llamadas
+iniciales grandes tienen un límite de respuesta de hasta 20000 tokens y un timeout de 45 segundos;
+los completados individuales conservan el presupuesto pequeño. El lease se renueva entre cartas.
 
 El progreso del administrador se entrega por Socket.IO en el mismo puerto del servidor,
 en un canal privado autenticado con la cookie de sesión. No utiliza consultas periódicas

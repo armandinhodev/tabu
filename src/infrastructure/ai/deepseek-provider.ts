@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 import { AdminError } from "../../application/admin/errors";
+import {
+  DEFAULT_BATCH_SIZE,
+  MAX_GENERATION_COUNT,
+} from "../../application/admin/generation-limits";
 import type {
   CandidatesPayload,
   GenerationProvider,
@@ -20,6 +24,9 @@ export const DEEPSEEK_MAX_OUTPUT_TOKENS = 2_000;
 
 /** Límite de tiempo de cada llamada al proveedor. */
 export const DEEPSEEK_TIMEOUT_MS = 20_000;
+
+/** Large initial batches get a bounded deadline below the default 60-second lease. */
+export const DEEPSEEK_BATCH_TIMEOUT_MS = 45_000;
 
 /** Candidatos máximos por carta (S5). */
 export const MAX_CANDIDATES_PER_CARD = 12;
@@ -81,17 +88,19 @@ const SYSTEM_PROMPT = [
 export function createDeepSeekProvider(options: DeepSeekProviderOptions): GenerationProvider {
   const apiKey = options.apiKey.trim();
   const fetchImpl: AdminFetch = options.fetchImpl ?? ((input, init) => fetch(input, init));
-  const timeoutMs = options.timeoutMs ?? DEEPSEEK_TIMEOUT_MS;
-  const maxOutputTokens = options.maxOutputTokens ?? DEEPSEEK_MAX_OUTPUT_TOKENS;
 
   async function request(
     userPrompt: string,
     signal: AbortSignal | undefined,
+    requestedCards = 1,
   ): Promise<{ payload: unknown; usage: ProviderUsage }> {
     const controller = new AbortController();
-    const timer = setTimeout(() => {
-      controller.abort();
-    }, timeoutMs);
+    const timer = setTimeout(
+      () => {
+        controller.abort();
+      },
+      options.timeoutMs ?? (requestedCards > 5 ? DEEPSEEK_BATCH_TIMEOUT_MS : DEEPSEEK_TIMEOUT_MS),
+    );
     const onAbort = (): void => {
       controller.abort();
     };
@@ -109,7 +118,12 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           model: DEEPSEEK_MODEL,
           thinking: { type: "disabled" },
           response_format: { type: "json_object" },
-          max_tokens: maxOutputTokens,
+          max_tokens:
+            options.maxOutputTokens ??
+            Math.max(
+              DEEPSEEK_MAX_OUTPUT_TOKENS,
+              Math.min(DEFAULT_BATCH_SIZE, requestedCards) * 400,
+            ),
           stream: false,
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
@@ -175,7 +189,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
     available: apiKey.length > 0,
 
     async proposeCards(input): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
-      const excluded = input.excludedObjectives.slice(-MAX_EXCLUDED_IN_PROMPT);
+      const excluded = input.excludedObjectives.slice(-MAX_GENERATION_COUNT);
       const avoid = excluded.length > 0 ? excluded.join(", ") : "ninguno";
 
       const { payload, usage } = await request(
@@ -190,6 +204,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           'Responde con {"cards":[{"objective":"...","candidates":["..."]}]}.',
         ].join(" "),
         input.signal,
+        input.count,
       );
 
       const parsed = cardsSchema.safeParse(payload);

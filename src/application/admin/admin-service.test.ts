@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { AdminService } from "./admin-service";
+import { DEFAULT_ADMIN_LIMITS } from "../../infrastructure/admin/runtime";
 import { AdminError } from "./errors";
 import type { AdminJobLimits } from "./ports";
 import type { ManagedCard } from "./types";
@@ -19,14 +20,14 @@ const LIMITS: AdminJobLimits = {
   leaseMs: 60_000,
 };
 
-function build() {
+function build(limits: AdminJobLimits = LIMITS) {
   const decks = new FakeDeckStore();
   const jobs = new FakeJobStore();
   const provider = new FakeProvider();
   const clock = new FakeClock();
   const ids = new FakeIds();
 
-  const service = new AdminService({ decks, jobs, provider, clock, ids, limits: LIMITS });
+  const service = new AdminService({ decks, jobs, provider, clock, ids, limits });
 
   return { decks, jobs, provider, service };
 }
@@ -98,7 +99,7 @@ describe("AdminService.queueGeneration", () => {
     decks.seed({ id: "deck-1", name: "General", theme: "General" });
 
     await expectAdminError(service.queueGeneration("deck-1", 0), 400, "invalid_input");
-    await expectAdminError(service.queueGeneration("deck-1", 51), 400, "invalid_input");
+    await expectAdminError(service.queueGeneration("deck-1", 1201), 400, "invalid_input");
     await expectAdminError(service.queueGeneration("deck-1", 1.5), 400, "invalid_input");
   });
 
@@ -169,6 +170,30 @@ describe("AdminService.queueGeneration", () => {
     expect(job.maxAttempts).toBe(12);
     expect(job.maxCalls).toBe(62);
   });
+
+  it.each([
+    [1, 3, 4],
+    [50, 3, 53],
+    [51, 4, 55],
+    [800, 18, 818],
+    [1200, 26, 1226],
+  ])(
+    "persists a fifty-card runtime batch and bounded budget for %i cards",
+    async (requested, maxAttempts, maxCalls) => {
+      const { service, decks, jobs } = build(DEFAULT_ADMIN_LIMITS);
+      decks.seed({ id: "deck-1", name: "General", theme: "General" });
+      const queued = await service.queueGeneration("deck-1", requested);
+      expect(queued).toMatchObject({
+        requested,
+        processed: 0,
+        status: "queued",
+        batchSize: 50,
+        maxAttempts,
+        maxCalls,
+      });
+      expect(await jobs.findById(queued.id)).toEqual(queued);
+    },
+  );
 });
 
 describe("AdminService.queueReplacement", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { processClaimedJob } from "./job-processor";
+import { jobLimitsFor } from "./admin-service";
 import type { AdminJob, ManagedDeck } from "./types";
 import type { ClaimedJob } from "./ports";
 import {
@@ -98,6 +99,94 @@ function build() {
 }
 
 describe("processClaimedJob (batch flow)", () => {
+  it.each([
+    [50, 1],
+    [51, 2],
+    [800, 16],
+    [1200, 24],
+  ])(
+    "completes %i cards in %i provider batches without exceeding fifty per call",
+    async (requested, expectedCalls) => {
+      const { decks, jobs, provider, deps, claim } = build();
+      const objectives = generatedWords(requested, "o");
+      deps.spell = new FakeSpellChecker(new Set([...objectives, ...SIX_WORDS]));
+      decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+      const propose = provider.proposeCards.bind(provider);
+      let offset = 0;
+      provider.proposeCards = async (input) => {
+        provider.batchQueue.push(
+          objectives
+            .slice(offset, offset + input.count)
+            .map((objective) => ({ objective, candidates: [...SIX_WORDS] })),
+        );
+        offset += input.count;
+        return propose(input);
+      };
+      const publish = decks.publishProjection.bind(decks);
+      decks.publishProjection = async (input) => {
+        decks.projections.length = 0;
+        await publish(input);
+      };
+      await processClaimedJob(deps, claim(buildJob({ requested, ...jobLimitsFor(requested) })));
+      expect(provider.batchCalls).toHaveLength(expectedCalls);
+      expect(provider.batchCalls.map((call) => call.count)).toEqual(
+        Array.from({ length: expectedCalls }, (_, index) => Math.min(50, requested - index * 50)),
+      );
+      expect(provider.completionCalls).toHaveLength(0);
+      const saved = decks.decks.get("deck-1")!;
+      expect(saved.cards).toHaveLength(requested);
+      expect(new Set(saved.cards.map((card) => card.word)).size).toBe(requested);
+      expect(decks.projections.at(-1)?.cards).toHaveLength(requested);
+      expect(await jobs.findById("job-1")).toMatchObject({
+        status: "completed",
+        processed: requested,
+        calls: expectedCalls,
+      });
+      expect(jobs.completed).toEqual(["job-1"]);
+    },
+  );
+
+  it.each(["short", "duplicate"] as const)(
+    "fills only the remaining card after a %s fifty-card response",
+    async (mode) => {
+      const { decks, jobs, provider, deps, claim } = build();
+      const objectives = generatedWords(50, "o");
+      decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+      const first = objectives
+        .slice(0, 49)
+        .map((objective) => ({ objective, candidates: [...SIX_WORDS] }));
+      if (mode === "duplicate") first.push(first[0]!);
+      provider.batchQueue = [first, [{ objective: objectives[49]!, candidates: [...SIX_WORDS] }]];
+      await processClaimedJob(
+        deps,
+        claim(buildJob({ requested: 50, batchSize: 50, maxAttempts: 3, maxCalls: 53 })),
+      );
+      expect(provider.batchCalls.map((call) => call.count)).toEqual([50, 1]);
+      expect(decks.decks.get("deck-1")?.cards).toHaveLength(50);
+      expect(jobs.completed).toEqual(["job-1"]);
+    },
+  );
+
+  it("renews ownership within a fifty-card batch that takes longer than the lease to persist", async () => {
+    const { decks, jobs, provider, deps, claim, clock } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    provider.batchQueue = [
+      generatedWords(50, "o").map((objective) => ({ objective, candidates: [...SIX_WORDS] })),
+    ];
+    const publish = decks.publishProjection.bind(decks);
+    decks.publishProjection = async (input) => {
+      await publish(input);
+      clock.advance(2000);
+    };
+    await processClaimedJob(
+      deps,
+      claim(buildJob({ requested: 50, batchSize: 50, maxAttempts: 3, maxCalls: 53 })),
+    );
+    expect(provider.batchCalls).toHaveLength(1);
+    expect(decks.decks.get("deck-1")?.cards).toHaveLength(50);
+    expect(jobs.completed).toEqual(["job-1"]);
+  });
+
   it("requests five cards in a single provider call", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });

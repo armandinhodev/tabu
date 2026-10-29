@@ -208,6 +208,10 @@ async function runGeneration(
         continue;
       }
 
+      // A fifty-card batch can take longer to persist than a single lease.
+      // Renew with the existing owner/token checks before processing each card.
+      await renewLease(deps, job, fence);
+
       const card = await buildCard(deps, job, fence, state, {
         id: `${job.id}-${state.processed}`,
         index: state.processed,

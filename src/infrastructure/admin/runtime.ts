@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 
 import { AdminService } from "../../application/admin/admin-service";
+import { DEFAULT_BATCH_SIZE } from "../../application/admin/generation-limits";
 import type { AdminJobLimits, AdminJobStore } from "../../application/admin/ports";
 import { withProgressPublishing } from "../../application/admin/progress";
 import type {
@@ -40,7 +41,7 @@ import { AdminWorker } from "./worker";
 export const DEFAULT_ADMIN_LIMITS: AdminJobLimits = {
   maxCalls: 20,
   maxAttempts: 3,
-  batchSize: 5,
+  batchSize: DEFAULT_BATCH_SIZE,
   leaseMs: 60_000,
 };
 

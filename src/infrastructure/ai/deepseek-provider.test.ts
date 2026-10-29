@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AdminError } from "../../application/admin/errors";
 import {
@@ -52,6 +52,96 @@ function promptOf(calls: { init: RequestInit }[]): string {
 }
 
 describe("createDeepSeekProvider", () => {
+  it("preserves an explicit output-token override for initial and completion requests", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
+    const provider = createDeepSeekProvider({
+      apiKey: "secret-key",
+      fetchImpl: fetch,
+      maxOutputTokens: 1234,
+    });
+    await provider.proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] });
+    expect(bodyOf(calls).max_tokens).toBe(1234);
+    calls.length = 0;
+    await provider.proposeCandidates({
+      objective: "fuego",
+      theme: "Objetos",
+      previousWords: [],
+      selected: [],
+      rejected: [],
+    });
+    expect(bodyOf(calls).max_tokens).toBe(1234);
+  });
+
+  it("scales the output budget for fifty cards without increasing small-request or completion budgets", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+    await provider.proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] });
+    expect(bodyOf(calls).max_tokens).toBe(2000);
+    calls.length = 0;
+    await provider.proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] });
+    expect(bodyOf(calls).max_tokens).toBe(20000);
+    expect(promptOf(calls)).toContain("Genera 50 cartas");
+    calls.length = 0;
+    await provider.proposeCandidates({
+      objective: "fuego",
+      theme: "Objetos",
+      previousWords: [],
+      selected: [],
+      rejected: [],
+    });
+    expect(bodyOf(calls).max_tokens).toBe(2000);
+  });
+
+  it("remembers all objectives of a twelve-hundred-card job instead of only the last two hundred", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+    await provider.proposeCards({
+      theme: "Objetos",
+      count: 50,
+      excludedObjectives: Array.from({ length: 1200 }, (_, index) => `objetivo${index}`),
+    });
+    expect(promptOf(calls)).toContain("objetivo0,");
+    expect(promptOf(calls)).toContain("objetivo1199");
+  });
+
+  it("allows a larger batch its bounded deadline while retaining the explicit timeout override", async () => {
+    vi.useFakeTimers();
+    try {
+      let aborted = false;
+      const fetch: AdminFetch = (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(new Error("aborted"));
+          });
+        });
+      const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+      const pending = provider
+        .proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] })
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(20001);
+      expect(aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(24999);
+      expect(await pending).toBeInstanceOf(AdminError);
+      expect(aborted).toBe(true);
+      aborted = false;
+      const custom = createDeepSeekProvider({
+        apiKey: "secret-key",
+        fetchImpl: fetch,
+        timeoutMs: 10,
+        maxOutputTokens: 1234,
+      });
+      const overridden = custom
+        .proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] })
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(await overridden).toBeInstanceOf(AdminError);
+      expect(aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("calls only deepseek-flash at the fixed endpoint", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
