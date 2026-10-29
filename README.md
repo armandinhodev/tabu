@@ -1,5 +1,15 @@
 # Tabú
 
+[![Next.js](https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-149ECA?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?logo=socketdotio&logoColor=white)](https://socket.io/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![DeepSeek Flash](https://img.shields.io/badge/DeepSeek_Flash-4D6BFE)](https://api-docs.deepseek.com/)
+
 Juego de Tabú multijugador en tiempo real. 2–4 equipos, cada jugador en su propio dispositivo, sin
 registro: solo un nombre. La palabra objetivo y la lista de palabras prohibidas **no** se muestran a
 todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo adivina.
