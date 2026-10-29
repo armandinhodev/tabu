@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   archive: vi.fn(),
   restore: vi.fn(),
+  remove: vi.fn(),
   generate: vi.fn(),
   exclude: vi.fn(),
   replace: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock("@/infrastructure/admin/runtime", () => ({
   updateAdminDeck: mocks.update,
   archiveAdminDeck: mocks.archive,
   restoreAdminDeck: mocks.restore,
+  deleteAdminDeckPermanently: mocks.remove,
   queueGeneration: mocks.generate,
   setCardExcluded: mocks.exclude,
   queueReplacement: mocks.replace,
@@ -32,6 +34,7 @@ vi.mock("@/infrastructure/admin/runtime", () => ({
 import { GET as list, POST as create } from "./decks/route";
 import { GET as get, PATCH as update, DELETE as archive } from "./decks/[deckId]/route";
 import { POST as restore } from "./decks/[deckId]/restore/route";
+import { DELETE as remove } from "./decks/[deckId]/permanent/route";
 import { POST as generate } from "./decks/[deckId]/generate/route";
 import { PATCH as exclude } from "./decks/[deckId]/cards/[cardId]/route";
 import { POST as replace } from "./decks/[deckId]/cards/[cardId]/replace/route";
@@ -69,6 +72,27 @@ beforeEach(() => {
 });
 
 describe("administrative HTTP boundary", () => {
+  it("permanently deletes through a separate guarded endpoint", async () => {
+    mocks.remove.mockResolvedValue({ id: deckId });
+    const response = await remove(deckRequest("DELETE"), context);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: { id: deckId } });
+    expect(mocks.remove).toHaveBeenCalledWith(deckId);
+    expect(mocks.archive).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])("guards permanent deletion before service access (%s)", async (status) => {
+    mocks.guard.mockReturnValue(Response.json({ error: "Denied" }, { status }));
+    expect((await remove(deckRequest("DELETE"), context)).status).toBe(status);
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it("requires archiving before permanent deletion", async () => {
+    mocks.remove.mockRejectedValue({ status: 409, code: "deck_not_archived" });
+    const response = await remove(deckRequest("DELETE"), context);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "deck_not_archived" });
+  });
   it.each([true, false])(
     "accepts the proper-name boolean %s on create and option-only edits",
     async (allowProperNames) => {

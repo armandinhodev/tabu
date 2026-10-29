@@ -206,6 +206,10 @@ export async function restoreAdminDeck(id: string): Promise<ManagedDeck> {
   return runtime().service.restoreDeck(id);
 }
 
+export async function deleteAdminDeckPermanently(id: string): Promise<{ id: string }> {
+  return runtime().service.deleteDeckPermanently(id);
+}
+
 /** Encola la generación de un lote de cartas. Falla con 409 si hay un trabajo activo. */
 export async function queueGeneration(deckId: string, input: { count: number }): Promise<AdminJob> {
   return runtime().service.queueGeneration(deckId, input.count);

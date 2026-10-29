@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import mongoose from "mongoose";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AdminService } from "../../../../application/admin/admin-service";
 import { AdminError } from "../../../../application/admin/errors";
@@ -99,6 +99,105 @@ describe.skipIf(mongoUri === undefined)("admin deck CRUD against a real Mongo", 
     await service.archiveDeck(deck.id);
     await service.restoreDeck(deck.id);
     expect(await service.getDeck(deck.id)).toHaveProperty("allowProperNames", false);
+  });
+
+  it("permanently removes an archived deck and history, retains an anonymous barrier and frees its name", async () => {
+    const { service, jobs } = build();
+    const deck = await service.createDeck({ name: "Delete me", theme: "Private theme" });
+    const job = await service.queueGeneration(deck.id, 1);
+    await AdminJobModel.updateOne(
+      { _id: job.id },
+      { $set: { status: "completed" }, $unset: { activeKey: "" } },
+    );
+    await AdminDeckModel.updateOne({ _id: deck.id }, { $unset: { activeJob: "" } });
+    await service.archiveDeck(deck.id);
+    expect(await service.deleteDeckPermanently(deck.id)).toEqual({ id: deck.id });
+    expect(await AdminDeckModel.findById(deck.id)).toBeNull();
+    expect(await jobs.findById(job.id)).toBeNull();
+    const barrier = await AdminDeckProjectionModel.findById(deck.publicDeckId).lean();
+    expect(barrier).toMatchObject({ active: false, cards: [], managedDeckId: deck.id });
+    expect(barrier?.name).not.toBe("Delete me");
+    expect(barrier?.category).not.toBe("Private theme");
+    await expect(
+      AdminDeckProjectionModel.findOneAndUpdate(
+        { _id: deck.publicDeckId, revision: { $lte: deck.revision } },
+        {
+          $set: {
+            name: "Delete me",
+            category: "Private theme",
+            language: "es",
+            active: true,
+            cards: [],
+            managedDeckId: deck.id,
+            revision: deck.revision,
+          },
+        },
+        { upsert: true },
+      ).exec(),
+    ).rejects.toMatchObject({ code: 11000 });
+    expect(await AdminDeckProjectionModel.findById(deck.publicDeckId).lean()).toEqual(barrier);
+    expect(await service.deleteDeckPermanently(deck.id)).toEqual({ id: deck.id });
+    expect(await service.createDeck({ name: "Delete me", theme: "New" })).toHaveProperty(
+      "name",
+      "Delete me",
+    );
+  });
+
+  it("rejects permanent deletion of active and busy decks without changing stored data", async () => {
+    const { service } = build();
+    const deck = await service.createDeck({ name: "Active delete", theme: "General" });
+    const snapshot = async () => JSON.stringify(await AdminDeckModel.findById(deck.id).lean());
+    const before = await snapshot();
+    await expectAdminError(service.deleteDeckPermanently(deck.id), 409, "deck_not_archived");
+    expect(await snapshot()).toBe(before);
+    const job = await service.queueGeneration(deck.id, 1);
+    await AdminDeckModel.updateOne({ _id: deck.id }, { $set: { archivedAt: new Date(NOW) } });
+    const busy = await snapshot();
+    await expectAdminError(service.deleteDeckPermanently(deck.id), 409, "job_in_progress");
+    expect(await snapshot()).toBe(busy);
+    expect(await AdminJobModel.findById(job.id)).not.toBeNull();
+    await expectAdminError(service.deleteDeckPermanently("missing"), 404, "not_found");
+  });
+
+  it("retries partial permanent cleanup and blocks restore/edit while deletion is pending", async () => {
+    const { service } = build();
+    const deck = await service.createDeck({ name: "Retry delete", theme: "General" });
+    await service.archiveDeck(deck.id);
+    const failure = vi.spyOn(AdminJobModel, "deleteMany").mockImplementationOnce(() => {
+      throw new Error("simulated database failure");
+    });
+    try {
+      await expect(service.deleteDeckPermanently(deck.id)).rejects.toThrow(
+        "simulated database failure",
+      );
+    } finally {
+      failure.mockRestore();
+    }
+    const pending = await AdminDeckModel.findById(deck.id).lean();
+    expect(pending?.deletionPending).toBe(true);
+    await expect(service.restoreDeck(deck.id)).rejects.toMatchObject({ status: 409 });
+    await expect(service.updateDeck(deck.id, { name: "Must not win" })).rejects.toMatchObject({
+      status: 409,
+    });
+    expect((await AdminDeckModel.findById(deck.id).lean())?.revision).toBe(pending?.revision);
+    await service.deleteDeckPermanently(deck.id);
+    expect(await AdminDeckModel.findById(deck.id)).toBeNull();
+  });
+
+  it("lets either restore or permanent deletion win without deleting a restored deck", async () => {
+    const { service } = build();
+    const deck = await service.createDeck({ name: "Race delete", theme: "General" });
+    await service.archiveDeck(deck.id);
+    const results = await Promise.allSettled([
+      service.restoreDeck(deck.id),
+      service.deleteDeckPermanently(deck.id),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const current = await AdminDeckModel.findById(deck.id).lean();
+    if (current !== null) {
+      expect(current.archivedAt).toBeUndefined();
+      expect(current.deletionPending).toBeUndefined();
+    }
   });
 
   it("archives the deck keeping the public document as an empty tombstone", async () => {

@@ -47,6 +47,7 @@ export async function adminResponse(
       mongo_unavailable: "MongoDB no está disponible. Actualiza antes de reintentar.",
       job_in_progress: "Este mazo ya tiene una generación o un reemplazo en curso.",
       deck_archived: "Este mazo está archivado. Restáuralo para volver a usarlo.",
+      deck_not_archived: "Archiva el mazo antes de eliminarlo definitivamente.",
     };
     const code =
       typeof error === "object" &&

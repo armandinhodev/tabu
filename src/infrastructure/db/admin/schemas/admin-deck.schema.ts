@@ -41,6 +41,8 @@ export interface AdminDeckFenceDocument {
 
 /** Mazo administrable (`adminDecks`). */
 export interface AdminDeckDocument {
+  /** Internal gate while an irreversible deletion finishes or is retried. */
+  deletionPending?: boolean;
   allowProperNames?: boolean;
   /** Id estable del mazo administrable (lo genera la aplicación). */
   _id: string;
@@ -110,6 +112,7 @@ const adminCardSchema = new Schema<AdminCardDocument>(
 export const adminDeckSchema = new Schema<AdminDeckDocument>(
   {
     allowProperNames: { type: Boolean, required: false },
+    deletionPending: { type: Boolean, required: false },
     // El id lo genera la aplicación: se declara para que no sea un ObjectId.
     _id: { type: String, required: true },
     name: { type: String, required: true, trim: true },

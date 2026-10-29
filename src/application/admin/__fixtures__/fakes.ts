@@ -166,6 +166,8 @@ interface FakeDeck {
 
 /** Mazo administrable en memoria con la misma semántica de fence. */
 export class FakeDeckStore implements AdminDeckStore {
+  jobStore?: FakeJobStore;
+  readonly deleted = new Set<string>();
   readonly decks = new Map<string, FakeDeck>();
   readonly projections: DeckProjection[] = [];
 
@@ -304,6 +306,21 @@ export class FakeDeckStore implements AdminDeckStore {
     deck.updatedAt = input.now;
 
     return deck;
+  }
+
+  async deleteArchived(input: { deckId: string; now: string }): Promise<void> {
+    const deck = this.decks.get(input.deckId);
+    if (deck === undefined) {
+      if (this.deleted.has(input.deckId)) return;
+      throw adminNotFound("deck not found");
+    }
+    if (deck.archivedAt === undefined) throw adminConflict("deck_not_archived", "Archive first");
+    if (deck.activeJob !== undefined) throw adminConflict("job_in_progress", "Active job");
+    for (const [id, record] of this.jobStore?.jobs ?? []) {
+      if (record.job.deckId === input.deckId) this.jobStore?.jobs.delete(id);
+    }
+    this.decks.delete(input.deckId);
+    this.deleted.add(input.deckId);
   }
 
   async reserveDeck(input: {

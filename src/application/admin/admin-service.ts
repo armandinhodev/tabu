@@ -257,6 +257,13 @@ export class AdminService {
     return restored;
   }
 
+  /** Permanently deletes an archived deck, its cards and generation history. */
+  async deleteDeckPermanently(id: string): Promise<{ id: string }> {
+    await this.assertNoActiveJob(id);
+    await this.deps.decks.deleteArchived({ deckId: id, now: this.now() });
+    return { id };
+  }
+
   /** Encola la generación de un lote de cartas. */
   async queueGeneration(deckId: string, count: number): Promise<AdminJob> {
     if (!Number.isInteger(count) || count < 1 || count > MAX_GENERATION_COUNT) {

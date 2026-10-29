@@ -202,6 +202,8 @@ export interface AdminDeckStore {
    * has an active job. Restoring a deck that is not archived changes nothing.
    */
   restoreDeck(input: { readonly deckId: string; readonly now: string }): Promise<ManagedDeck>;
+  /** Deletes an archived deck and its history; retries finish interrupted cleanup. */
+  deleteArchived(input: { readonly deckId: string; readonly now: string }): Promise<void>;
   /**
    * Reserves a non archived deck without an active job for a pending job.
    * `false` means the deck is archived or already reserved.

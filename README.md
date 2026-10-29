@@ -89,7 +89,12 @@ se archiva y se restaura. El archivado es recuperable: no borra nada, conserva l
 los hallazgos de validación, el historial y el mismo identificador público, y el mazo deja de
 aceptar generaciones, reemplazos o cambios de cartas hasta restaurarlo. El catálogo muestra
 por defecto sólo los mazos activos; el filtro **Mostrar archivados** trae los archivados
-para poder seleccionarlos y restaurarlos. Editar, archivar y restaurar se rechazan mientras
+para poder seleccionarlos y restaurarlos. Un mazo archivado también ofrece **Eliminar definitivamente**:
+requiere una segunda confirmación y borra el mazo, sus cartas y su historial de generación;
+no se puede deshacer. No se añade protección especial para partidas en curso. El servidor conserva
+únicamente una marca pública vacía y anónima para impedir publicaciones atrasadas, no las cartas
+ni el nombre original. Si la limpieza falla, reintentar la eliminación la completa.
+Editar, archivar, restaurar y eliminar se rechazan mientras
 el mazo tiene una generación o un reemplazo en curso. Cambiar la temática afecta sólo a las
 generaciones futuras: las cartas guardadas no se regeneran.
 

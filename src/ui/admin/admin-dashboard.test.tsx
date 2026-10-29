@@ -126,6 +126,24 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it("clears a permanently deleted deck even when archived decks are visible", async () => {
+    catalog = [archivedDeck];
+    render(<AdminDashboard />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Mostrar archivados" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Eliminar definitivamente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación definitiva" }));
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        url: "/api/admin/decks/deck-2/permanent",
+        method: "DELETE",
+        body: null,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Restaurar mazo" })).not.toBeInTheDocument(),
+    );
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
   it("opts into proper-name objectives when creating a deck", async () => {
     render(<AdminDashboard />);
     fireEvent.click(await screen.findByRole("tab", { name: "Crear mazo" }));

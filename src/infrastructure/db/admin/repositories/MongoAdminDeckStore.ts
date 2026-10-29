@@ -17,7 +17,7 @@ import { normalizeWord } from "../../../../domain/value-objects/TabooWords";
 import { DeckModel } from "../../mongoose/models/DeckModel";
 import { toCardDocument, toManagedDeck } from "../mappers";
 import { assertMongoAvailable, isDuplicateKeyError } from "../mongo-available";
-import { AdminDeckModel, AdminDeckProjectionModel } from "../models/AdminModels";
+import { AdminDeckModel, AdminDeckProjectionModel, AdminJobModel } from "../models/AdminModels";
 
 /**
  * Persistencia de los mazos administrables.
@@ -131,6 +131,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
       const document = await AdminDeckModel.findOneAndUpdate(
         {
           _id: input.deckId,
+          deletionPending: { $ne: true },
           // Con un trabajo activo el mazo no se toca: la API responde 409.
           "activeJob.jobId": { $exists: false },
         },
@@ -225,6 +226,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
       {
         _id: input.deckId,
         archivedAt: { $exists: true },
+        deletionPending: { $ne: true },
         "activeJob.jobId": { $exists: false },
       },
       {
@@ -255,6 +257,60 @@ export class MongoAdminDeckStore implements AdminDeckStore {
     }
 
     throw adminConflict("restore_failed", "The deck could not be restored");
+  }
+
+  /** Permanently removes private data, keeping only an anonymous stale-write barrier. */
+  async deleteArchived(input: { deckId: string; now: string }): Promise<void> {
+    assertMongoAvailable();
+    let current = await AdminDeckModel.findById(input.deckId).exec();
+    if (current === null) {
+      const barrier = await AdminDeckProjectionModel.findOne({
+        managedDeckId: input.deckId,
+      }).exec();
+      if (barrier === null) throw adminNotFound("No archived deck to delete");
+      await AdminJobModel.deleteMany({ deckId: input.deckId }).exec();
+      return;
+    }
+    if (current.archivedAt === undefined) {
+      throw adminConflict("deck_not_archived", "Archive the deck before permanent deletion");
+    }
+    if (current.activeJob !== undefined) {
+      throw adminConflict("job_in_progress", "The deck has an active job");
+    }
+    if (current.deletionPending !== true) {
+      current = await AdminDeckModel.findOneAndUpdate(
+        {
+          _id: input.deckId,
+          archivedAt: { $exists: true },
+          "activeJob.jobId": { $exists: false },
+          deletionPending: { $ne: true },
+        },
+        { $set: { deletionPending: true, updatedAt: new Date(input.now) }, $inc: { revision: 1 } },
+        { new: true },
+      ).exec();
+      if (current === null)
+        throw adminConflict("delete_conflict", "The deck changed; retry deletion");
+    }
+    // The gate wins atomically against restore/edit. Publishers that already
+    // read the deck have a lower revision; new publishers cannot read the gate.
+    await AdminDeckProjectionModel.findOneAndUpdate(
+      { _id: new Types.ObjectId(current.publicDeckId), revision: { $lte: current.revision } },
+      {
+        $set: {
+          name: `deleted-${current.publicDeckId}`,
+          category: "deleted",
+          language: current.language,
+          active: false,
+          cards: [],
+          managedDeckId: input.deckId,
+          revision: current.revision,
+        },
+        $setOnInsert: { createdAt: new Date(input.now) },
+      },
+      { upsert: true },
+    ).exec();
+    await AdminJobModel.deleteMany({ deckId: input.deckId }).exec();
+    await AdminDeckModel.deleteOne({ _id: input.deckId, deletionPending: true }).exec();
   }
 
   /**
@@ -604,7 +660,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
   async publishProjection(input: { deckId: string; fence?: JobFence; now: string }): Promise<void> {
     assertMongoAvailable();
 
-    const filter: Record<string, unknown> = { _id: input.deckId };
+    const filter: Record<string, unknown> = { _id: input.deckId, deletionPending: { $ne: true } };
 
     if (input.fence !== undefined) {
       filter["activeJob.jobId"] = input.fence.jobId;

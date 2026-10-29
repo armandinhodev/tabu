@@ -44,6 +44,7 @@ export interface DeckManagementProps {
   readonly act: (action: () => Promise<void>) => Promise<void>;
   /** Avisa que el mazo quedó archivado: el tablero puede limpiar la selección. */
   readonly onArchived: (deckId: string) => void;
+  readonly onDeleted: (deckId: string) => void;
 }
 
 /**
@@ -54,16 +55,26 @@ export interface DeckManagementProps {
  * conserva sus cartas, sus hallazgos y su historial, y se puede restaurar
  * después con el mismo identificador.
  */
-export function DeckManagement({ deck, busy, running, api, act, onArchived }: DeckManagementProps) {
+export function DeckManagement({
+  deck,
+  busy,
+  running,
+  api,
+  act,
+  onArchived,
+  onDeleted,
+}: DeckManagementProps) {
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [confirmingDeletion, setConfirmingDeletion] = useState(false);
   const [allowProperNames, setAllowProperNames] = useState(false);
 
   useEffect(() => {
     setName(deck?.name ?? "");
     setTheme(deck?.theme ?? "");
     setConfirming(false);
+    setConfirmingDeletion(false);
     setAllowProperNames(deck?.allowProperNames ?? false);
   }, [deck?.id, deck?.name, deck?.theme, deck?.allowProperNames]);
 
@@ -107,6 +118,16 @@ export function DeckManagement({ deck, busy, running, api, act, onArchived }: De
   async function restore() {
     await act(async () => {
       await api(`/api/admin/decks/${encodeURIComponent(current.id)}/restore`, { method: "POST" });
+    });
+  }
+
+  async function remove() {
+    await act(async () => {
+      await api(`/api/admin/decks/${encodeURIComponent(current.id)}/permanent`, {
+        method: "DELETE",
+      });
+      setConfirmingDeletion(false);
+      onDeleted(current.id);
     });
   }
 
@@ -156,9 +177,44 @@ export function DeckManagement({ deck, busy, running, api, act, onArchived }: De
             Guardar cambios
           </Button>
           {archived ? (
-            <Button variant="ghost" size="sm" disabled={locked} onClick={() => void restore()}>
-              Restaurar mazo
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" disabled={locked} onClick={() => void restore()}>
+                Restaurar mazo
+              </Button>
+              {confirmingDeletion ? (
+                <>
+                  <p role="alert" className="w-full text-body-sm text-warning">
+                    Se eliminarán el mazo, sus cartas y su historial. Esta acción no se puede
+                    deshacer.
+                  </p>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={locked}
+                    onClick={() => void remove()}
+                  >
+                    Confirmar eliminación definitiva
+                  </Button>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={locked}
+                    onClick={() => setConfirmingDeletion(false)}
+                  >
+                    Cancelar eliminación
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={locked}
+                  onClick={() => setConfirmingDeletion(true)}
+                >
+                  Eliminar definitivamente
+                </Button>
+              )}
+            </>
           ) : confirming ? (
             <>
               <Button variant="caution" size="sm" disabled={locked} onClick={() => void archive()}>

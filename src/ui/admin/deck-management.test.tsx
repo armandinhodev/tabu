@@ -29,6 +29,7 @@ function renderManagement(overrides: Partial<DeckManagementProps> = {}) {
     await action();
   });
   const onArchived = vi.fn();
+  const onDeleted = vi.fn();
 
   render(
     <DeckManagement
@@ -38,14 +39,44 @@ function renderManagement(overrides: Partial<DeckManagementProps> = {}) {
       api={api as unknown as DeckManagementProps["api"]}
       act={act}
       onArchived={onArchived}
+      onDeleted={onDeleted}
       {...overrides}
     />,
   );
 
-  return { api, act, onArchived };
+  return { api, act, onArchived, onDeleted };
 }
 
 describe("DeckManagement", () => {
+  it("offers permanent deletion only when archived and requires confirmation", async () => {
+    const { api, onDeleted } = renderManagement({ deck: archivedDeck });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+    expect(screen.getByText(/Se eliminarán el mazo, sus cartas y su historial/)).toBeVisible();
+    expect(api).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar eliminación" }));
+    expect(api).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación definitiva" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith("/api/admin/decks/deck-1/permanent", { method: "DELETE" }),
+    );
+    expect(onDeleted).toHaveBeenCalledWith("deck-1");
+  });
+
+  it("does not offer permanent deletion on an active deck", () => {
+    renderManagement();
+    expect(
+      screen.queryByRole("button", { name: "Eliminar definitivamente" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([{ busy: true }, { running: true }])(
+    "disables permanent deletion during another operation (%j)",
+    (lock) => {
+      renderManagement({ deck: archivedDeck, ...lock });
+      expect(screen.getByRole("button", { name: "Eliminar definitivamente" })).toBeDisabled();
+    },
+  );
   it("loads an enabled option and can turn it off", async () => {
     const { api } = renderManagement({ deck: { ...deck, allowProperNames: true } });
     const checkbox = screen.getByRole("checkbox", { name: "Permitir nombres propios y títulos" });

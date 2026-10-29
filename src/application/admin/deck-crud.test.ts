@@ -24,6 +24,7 @@ const NOW = "2026-10-29T12:00:00.000Z";
 function build() {
   const decks = new FakeDeckStore();
   const jobs = new FakeJobStore();
+  decks.jobStore = jobs;
   const provider = new FakeProvider();
   const clock = new FakeClock();
   const ids = new FakeIds();
@@ -84,6 +85,33 @@ function queuedJob(overrides: Partial<AdminJob> = {}): AdminJob {
 }
 
 describe("AdminService.listDecks", () => {
+  it("permanently deletes only archived decks and allows a completed retry", async () => {
+    const { service, decks } = build();
+    decks.seed({
+      id: "deck-1",
+      name: "Archived",
+      theme: "General",
+      cards: [card()],
+      archivedAt: NOW,
+    });
+    decks.seed({ id: "other", name: "Other", theme: "General" });
+    expect(await service.deleteDeckPermanently("deck-1")).toEqual({ id: "deck-1" });
+    expect(await decks.findById("deck-1")).toBeNull();
+    expect(await service.deleteDeckPermanently("deck-1")).toEqual({ id: "deck-1" });
+    expect(await decks.findById("other")).not.toBeNull();
+  });
+
+  it("rejects permanent deletion of active, busy or unknown decks without mutation", async () => {
+    const { service, decks, jobs } = build();
+    decks.seed({ id: "deck-1", name: "Active", theme: "General" });
+    await expectAdminError(service.deleteDeckPermanently("deck-1"), 409, "deck_not_archived");
+    decks.seed({ id: "deck-2", name: "Busy", theme: "General", archivedAt: NOW });
+    jobs.seed(queuedJob({ deckId: "deck-2" }));
+    const before = JSON.stringify(await decks.list());
+    await expectAdminError(service.deleteDeckPermanently("deck-2"), 409, "job_in_progress");
+    await expectAdminError(service.deleteDeckPermanently("missing"), 404, "not_found");
+    expect(JSON.stringify(await decks.list())).toBe(before);
+  });
   it("hides archived decks by default and returns them on request", async () => {
     const { service, decks } = build();
     decks.seed({ id: "deck-1", name: "Activo", theme: "General" });

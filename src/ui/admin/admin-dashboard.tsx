@@ -321,6 +321,19 @@ export function AdminDashboard() {
     }
   }
 
+  function handleDeleted(deckId: string) {
+    if (selectedId === deckId) {
+      selectionClearedRef.current = true;
+      setSelectedId(null);
+      setDeck(null);
+    }
+    if (job?.deckId === deckId) {
+      setJob(null);
+      setJobId(null);
+      rememberJob(null);
+    }
+  }
+
   /** El filtro de archivados recarga el catálogo y ajusta la selección. */
   function toggleArchived(next: boolean) {
     setShowArchived(next);
@@ -669,6 +682,7 @@ export function AdminDashboard() {
                   api={api}
                   act={act}
                   onArchived={handleArchived}
+                  onDeleted={handleDeleted}
                 />
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="space-y-2">
