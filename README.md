@@ -80,6 +80,10 @@ TypeScript en producción. No usa `next start` ni el servidor standalone, que om
 El panel está en `/admin`. Los mazos creados desde allí se administran por separado de los tres
 mazos originales; las partidas que ya comenzaron conservan sus cartas.
 
+La pestaña **Crear mazo** contiene el formulario de generación; **Mazos** permite revisar las
+cartas y pedir nuevas generaciones o reemplazos. El progreso en vivo se mantiene visible al
+cambiar de pestaña, y el formulario conserva los datos todavía no enviados.
+
 Configurar estas variables únicamente en el servidor, en `.env` o en el entorno del contenedor:
 
 | Variable               | Uso                                                               |

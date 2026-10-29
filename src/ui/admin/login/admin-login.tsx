@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/ui/components/ui/button";
@@ -111,6 +112,13 @@ export function AdminLogin({ configured, onAuthenticated }: AdminLoginProps) {
       aria-labelledby={TITLE_ID}
       className="flex w-full flex-col gap-5 rounded-xl border border-line bg-surface-2 p-5 shadow-card sm:p-6"
     >
+      <Link
+        href="/"
+        className="inline-flex min-h-11 items-center gap-2 self-start rounded-md px-2 text-body-sm text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        <ArrowLeft aria-hidden="true" className="size-4" />
+        Volver al juego
+      </Link>
       <header className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <span

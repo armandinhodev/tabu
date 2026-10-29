@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async () => {
@@ -98,6 +98,82 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it("separates creation and management into tabs while retaining the creation draft", async () => {
+    render(<AdminDashboard />);
+    const createTab = await screen.findByRole("tab", { name: "Crear mazo" });
+    const decksTab = screen.getByRole("tab", { name: "Mazos" });
+    expect(decksTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Mazos" })).toBeVisible();
+    expect(screen.queryByRole("tabpanel", { name: "Crear mazo" })).not.toBeInTheDocument();
+
+    fireEvent.click(createTab);
+    const createPanel = screen.getByRole("tabpanel", { name: "Crear mazo" });
+    expect(createTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tabpanel", { name: "Mazos" })).not.toBeInTheDocument();
+    fireEvent.change(within(createPanel).getByLabelText("Nombre del mazo"), {
+      target: { value: "Draft" },
+    });
+    fireEvent.click(decksTab);
+    fireEvent.click(createTab);
+    expect(
+      within(screen.getByRole("tabpanel", { name: "Crear mazo" })).getByLabelText(
+        "Nombre del mazo",
+      ),
+    ).toHaveValue("Draft");
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("supports arrow, Home and End navigation between the tabs", async () => {
+    render(<AdminDashboard />);
+    const createTab = await screen.findByRole("tab", { name: "Crear mazo" });
+    const decksTab = screen.getByRole("tab", { name: "Mazos" });
+    decksTab.focus();
+    fireEvent.keyDown(decksTab, { key: "ArrowRight" });
+    expect(createTab).toHaveFocus();
+    expect(createTab).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(createTab, { key: "End" });
+    expect(decksTab).toHaveFocus();
+    fireEvent.keyDown(decksTab, { key: "Home" });
+    expect(createTab).toHaveFocus();
+    fireEvent.keyDown(createTab, { key: "ArrowLeft" });
+    expect(decksTab).toHaveFocus();
+  });
+
+  it("keeps pushed progress visible in either tab without resubscribing", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+    const createTab = await screen.findByRole("tab", { name: "Crear mazo" });
+    await waitFor(() => expect(socketMock.subscribe).toHaveBeenCalledWith("job-1"));
+    const before = socketMock.subscribe.mock.calls.length;
+    fireEvent.click(createTab);
+    socketMock.handlers?.onJob({
+      id: "job-1",
+      status: "running",
+      processed: 3,
+      requested: 5,
+      updatedAt: "2026-10-29T12:00:30.000Z",
+    });
+    expect(await screen.findByText(/3\/5 cartas/)).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Mazos" }));
+    expect(screen.getByText(/3\/5 cartas/)).toBeVisible();
+    expect(socketMock.subscribe.mock.calls).toHaveLength(before);
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("keeps the additional-generation quantity editable from the decks tab", async () => {
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generar 7 cartas más" }));
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        url: "/api/admin/decks/deck-1/generate",
+        method: "POST",
+        body: { count: 7 },
+      }),
+    );
+  });
+
   it("shows only the login when the session is not authenticated", async () => {
     authenticated = false;
     render(<AdminDashboard />);
@@ -122,6 +198,7 @@ describe("AdminDashboard", () => {
   it("creates a deck and submits a bounded generation request", async () => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "Administración de mazos" });
+    fireEvent.click(screen.getByRole("tab", { name: "Crear mazo" }));
     fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Sports" } });
     fireEvent.change(screen.getByLabelText("Temática e indicaciones"), {
       target: { value: "Sports for adults" },
@@ -142,6 +219,7 @@ describe("AdminDashboard", () => {
         body: { count: 5 },
       }),
     );
+    expect(screen.getByRole("tab", { name: "Mazos" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("requests an automatic replacement without editing the old card locally", async () => {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AdminLogin } from "./admin-login";
@@ -47,6 +47,15 @@ afterEach(() => {
 });
 
 describe("AdminLogin", () => {
+  it("places the return-to-game navigation inside the named login card", () => {
+    render(<AdminLogin configured />);
+    const card = screen.getByRole("region", { name: "Acceso al panel de administración" });
+    expect(within(card).getByRole("link", { name: "Volver al juego" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+  });
+
   it("sends the credentials to the session endpoint and reports the success", async () => {
     fetchMock.mockResolvedValue(Response.json({ authenticated: true }));
     const onAuthenticated = vi.fn();

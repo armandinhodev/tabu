@@ -101,6 +101,8 @@ export function AdminDashboard() {
   const [theme, setTheme] = useState("");
   const [count, setCount] = useState("5");
   const [onlyExcluded, setOnlyExcluded] = useState(false);
+  const [activeTab, setActiveTab] = useState<"create" | "decks">("decks");
+  const tabRefs = useRef<Partial<Record<"create" | "decks", HTMLButtonElement | null>>>({});
   const [connection, setConnection] = useState<AdminConnectionState>("idle");
   const socketRef = useRef<AdminSocketClient | null>(null);
   const progressRef = useRef("");
@@ -308,6 +310,7 @@ export function AdminDashboard() {
       });
       setSelectedId(created.id);
       setDeck(created);
+      setActiveTab("decks");
       setName("");
       setTheme("");
       trackJob(
@@ -332,10 +335,7 @@ export function AdminDashboard() {
     );
   if (auth === "login")
     return (
-      <main className="mx-auto max-w-lg p-6">
-        <Link href="/" className="text-fg-muted underline">
-          Volver al juego
-        </Link>
+      <main className="mx-auto max-w-lg px-4 py-8 sm:px-6 sm:py-12">
         <AdminLogin
           configured={configured}
           onAuthenticated={() => {
@@ -401,9 +401,54 @@ export function AdminDashboard() {
         </p>
       )}
 
+      <div
+        role="tablist"
+        aria-label="Secciones del panel"
+        className="flex gap-2 border-b border-line pb-2"
+      >
+        {(
+          [
+            ["create", "Crear mazo"],
+            ["decks", "Mazos"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            ref={(element) => {
+              tabRefs.current[value] = element;
+            }}
+            type="button"
+            role="tab"
+            id={`admin-${value}-tab`}
+            aria-controls={`admin-${value}-panel`}
+            aria-selected={activeTab === value}
+            tabIndex={activeTab === value ? 0 : -1}
+            className={`min-h-11 rounded-md px-4 font-display font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${activeTab === value ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"}`}
+            onClick={() => setActiveTab(value)}
+            onKeyDown={(event) => {
+              let next: "create" | "decks";
+              if (event.key === "Home") next = "create";
+              else if (event.key === "End") next = "decks";
+              else if (event.key === "ArrowLeft" || event.key === "ArrowRight")
+                next = value === "create" ? "decks" : "create";
+              else return;
+              event.preventDefault();
+              setActiveTab(next);
+              tabRefs.current[next]?.focus();
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <section
+        role="tabpanel"
+        id="admin-create-panel"
+        hidden={activeTab !== "create"}
+        tabIndex={0}
         className="rounded-lg border border-line bg-surface p-5"
-        aria-labelledby="create-title"
+        aria-labelledby="admin-create-tab"
       >
         <h2 id="create-title" className="font-display text-h3">
           Crear un mazo
@@ -492,184 +537,210 @@ export function AdminDashboard() {
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="space-y-3" aria-label="Mazos administrados">
-          <h2 className="font-display text-h3">Mazos</h2>
-          {decks.length === 0 && (
-            <p className="text-fg-muted">
-              Todavía no hay mazos creados desde este panel. Los mazos originales del juego no se
-              modifican.
-            </p>
-          )}
-          {decks.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={selectedId === item.id}
-              onClick={() => {
-                setSelectedId(item.id);
-                setDeck(null);
-              }}
-              className={`w-full rounded-md border p-4 text-left ${selectedId === item.id ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
-            >
-              <span className="block font-semibold">{item.name}</span>
-              <span className="mt-1 block text-body-sm text-fg-muted">
-                {item.cards?.length ?? 0} cartas
-              </span>
-            </button>
-          ))}
-          <Button variant="quiet" size="sm" onClick={() => setRefresh((value) => value + 1)}>
-            Actualizar
-          </Button>
-        </aside>
-
-        <section className="min-w-0 space-y-4" aria-label="Cartas del mazo">
-          {deck && (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="font-display text-h3">{deck.name}</h2>
-                  <p className="text-fg-muted">{deck.theme}</p>
-                  <p className="mt-1 text-body-sm">
-                    {cards.filter((card) => !card.excluded).length} disponibles ·{" "}
-                    {cards.filter((card) => card.excluded).length} excluidas
-                  </p>
-                </div>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={onlyExcluded}
-                    onChange={(event) => setOnlyExcluded(event.target.checked)}
-                  />
-                  Solo excluidas
-                </label>
-              </div>
-              <Button
-                variant="ghost"
-                disabled={busy || running}
-                onClick={() =>
-                  void act(async () => {
-                    const amount = Number(count);
-                    if (!Number.isInteger(amount) || amount < 1 || amount > 50)
-                      throw new RequestFailure(400, "La cantidad debe ser un entero entre 1 y 50.");
-                    trackJob(
-                      await api<JobView>(
-                        `/api/admin/decks/${encodeURIComponent(deck.id)}/generate`,
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ count: amount }),
-                        },
-                      ),
-                    );
-                  })
-                }
+      <section
+        role="tabpanel"
+        id="admin-decks-panel"
+        aria-labelledby="admin-decks-tab"
+        hidden={activeTab !== "decks"}
+        tabIndex={0}
+      >
+        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="space-y-3" aria-label="Mazos administrados">
+            <h2 className="font-display text-h3">Mazos</h2>
+            {decks.length === 0 && (
+              <p className="text-fg-muted">
+                Todavía no hay mazos creados desde este panel. Los mazos originales del juego no se
+                modifican.
+              </p>
+            )}
+            {decks.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selectedId === item.id}
+                onClick={() => {
+                  setSelectedId(item.id);
+                  setDeck(null);
+                }}
+                className={`w-full rounded-md border p-4 text-left ${selectedId === item.id ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
               >
-                Generar {count} cartas más
-              </Button>
-            </>
-          )}
-          {deck && visibleCards.length === 0 && (
-            <p className="rounded-md border border-line p-5 text-fg-muted">
-              No hay cartas para mostrar. El progreso se actualiza automáticamente durante la
-              generación.
-            </p>
-          )}
-          <div className="grid gap-4 xl:grid-cols-2">
-            {visibleCards.map((card) => (
-              <article key={card.id} className="rounded-lg border border-line bg-surface p-5">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-display text-h3">{card.word}</h3>
-                  <span className={card.excluded ? "text-warning" : "text-success"}>
-                    {card.excluded
-                      ? "Excluida"
-                      : card.manualOverride
-                        ? "Habilitada manualmente"
-                        : "Disponible"}
-                  </span>
-                </div>
-                <ol className="mt-4 grid grid-cols-2 gap-2">
-                  {card.taboo.map((word, index) => (
-                    <li key={`${index}-${word}`} className="rounded-md bg-surface-2 px-3 py-2">
-                      {word}
-                    </li>
-                  ))}
-                </ol>
-                {card.taboo.length < 6 && (
-                  <p className="mt-3 text-warning">Faltan prohibidas para completar las seis.</p>
-                )}
-                {card.issues.length > 0 && (
-                  <details className="mt-4 text-body-sm">
-                    <summary className="cursor-pointer text-warning">
-                      Ver advertencias ({card.issues.length})
-                    </summary>
-                    <ul className="mt-2 list-disc space-y-1 pl-5">
-                      {card.issues.map((issue, index) => (
-                        <li key={`${index}-${issue}`}>{issue}</li>
-                      ))}
-                    </ul>
-                    <p className="mt-2 text-fg-muted">
-                      Una palabra desconocida puede ser un regionalismo. Habilitar la carta no
-                      elimina estas advertencias.
+                <span className="block font-semibold">{item.name}</span>
+                <span className="mt-1 block text-body-sm text-fg-muted">
+                  {item.cards?.length ?? 0} cartas
+                </span>
+              </button>
+            ))}
+            <Button variant="quiet" size="sm" onClick={() => setRefresh((value) => value + 1)}>
+              Actualizar
+            </Button>
+          </aside>
+
+          <section className="min-w-0 space-y-4" aria-label="Cartas del mazo">
+            {deck && (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className="font-display text-h3">{deck.name}</h2>
+                    <p className="text-fg-muted">{deck.theme}</p>
+                    <p className="mt-1 text-body-sm">
+                      {cards.filter((card) => !card.excluded).length} disponibles ·{" "}
+                      {cards.filter((card) => card.excluded).length} excluidas
                     </p>
-                  </details>
-                )}
-                {card.candidates && card.candidates.length > 0 && (
-                  <details className="mt-3 text-body-sm">
-                    <summary className="cursor-pointer">Ver candidatas y validación</summary>
-                    <ul className="mt-2 space-y-1">
-                      {card.candidates.map((candidate, index) => (
-                        <li key={`${index}-${candidate.word}`}>
-                          {candidate.word} · {candidate.recognized ? "Reconocida" : "Revisar"}
-                          {candidate.reason ? ` · ${candidate.reason}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-                <div className="mt-4 flex flex-wrap gap-2">
+                  </div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={onlyExcluded}
+                      onChange={(event) => setOnlyExcluded(event.target.checked)}
+                    />
+                    Solo excluidas
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="space-y-2">
+                    <span className="block text-body-sm text-fg-muted">Cantidad para generar</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      step={1}
+                      value={count}
+                      onChange={(event) => setCount(event.target.value)}
+                      disabled={busy || running}
+                      className="w-24"
+                    />
+                  </label>
                   <Button
-                    size="sm"
-                    variant={card.excluded ? "caution" : "ghost"}
-                    disabled={busy || running || (card.excluded && card.taboo.length !== 6)}
+                    variant="ghost"
+                    disabled={busy || running}
                     onClick={() =>
                       void act(async () => {
-                        await api(
-                          `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}`,
-                          {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ excluded: !card.excluded }),
-                          },
+                        const amount = Number(count);
+                        if (!Number.isInteger(amount) || amount < 1 || amount > 50)
+                          throw new RequestFailure(
+                            400,
+                            "La cantidad debe ser un entero entre 1 y 50.",
+                          );
+                        trackJob(
+                          await api<JobView>(
+                            `/api/admin/decks/${encodeURIComponent(deck.id)}/generate`,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ count: amount }),
+                            },
+                          ),
                         );
                       })
                     }
                   >
-                    {card.excluded ? "Habilitar de todos modos" : "Excluir"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy || running}
-                    onClick={() =>
-                      void act(async () =>
-                        trackJob(
-                          await api<JobView>(
-                            `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}/replace`,
-                            { method: "POST" },
-                          ),
-                        ),
-                      )
-                    }
-                  >
-                    Reemplazar con Flash
+                    Generar {count} cartas más
                   </Button>
                 </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
+              </>
+            )}
+            {deck && visibleCards.length === 0 && (
+              <p className="rounded-md border border-line p-5 text-fg-muted">
+                No hay cartas para mostrar. El progreso se actualiza automáticamente durante la
+                generación.
+              </p>
+            )}
+            <div className="grid gap-4 xl:grid-cols-2">
+              {visibleCards.map((card) => (
+                <article key={card.id} className="rounded-lg border border-line bg-surface p-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-display text-h3">{card.word}</h3>
+                    <span className={card.excluded ? "text-warning" : "text-success"}>
+                      {card.excluded
+                        ? "Excluida"
+                        : card.manualOverride
+                          ? "Habilitada manualmente"
+                          : "Disponible"}
+                    </span>
+                  </div>
+                  <ol className="mt-4 grid grid-cols-2 gap-2">
+                    {card.taboo.map((word, index) => (
+                      <li key={`${index}-${word}`} className="rounded-md bg-surface-2 px-3 py-2">
+                        {word}
+                      </li>
+                    ))}
+                  </ol>
+                  {card.taboo.length < 6 && (
+                    <p className="mt-3 text-warning">Faltan prohibidas para completar las seis.</p>
+                  )}
+                  {card.issues.length > 0 && (
+                    <details className="mt-4 text-body-sm">
+                      <summary className="cursor-pointer text-warning">
+                        Ver advertencias ({card.issues.length})
+                      </summary>
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                        {card.issues.map((issue, index) => (
+                          <li key={`${index}-${issue}`}>{issue}</li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-fg-muted">
+                        Una palabra desconocida puede ser un regionalismo. Habilitar la carta no
+                        elimina estas advertencias.
+                      </p>
+                    </details>
+                  )}
+                  {card.candidates && card.candidates.length > 0 && (
+                    <details className="mt-3 text-body-sm">
+                      <summary className="cursor-pointer">Ver candidatas y validación</summary>
+                      <ul className="mt-2 space-y-1">
+                        {card.candidates.map((candidate, index) => (
+                          <li key={`${index}-${candidate.word}`}>
+                            {candidate.word} · {candidate.recognized ? "Reconocida" : "Revisar"}
+                            {candidate.reason ? ` · ${candidate.reason}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant={card.excluded ? "caution" : "ghost"}
+                      disabled={busy || running || (card.excluded && card.taboo.length !== 6)}
+                      onClick={() =>
+                        void act(async () => {
+                          await api(
+                            `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}`,
+                            {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ excluded: !card.excluded }),
+                            },
+                          );
+                        })
+                      }
+                    >
+                      {card.excluded ? "Habilitar de todos modos" : "Excluir"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy || running}
+                      onClick={() =>
+                        void act(async () =>
+                          trackJob(
+                            await api<JobView>(
+                              `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}/replace`,
+                              { method: "POST" },
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      Reemplazar con Flash
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
     </main>
   );
 }
