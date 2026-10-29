@@ -16,6 +16,26 @@ function fillCredentials(): void {
   fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "clave-de-prueba" } });
 }
 
+/** Promise whose settlement the test controls, to observe the pending state. */
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+
+  return { promise, resolve };
+}
+
+function formElement(): HTMLFormElement {
+  const form = document.querySelector("form");
+
+  if (form === null) {
+    throw new Error("The login form is not rendered.");
+  }
+
+  return form;
+}
+
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
@@ -115,5 +135,139 @@ describe("AdminLogin", () => {
 
     fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "clave-de-prueba" } });
     expect(screen.getByRole("button", { name: "Ingresar" })).toBeEnabled();
+  });
+});
+
+describe("AdminLogin presentation", () => {
+  it("presents an accessible heading that names the administrative panel", () => {
+    render(<AdminLogin configured />);
+
+    expect(
+      screen.getByRole("heading", { name: "Acceso al panel de administración" }),
+    ).toBeInTheDocument();
+  });
+
+  it("toggles the password visibility with an accessible labelled button", () => {
+    render(<AdminLogin configured />);
+
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("type", "password");
+
+    const show = screen.getByRole("button", { name: "Mostrar contraseña" });
+
+    expect(show).toHaveAttribute("type", "button");
+    expect(show).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(show);
+
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("type", "text");
+
+    const hide = screen.getByRole("button", { name: "Ocultar contraseña" });
+
+    expect(hide).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(hide);
+
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("type", "password");
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("does not send any request when the visibility toggle is used", () => {
+    render(<AdminLogin configured />);
+    fillCredentials();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("disables every control and marks the form as busy while the request is in flight", async () => {
+    const pending = deferred<Response>();
+
+    fetchMock.mockReturnValue(pending.promise);
+
+    render(<AdminLogin configured />);
+    fillCredentials();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+
+    const submit = await screen.findByRole("button", { name: "Ingresando…" });
+
+    expect(submit).toBeDisabled();
+    expect(formElement()).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByLabelText("Usuario")).toBeDisabled();
+    expect(screen.getByLabelText("Contraseña")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toBeDisabled();
+
+    pending.resolve(Response.json({ authenticated: true }));
+
+    await waitFor(() => expect(formElement()).toHaveAttribute("aria-busy", "false"));
+  });
+
+  it("never sends the credentials twice while a login is pending", async () => {
+    const pending = deferred<Response>();
+    const onAuthenticated = vi.fn();
+
+    fetchMock.mockReturnValue(pending.promise);
+
+    render(<AdminLogin configured onAuthenticated={onAuthenticated} />);
+    fillCredentials();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingresando…" }));
+    fireEvent.submit(formElement());
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    pending.resolve(Response.json({ authenticated: true }));
+
+    await waitFor(() => expect(onAuthenticated).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the password but keeps the username after a rejected attempt", async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ error: "Usuario o contraseña incorrectos." }, { status: 401 }),
+    );
+
+    render(<AdminLogin configured />);
+    fillCredentials();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Usuario o contraseña incorrectos."),
+    );
+    expect(screen.getByLabelText("Contraseña")).toHaveValue("");
+    expect(screen.getByLabelText("Usuario")).toHaveValue("admin-decks");
+  });
+
+  it("associates the credential error with the password field", async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ error: "Usuario o contraseña incorrectos." }, { status: 401 }),
+    );
+
+    render(<AdminLogin configured />);
+    fillCredentials();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+
+    const alert = await screen.findByRole("alert");
+    const password = screen.getByLabelText("Contraseña");
+
+    expect(password).toHaveAttribute("aria-invalid", "true");
+    expect(password).toHaveAttribute("aria-describedby", alert.getAttribute("id"));
+    expect(alert.getAttribute("id")).toBeTruthy();
+  });
+
+  it("blocks the visibility toggle when the panel is not configured", () => {
+    render(<AdminLogin configured={false} />);
+
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "El panel de administración no está disponible",
+    );
   });
 });
