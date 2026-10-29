@@ -99,6 +99,21 @@ function build() {
 }
 
 describe("processClaimedJob (batch flow)", () => {
+  it("does not request completion when six proper-name forbiddens are already valid", async () => {
+    const { decks, provider, deps, claim } = build();
+    const names = ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"];
+    deps.spell = new FakeSpellChecker(new Set());
+    decks.seed({ id: "deck-1", name: "Series", theme: "Series", allowProperNames: true });
+    provider.batchQueue.push([{ objective: "Juego de tronos", candidates: names }]);
+    provider.completionError = new Error("No completion should be requested");
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+    expect(provider.completionCalls).toHaveLength(0);
+    expect((await decks.findById("deck-1"))?.cards[0]).toMatchObject({
+      taboo: names,
+      excluded: false,
+      issues: [],
+    });
+  });
   it.each([
     ["generate", true],
     ["replace", true],

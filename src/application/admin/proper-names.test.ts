@@ -34,6 +34,7 @@ describe("proper-name objectives", () => {
   });
 
   it("keeps structural and previous-proposal checks while bypassing the dictionary", () => {
+    const isRecognized = vi.fn(() => true);
     const result = evaluateCard(
       {
         objective: "Juego de tronos",
@@ -54,7 +55,7 @@ describe("proper-name objectives", () => {
           "anterior",
         ],
       },
-      new FakeSpellChecker(new Set()),
+      { isRecognized },
     );
     expect(result.taboo).toEqual(["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"]);
     expect(result.candidates.map((candidate) => candidate.reason)).toEqual([
@@ -72,6 +73,7 @@ describe("proper-name objectives", () => {
       "previously_proposed",
     ]);
     expect(result.doubtful).toBe(false);
+    expect(isRecognized.mock.calls).toEqual([["Juego de tronos"]]);
   });
 
   it.each([undefined, false])(
