@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { evaluateCard } from "./candidates";
 import { AdminService, jobLimitsFor } from "./admin-service";
@@ -15,6 +15,84 @@ const words = ["dragón", "serie", "reino", "espada", "familia", "invierno"];
 const spell = new FakeSpellChecker(new Set([...words, "Juego", "de", "tronos"]));
 
 describe("proper-name objectives", () => {
+  it("accepts proper-name forbiddens without consulting their dictionary entries", () => {
+    const names = ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"];
+    const isRecognized = vi.fn((value: string) => {
+      if (value !== "Juego de tronos")
+        throw new Error("Forbidden words must bypass the dictionary");
+      return false;
+    });
+    const result = evaluateCard(
+      { objective: "Juego de tronos", candidates: names, allowProperNames: true },
+      { isRecognized },
+    );
+    expect(result).toMatchObject({ taboo: names, issues: [], doubtful: false });
+    expect(result.candidates).toEqual(
+      names.map((word) => ({ word, recognized: false, valid: true })),
+    );
+    expect(isRecognized.mock.calls).toEqual([["Juego de tronos"]]);
+  });
+
+  it("keeps structural and previous-proposal checks while bypassing the dictionary", () => {
+    const result = evaluateCard(
+      {
+        objective: "Juego de tronos",
+        allowProperNames: true,
+        previouslyProposed: ["Bran", "anterior"],
+        candidates: [
+          "tronos",
+          "dos palabras",
+          "",
+          "Arya",
+          "Árya",
+          "Ned",
+          "Sansa",
+          "Tyrion",
+          "Cersei",
+          "Jaime",
+          "Bran",
+          "anterior",
+        ],
+      },
+      new FakeSpellChecker(new Set()),
+    );
+    expect(result.taboo).toEqual(["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"]);
+    expect(result.candidates.map((candidate) => candidate.reason)).toEqual([
+      "equals_objective",
+      "not_single_word",
+      "empty",
+      undefined,
+      "duplicate",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "previously_proposed",
+      "previously_proposed",
+    ]);
+    expect(result.doubtful).toBe(false);
+  });
+
+  it.each([undefined, false])(
+    "still dictionary-validates forbidden words when the option is %s",
+    (allowProperNames) => {
+      const result = evaluateCard(
+        {
+          objective: "fuego",
+          candidates: ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"],
+          ...(allowProperNames === undefined ? {} : { allowProperNames }),
+        },
+        new FakeSpellChecker(new Set(["fuego"])),
+      );
+      expect(result.taboo).toHaveLength(6);
+      expect(result.candidates.every((candidate) => candidate.reason === "not_in_dictionary")).toBe(
+        true,
+      );
+      expect(result.issues).toEqual(["insufficient_recognized_words"]);
+      expect(result.doubtful).toBe(true);
+    },
+  );
   it("preserves default-off and explicit-off objective validation", () => {
     for (const option of [{}, { allowProperNames: false }]) {
       expect(
@@ -48,11 +126,11 @@ describe("proper-name objectives", () => {
     }
   });
 
-  it("excludes normalized title components and still requires six recognized single words", () => {
+  it("excludes normalized title components and still requires six single words", () => {
     const result = evaluateCard(
       {
         objective: "Juego de tronos",
-        candidates: ["Juégo", "de", "TRONOS", "dos palabras", "jaule", ...words],
+        candidates: ["Juégo", "de", "TRONOS", "dos palabras", "Daenerys", ...words],
         ...{ allowProperNames: true },
       },
       spell,
@@ -62,14 +140,14 @@ describe("proper-name objectives", () => {
       "equals_objective",
       "equals_objective",
       "not_single_word",
-      "not_in_dictionary",
+      undefined,
     ]);
-    expect(result.taboo).toEqual(words);
+    expect(result.taboo).toEqual(["Daenerys", ...words.slice(0, 5)]);
     expect(result.doubtful).toBe(false);
     const incomplete = evaluateCard(
       {
         objective: "Daenerys",
-        candidates: ["dos palabras", "jaule", ...words.slice(0, 5)],
+        candidates: ["dos palabras", ...words.slice(0, 5)],
         ...{ allowProperNames: true },
       },
       spell,

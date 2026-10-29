@@ -38,7 +38,7 @@ export interface EvaluatedCard {
   readonly objectiveRecognized: boolean;
   /** Candidatos evaluados, en el orden entregado por el proveedor. */
   readonly candidates: readonly AdminCandidate[];
-  /** Primeras palabras reconocidas por el diccionario (orden del proveedor). */
+  /** Accepted words in provider order; opt-in names do not require dictionary lookup. */
   readonly recognizedWords: readonly string[];
   /** Primeras palabras estructuralmente válidas (pueden no estar en el diccionario). */
   readonly structuralWords: readonly string[];
@@ -78,6 +78,8 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
   const blocked = new Set((input.previouslyProposed ?? []).map(normalizeWord));
   const seen = new Set<string>();
   const evaluated: AdminCandidate[] = [];
+  const recognizeCandidate = (word: string): boolean =>
+    !input.allowProperNames && spell.isRecognized(word);
 
   for (const raw of input.candidates.slice(0, MAX_CANDIDATES_PER_CARD)) {
     const word = raw.normalize("NFC").trim();
@@ -96,7 +98,7 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
     if (key === objectiveKey || components.has(key)) {
       evaluated.push({
         word,
-        recognized: spell.isRecognized(word),
+        recognized: recognizeCandidate(word),
         valid: false,
         reason: "equals_objective",
       });
@@ -106,7 +108,7 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
     if (seen.has(key)) {
       evaluated.push({
         word,
-        recognized: spell.isRecognized(word),
+        recognized: recognizeCandidate(word),
         valid: false,
         reason: "duplicate",
       });
@@ -118,21 +120,21 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
     if (blocked.has(key)) {
       evaluated.push({
         word,
-        recognized: spell.isRecognized(word),
+        recognized: recognizeCandidate(word),
         valid: false,
         reason: "previously_proposed",
       });
       continue;
     }
 
-    const recognized = spell.isRecognized(word);
+    const recognized = recognizeCandidate(word);
 
-    if (!recognized) {
+    if (!recognized && !input.allowProperNames) {
       evaluated.push({ word, recognized: false, valid: false, reason: "not_in_dictionary" });
       continue;
     }
 
-    evaluated.push({ word, recognized: true, valid: true });
+    evaluated.push({ word, recognized, valid: true });
   }
 
   const recognizedWords = evaluated

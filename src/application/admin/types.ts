@@ -21,6 +21,7 @@ export type AdminJobStatus = "queued" | "running" | "completed" | "failed";
  */
 export interface AdminCandidate {
   readonly word: string;
+  /** False also includes unchecked proper-name candidates; never fabricate recognition. */
   readonly recognized: boolean;
   readonly valid: boolean;
   readonly reason?: string;

@@ -108,6 +108,10 @@ describe("processClaimedJob (batch flow)", () => {
     "threads proper-name mode through %s and completion when enabled=%s",
     async (kind, allowProperNames) => {
       const { decks, provider, deps, claim } = build();
+      const candidates = allowProperNames
+        ? ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"]
+        : SIX_WORDS;
+      if (allowProperNames) deps.spell = new FakeSpellChecker(new Set(["fuego"]));
       const deck = decks.seed({
         id: "deck-1",
         name: "Series",
@@ -126,9 +130,9 @@ describe("processClaimedJob (batch flow)", () => {
         updatedAt: deck.updatedAt,
       });
       provider.batchQueue.push([
-        { objective: "Juego de tronos", candidates: SIX_WORDS.slice(0, 3) },
+        { objective: "Juego de tronos", candidates: candidates.slice(0, 3) },
       ]);
-      provider.completionQueue.push(SIX_WORDS.slice(3));
+      provider.completionQueue.push(candidates.slice(3));
       await processClaimedJob(
         deps,
         claim(
@@ -149,7 +153,7 @@ describe("processClaimedJob (batch flow)", () => {
       expect(deck.cards.find((card) => card.word === "Juego de tronos")).toMatchObject({
         excluded: !allowProperNames,
         issues: allowProperNames ? [] : ["malformed_objective"],
-        taboo: SIX_WORDS,
+        taboo: candidates,
       });
     },
   );

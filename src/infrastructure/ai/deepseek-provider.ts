@@ -203,7 +203,9 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           '- "candidates": hasta 12 palabras prohibidas, cada una de una sola palabra',
           "en español, ordenadas de la mejor a la peor para que no las adivine quien ve el objetivo.",
           ...(input.allowProperNames
-            ? ["No uses partes del objetivo como palabras prohibidas."]
+            ? [
+                "Las prohibidas también pueden ser nombres propios, siempre de una sola palabra. No uses partes del objetivo como palabras prohibidas.",
+              ]
             : []),
           `No repitas ninguno de estos objetivos ya usados en el mazo: ${avoid}.`,
           'Responde con {"cards":[{"objective":"...","candidates":["..."]}]}.',
@@ -252,7 +254,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           "No repitas ninguna de las palabras ya propuestas.",
           ...(input.allowProperNames
             ? [
-                "El objetivo puede ser un nombre propio o título; no uses partes del objetivo como palabras prohibidas.",
+                "El objetivo puede ser un nombre propio o título. Las prohibidas también pueden ser nombres propios, siempre de una sola palabra; no uses partes del objetivo como palabras prohibidas.",
               ]
             : []),
           "Puedes devolver menos de 12 o ninguna.",

@@ -64,6 +64,7 @@ describe("createDeepSeekProvider", () => {
     expect(promptOf(calls)).toContain("nombres propios y títulos");
     expect(promptOf(calls)).not.toContain("de cuatro a doce letras");
     expect(promptOf(calls)).toContain("partes del objetivo");
+    expect(promptOf(calls)).toContain("Las prohibidas también pueden ser nombres propios");
     calls.length = 0;
     await provider.proposeCandidates({
       theme: "Series",
@@ -74,6 +75,7 @@ describe("createDeepSeekProvider", () => {
       ...{ allowProperNames: true },
     });
     expect(promptOf(calls)).toContain("partes del objetivo");
+    expect(promptOf(calls)).toContain("Las prohibidas también pueden ser nombres propios");
   });
   it("preserves an explicit output-token override for initial and completion requests", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));

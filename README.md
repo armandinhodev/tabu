@@ -130,8 +130,10 @@ las primeras seis prohibidas válidas. No usa Jev, puntuaciones mínimas ni cort
 La opción **Permitir nombres propios y títulos** se configura al crear o editar cada mazo y está
 desactivada por defecto. Al activarla, los próximos objetivos pueden ser nombres o títulos de
 varias palabras, como `Juego de tronos`, con números y puntuación habitual de títulos. Las seis
-prohibidas siguen siendo palabras individuales reconocidas por el diccionario y no pueden repetir
-componentes del objetivo. Un nombre propio no se excluye solo por no figurar en el diccionario;
+prohibidas siguen siendo palabras individuales y no pueden repetir componentes del objetivo.
+Con esta opción activada, las prohibidas no se consultan en el diccionario: pueden ser nombres
+propios y se conservan las primeras seis válidas por estructura, orden y ausencia de duplicados.
+Con la opción desactivada se mantiene la validación del diccionario. Un nombre propio no se excluye solo por no figurar en el diccionario;
 eso tampoco garantiza su ortografía ni su existencia. Revisar editorialmente los resultados.
 Cambiar esta opción no modifica ni revalida cartas existentes y no afecta las partidas en curso.
 
