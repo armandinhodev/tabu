@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 
 import { Button } from "@/ui/components/ui/button";
-import { ConfirmDialog } from "@/ui/components/ui/dialog";
+import { AdminConfirmDialog } from "./admin-confirm-dialog";
 
 export function CardDeletion({
   word,
@@ -36,19 +36,21 @@ export function CardDeletion({
       <Button
         variant="quiet"
         size="sm"
-        className="text-warning hover:text-warning"
+        className="text-warning enabled:hover:bg-danger-soft enabled:hover:text-danger disabled:hover:bg-transparent disabled:hover:text-warning"
         disabled={disabled || deleting}
         onClick={() => setConfirming(true)}
       >
         <Trash2 aria-hidden="true" className="size-4" />
         Eliminar carta
       </Button>
-      <ConfirmDialog
+      <AdminConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Eliminar carta definitivamente"
-        description={`Se eliminará definitivamente la carta «${word}». Esta acción no se puede deshacer.`}
-        confirmLabel="Confirmar eliminación de carta"
+        title="¿Eliminar esta carta?"
+        targetName={word}
+        targetLabel="Carta"
+        description="La carta se eliminará de este mazo. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar carta"
         disabled={disabled || deleting}
         onConfirm={() => void remove()}
       />

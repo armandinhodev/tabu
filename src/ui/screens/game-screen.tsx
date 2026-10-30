@@ -154,12 +154,12 @@ export function GameScreen() {
         <div className="hidden rounded-lg border border-line bg-surface p-4 xl:block">
           <p className="text-h3 font-semibold text-fg">
             {role === "DESCRIBER"
-              ? "describís"
+              ? "Describís"
               : role === "ACTIVE"
-                ? "adivinás"
+                ? "Adivinás"
                 : role === "RIVAL"
-                  ? "vigilás"
-                  : "mirás"}
+                  ? "Vigilás"
+                  : "Mirás"}
           </p>
         </div>
         <Button

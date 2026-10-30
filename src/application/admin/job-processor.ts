@@ -17,6 +17,7 @@ import type {
   GenerationProvider,
   JobFence,
   ProviderUsage,
+  ProposedCard,
   SpellChecker,
 } from "./ports";
 import type { AdminJob, ManagedCard, ManagedDeck } from "./types";
@@ -378,20 +379,34 @@ async function runReplacement(
     objectives: [...job.objectives],
   };
 
-  await renewLease(deps, job, fence);
+  let proposed: ProposedCard | undefined;
 
-  const result = await requestBatch(deps, job, fence, state, {
-    ...(deck.rules ? { rules: deck.rules } : {}),
-    theme: deck.theme,
-    ...(deck.allowProperNames ? { allowProperNames: true } : {}),
-    count: 1,
-    excludedObjectives: deck.usedObjectives,
-    ...(signal === undefined ? {} : { signal }),
-  });
+  // Reuse the persisted budget: a rejected objective must not end the job
+  // before its remaining attempts have been used, or change the stored card.
+  do {
+    await renewLease(deps, job, fence);
+    const result = await requestBatch(deps, job, fence, state, {
+      ...(deck.rules ? { rules: deck.rules } : {}),
+      theme: deck.theme,
+      ...(deck.allowProperNames ? { allowProperNames: true } : {}),
+      count: 1,
+      excludedObjectives: deck.usedObjectives,
+      ...(signal === undefined ? {} : { signal }),
+    });
 
-  state.usage = addUsage(state.usage, result.usage);
+    state.usage = addUsage(state.usage, result.usage);
+    proposed = result.cards.find((card) => {
+      const key = normalizeWord(card.objective);
+      return key.length > 0 && !deck.usedObjectives.includes(key);
+    });
 
-  const proposed = result.cards[0];
+    // Account for rejected responses too, including the final failed attempt.
+    await saveCheckpoint(deps, job, fence, state);
+  } while (
+    proposed === undefined &&
+    state.attempts < job.maxAttempts &&
+    state.calls < job.maxCalls
+  );
 
   if (proposed === undefined) {
     throw new AdminError(
@@ -402,15 +417,6 @@ async function runReplacement(
   }
 
   const objective = proposed.objective.normalize("NFC").trim();
-  const key = normalizeWord(objective);
-
-  if (key.length === 0 || deck.usedObjectives.includes(key)) {
-    throw new AdminError(
-      503,
-      "no_new_objective",
-      "The provider did not return a new objective for the replacement",
-    );
-  }
 
   const card = await buildCard(deps, job, fence, state, {
     ...(deck.rules ? { rules: deck.rules } : {}),

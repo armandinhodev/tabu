@@ -151,6 +151,35 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it.each([false, true])(
+    "gives card actions visible enabled hover styles (excluded=%s)",
+    async (excluded) => {
+      catalog = [{ ...deck, cards: [{ ...card, excluded }] }];
+      render(<AdminDashboard />);
+      await screen.findByRole("heading", { name: "jaula" });
+      expect(screen.getByRole("button", { name: "Editar carta" })).toHaveClass(
+        "enabled:hover:bg-raised-hover",
+      );
+      expect(screen.getByRole("button", { name: "Reemplazar con IA" })).toHaveClass(
+        "enabled:hover:bg-raised-hover",
+      );
+      expect(
+        screen.getByRole("button", { name: excluded ? "Habilitar de todos modos" : "Excluir" }),
+      ).toHaveClass(excluded ? "enabled:hover:bg-warning/30" : "enabled:hover:bg-raised-hover");
+      expect(screen.getByRole("button", { name: "Eliminar carta" })).toHaveClass(
+        "enabled:hover:bg-danger-soft",
+        "enabled:hover:text-danger",
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+      expect(screen.getByRole("button", { name: "Guardar carta" })).toHaveClass(
+        "enabled:hover:shadow-card",
+      );
+      expect(screen.getByRole("button", { name: "Cancelar edición" })).toHaveClass(
+        "enabled:hover:bg-raised-hover",
+      );
+    },
+  );
+
   it("keeps a card visible and displays the error when deletion fails", async () => {
     const originalFetch = globalThis.fetch;
     vi.stubGlobal(
@@ -164,7 +193,9 @@ describe("AdminDashboard", () => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
     fireEvent.click(screen.getByRole("button", { name: "Eliminar carta" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación de carta" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Eliminar carta" }),
+    );
     expect(await screen.findByRole("alert")).toHaveTextContent("El mazo cambió. Reintenta.");
     expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
     expect(socketMock.disconnect).not.toHaveBeenCalled();
@@ -250,7 +281,9 @@ describe("AdminDashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
     fireEvent.click(screen.getByRole("button", { name: "Eliminar carta" }));
     expect(requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación de carta" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Eliminar carta" }),
+    );
     await waitFor(() => expect(screen.getByText("Mostrando 1–20 de 20 cartas")).toBeVisible());
     expect(requests).toContainEqual({
       url: "/api/admin/decks/deck-1/cards/card-21",
@@ -607,7 +640,7 @@ describe("AdminDashboard", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mostrar archivados" }));
     fireEvent.click(await screen.findByRole("tab", { name: "Ajustes" }));
     fireEvent.click(await screen.findByRole("button", { name: "Eliminar definitivamente" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación definitiva" }));
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar mazo" }));
     await waitFor(() =>
       expect(requests).toContainEqual({
         url: "/api/admin/decks/deck-2/permanent",
@@ -1272,7 +1305,9 @@ describe("AdminDashboard", () => {
     await screen.findByRole("heading", { name: "jaula" });
     fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
     fireEvent.click(screen.getByRole("button", { name: "Archivar mazo" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Confirmar archivado" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Archivar mazo" }),
+    );
 
     await waitFor(
       () =>

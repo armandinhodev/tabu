@@ -97,13 +97,15 @@ describe("DeckManagement", () => {
   it("offers permanent deletion only when archived and requires confirmation", async () => {
     const { api, onDeleted } = renderManagement({ deck: archivedDeck });
     fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
-    expect(screen.getByRole("dialog", { name: "Eliminar mazo definitivamente" })).toBeVisible();
-    expect(screen.getByText(/Se eliminarán el mazo, sus cartas y su historial/)).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "¿Eliminar este mazo?" })).toBeVisible();
+    expect(
+      screen.getByText(/Se eliminarán el mazo, todas sus cartas y su historial/),
+    ).toBeVisible();
     expect(api).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Cancelar eliminación" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(api).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación definitiva" }));
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar mazo" }));
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith("/api/admin/decks/deck-1/permanent", { method: "DELETE" }),
     );
@@ -182,15 +184,16 @@ describe("DeckManagement", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Archivar mazo" }));
 
-    const dialog = screen.getByRole("dialog", { name: "Archivar mazo" });
+    const dialog = screen.getByRole("dialog", { name: "¿Archivar este mazo?" });
+    expect(within(dialog).getByText("Mazo")).toBeVisible();
     expect(within(dialog).getByText(/General/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Confirmar archivado" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Archivar mazo" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeVisible();
     expect(api).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
-    expect(screen.queryByRole("button", { name: "Confirmar archivado" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archivar mazo" })).toBeVisible();
     expect(api).not.toHaveBeenCalled();
   });
@@ -215,7 +218,9 @@ describe("DeckManagement", () => {
     const { api, onArchived } = renderManagement();
 
     fireEvent.click(screen.getByRole("button", { name: "Archivar mazo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar archivado" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Archivar mazo" }),
+    );
 
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith("/api/admin/decks/deck-1", { method: "DELETE" }),
@@ -245,7 +250,7 @@ describe("DeckManagement", () => {
         />,
       );
       const confirm = screen.getByRole("button", {
-        name: archived ? "Confirmar eliminación definitiva" : "Confirmar archivado",
+        name: archived ? "Eliminar mazo" : "Archivar mazo",
       });
       expect(confirm).toBeDisabled();
       fireEvent.click(confirm);

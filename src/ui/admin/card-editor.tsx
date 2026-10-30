@@ -45,7 +45,7 @@ export function CardEditor({
         variant="ghost"
         size="sm"
         disabled={disabled}
-        className="mt-4"
+        className="mt-4 enabled:hover:border-line-control enabled:hover:bg-raised-hover enabled:hover:shadow-card"
         onClick={() => {
           setWord(card.word);
           setTaboo(
@@ -107,11 +107,18 @@ export function CardEditor({
         <Button
           type="submit"
           size="sm"
+          className="enabled:hover:shadow-card"
           disabled={locked || stale || !word.trim() || !taboo.some((term) => term.trim())}
         >
           Guardar carta
         </Button>
-        <Button variant="quiet" size="sm" disabled={saving} onClick={() => setEditing(false)}>
+        <Button
+          variant="quiet"
+          size="sm"
+          className="enabled:hover:bg-raised-hover enabled:hover:text-fg"
+          disabled={saving}
+          onClick={() => setEditing(false)}
+        >
           Cancelar edición
         </Button>
       </div>

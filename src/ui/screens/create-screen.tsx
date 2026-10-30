@@ -1,11 +1,11 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { ArrowRight, Check, Layers, SlidersHorizontal, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 import { ErrorState } from "@/ui/components/game/banners";
-import { Screen, ScreenHeader, StickyFooter } from "@/ui/components/ui/screen";
+import { Screen, ScreenHeader } from "@/ui/components/ui/screen";
 import { Skeleton } from "@/ui/components/ui/skeleton";
 import { SegmentedControl } from "@/ui/components/ui/segmented-control";
 import { Switch } from "@/ui/components/ui/switch";
@@ -89,130 +89,202 @@ export function CreateScreen() {
     loadDecks();
   }, []);
 
+  const selectedDeck = decks.find((deck) => deck.id === deckId);
+
   return (
-    <Screen>
+    <Screen className="md:max-w-4xl">
       <ScreenHeader
-        eyebrow="Nueva partida"
+        eyebrow="Prepará la próxima ronda"
         title="Crear partida"
         subtitle={`Vas a jugar como ${playerName === "" ? "Jugador" : playerName}.`}
         action={<MuteButton />}
       />
 
-      {deckState === "loading" ? (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-20 w-full rounded-lg" />
-          <Skeleton className="h-20 w-full rounded-lg" />
-          <Skeleton className="h-20 w-full rounded-lg" />
+      <section aria-labelledby="create-deck-heading" className="space-y-4">
+        <div className="flex items-start gap-3">
+          <Layers aria-hidden="true" className="mt-1 size-5 shrink-0 text-accent" />
+          <div>
+            <h2 id="create-deck-heading" className="font-display text-h3 font-semibold text-fg">
+              Elegí un mazo
+            </h2>
+            <p className="mt-1 text-body-sm text-fg-muted">
+              Las cartas que van a jugar todos los equipos.
+            </p>
+          </div>
         </div>
-      ) : deckState === "error" ? (
-        <ErrorState
-          title="No pudimos cargar los mazos"
-          message="Revisá que la base esté levantada y volvé a intentar."
-          onRetry={loadDecks}
-        />
-      ) : (
-        <fieldset className="flex flex-col gap-3">
-          <legend className="mb-1 text-caption uppercase text-fg-muted">Mazo</legend>
-          {decks.map((deck) => {
-            const selected = deck.id === deckId;
+        {deckState === "loading" ? (
+          <div
+            role="status"
+            aria-label="Cargando mazos"
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
+            <span className="sr-only">Cargando mazos…</span>
+            <Skeleton className="h-20 w-full rounded-lg" />
+            <Skeleton className="h-20 w-full rounded-lg" />
+            <Skeleton className="h-20 w-full rounded-lg" />
+          </div>
+        ) : deckState === "error" ? (
+          <ErrorState
+            title="No pudimos cargar los mazos"
+            message="No pudimos consultar los mazos. Volvé a intentar en unos segundos."
+            onRetry={loadDecks}
+          />
+        ) : (
+          <fieldset className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <legend className="sr-only">Mazo</legend>
+            {decks.map((deck) => {
+              const selected = deck.id === deckId;
 
-            return (
-              <label
-                key={deck.id}
-                className={cn(
-                  "flex cursor-pointer items-center justify-between gap-3 rounded-lg border bg-surface p-4 transition-colors duration-[var(--dur-instant)]",
-                  selected ? "border-accent" : "border-line hover:border-line-strong",
-                )}
-              >
-                <span className="flex flex-col gap-0.5">
-                  <span className="font-display text-h3 font-semibold text-fg">{deck.name}</span>
-                  <span className="text-body-sm text-fg-muted">
-                    {deck.cardCount} cartas · {deck.category}
-                  </span>
-                </span>
-                <input
-                  type="radio"
-                  name="deck"
-                  value={deck.id}
-                  checked={selected}
-                  onChange={() => setDeckId(deck.id)}
-                  className="sr-only"
-                />
-                <span
-                  aria-hidden="true"
+              return (
+                <label
+                  key={deck.id}
                   className={cn(
-                    "grid size-6 shrink-0 place-items-center rounded-pill border",
-                    selected ? "border-accent bg-accent text-on-accent" : "border-line-strong",
+                    "flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 transition-colors duration-[var(--dur-instant)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-canvas motion-reduce:transition-none sm:p-4",
+                    selected
+                      ? "border-accent bg-accent-soft"
+                      : "border-line-strong bg-surface hover:border-line-control hover:bg-surface-2",
                   )}
                 >
-                  {selected ? <Check className="size-4" /> : null}
-                </span>
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span className="font-display text-h3 font-semibold break-words text-fg">
+                      {deck.name}
+                    </span>
+                    <span className="text-body-sm text-fg-muted">
+                      {deck.cardCount} cartas
+                      {deck.category !== deck.name ? ` · ${deck.category}` : ""}
+                    </span>
+                  </span>
+                  <input
+                    type="radio"
+                    name="deck"
+                    value={deck.id}
+                    checked={selected}
+                    onChange={() => setDeckId(deck.id)}
+                    className="sr-only"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "grid size-6 shrink-0 place-items-center rounded-pill border",
+                      selected ? "border-accent bg-accent text-on-accent" : "border-line-strong",
+                    )}
+                  >
+                    {selected ? <Check className="size-4" /> : null}
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+        )}
+      </section>
+
+      <section
+        aria-labelledby="create-rules-heading"
+        className="rounded-lg border border-line bg-surface p-4 sm:p-6"
+      >
+        <div className="mb-6 flex items-start gap-3">
+          <SlidersHorizontal aria-hidden="true" className="mt-1 size-5 shrink-0 text-accent" />
+          <div>
+            <h2 id="create-rules-heading" className="font-display text-h3 font-semibold text-fg">
+              Configurá la partida
+            </h2>
+            <p className="mt-1 text-body-sm text-fg-muted">
+              Podés dejar estos valores y empezar a jugar.
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
+          <div className="flex flex-col gap-2">
+            <span className="text-body-sm font-semibold text-fg">Equipos</span>
+            <SegmentedControl
+              label="Cantidad de equipos"
+              value={teamCount}
+              options={TEAM_OPTIONS}
+              onValueChange={setTeamCount}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-body-sm font-semibold text-fg">Tiempo por turno</span>
+            <SegmentedControl
+              label="Tiempo por turno"
+              value={turnSeconds}
+              options={TIME_OPTIONS}
+              onValueChange={setTurnSeconds}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-body-sm font-semibold text-fg">
+              Palabras prohibidas por carta
+            </span>
+            <SegmentedControl
+              label="Cantidad de palabras prohibidas"
+              value={tabooWordCount}
+              options={TABOO_COUNT_OPTIONS}
+              onValueChange={setTabooWordCount}
+              className="grid grid-cols-3 min-[375px]:grid-cols-6 [&>button]:px-2"
+            />
+            <p className="text-body-sm text-fg-muted">Más palabras prohibidas, mayor dificultad.</p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-body-sm font-semibold text-fg">Saltos de carta por turno</span>
+            <SegmentedControl
+              label="Cantidad de saltos de carta por turno"
+              value={skipLimit}
+              options={SKIP_LIMIT_OPTIONS}
+              onValueChange={setSkipLimit}
+              className="grid grid-cols-3 min-[375px]:grid-cols-6 [&>button]:px-2"
+            />
+            <p className="text-body-sm text-fg-muted">
+              Saltar no resta puntos. Elegí 0 para jugar sin saltos.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-between gap-4 border-t border-line pt-5">
+          <div className="flex items-start gap-3">
+            <Users
+              aria-hidden="true"
+              className="mt-1 hidden size-5 shrink-0 text-fg-muted sm:block"
+            />
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="create-balanced-teams"
+                className="cursor-pointer text-body-sm font-semibold text-fg"
+              >
+                Equipos balanceados
               </label>
-            );
-          })}
-        </fieldset>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
-        <div className="flex flex-col gap-2">
-          <span className="text-caption uppercase text-fg-muted">Equipos</span>
-          <SegmentedControl
-            label="Cantidad de equipos"
-            value={teamCount}
-            options={TEAM_OPTIONS}
-            onValueChange={setTeamCount}
+              <span className="text-body-sm text-fg-muted">
+                Repartimos automáticamente al arrancar.
+              </span>
+            </div>
+          </div>
+          <Switch
+            id="create-balanced-teams"
+            label="Equipos balanceados"
+            checked={randomTeams}
+            onCheckedChange={setRandomTeams}
+            className="before:absolute before:inset-x-0 before:-inset-y-2"
           />
         </div>
+      </section>
 
-        <div className="flex flex-col gap-2">
-          <span className="text-caption uppercase text-fg-muted">Tiempo por turno</span>
-          <SegmentedControl
-            label="Tiempo por turno"
-            value={turnSeconds}
-            options={TIME_OPTIONS}
-            onValueChange={setTurnSeconds}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <span className="text-caption uppercase text-fg-muted">Palabras prohibidas por carta</span>
-          <SegmentedControl
-            label="Cantidad de palabras prohibidas"
-            value={tabooWordCount}
-            options={TABOO_COUNT_OPTIONS}
-            onValueChange={setTabooWordCount}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <span className="text-caption uppercase text-fg-muted">Saltos de carta por turno</span>
-          <SegmentedControl
-            label="Cantidad de saltos de carta por turno"
-            value={skipLimit}
-            options={SKIP_LIMIT_OPTIONS}
-            onValueChange={setSkipLimit}
-          />
-          <p className="text-body-sm text-fg-subtle">
-            Skipear no resta puntos: solo acota cuántas cartas se pueden saltar en un turno.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface p-4">
-        <div className="flex flex-col">
-          <span className="text-body text-fg">Equipos balanceados</span>
-          <span className="text-body-sm text-fg-muted">
-            Repartimos automáticamente al arrancar.
-          </span>
-        </div>
-        <Switch
-          label="Equipos balanceados"
-          checked={randomTeams}
-          onCheckedChange={setRandomTeams}
-        />
-      </div>
-
-      <StickyFooter>
+      <footer className="mt-auto flex flex-col gap-2 border-t border-line pt-5">
+        {deckState === "ready" && selectedDeck && (
+          <div
+            role="status"
+            aria-label="Resumen de la partida"
+            className="mb-2 min-w-0 text-body-sm"
+          >
+            <p className="font-semibold break-words text-fg">{selectedDeck.name}</p>
+            <p className="mt-1 text-fg-muted">
+              {teamCount} equipos · {turnSeconds} s por turno · {tabooWordCount} prohibidas ·{" "}
+              {skipLimit === "0" ? "Sin saltos" : `${skipLimit} saltos`}
+            </p>
+          </div>
+        )}
         <Button
           block
           disabled={busy || deckId === null || deckState !== "ready"}
@@ -231,12 +303,13 @@ export function CreateScreen() {
             });
           }}
         >
-          Crear sala
+          {busy ? "Creando sala…" : "Crear sala"}
+          {!busy && <ArrowRight aria-hidden="true" className="size-5" />}
         </Button>
-        <Button variant="ghost" block onClick={() => goTo("home")}>
+        <Button variant="quiet" block onClick={() => goTo("home")}>
           Volver
         </Button>
-      </StickyFooter>
+      </footer>
     </Screen>
   );
 }

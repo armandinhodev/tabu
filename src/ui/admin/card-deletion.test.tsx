@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async () => {
@@ -14,9 +14,9 @@ describe("CardDeletion", () => {
     const onDelete = vi.fn(async () => {});
     render(<CardDeletion word="fuego" disabled={false} onDelete={onDelete} />);
     fireEvent.click(screen.getByRole("button", { name: "Eliminar carta" }));
-    expect(
-      screen.getByRole("dialog", { name: "Eliminar carta definitivamente" }),
-    ).toHaveTextContent("fuego");
+    expect(screen.getByRole("dialog", { name: "¿Eliminar esta carta?" })).toHaveTextContent(
+      "fuego",
+    );
     expect(screen.getByText(/no se puede deshacer/i)).toBeVisible();
     expect(onDelete).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
@@ -26,7 +26,9 @@ describe("CardDeletion", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(onDelete).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Eliminar carta" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación de carta" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Eliminar carta" }),
+    );
     await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
   });
   it("locks an open confirmation when generation or another operation starts", () => {
@@ -34,8 +36,11 @@ describe("CardDeletion", () => {
     const view = render(<CardDeletion word="fuego" disabled={false} onDelete={onDelete} />);
     fireEvent.click(screen.getByRole("button", { name: "Eliminar carta" }));
     view.rerender(<CardDeletion word="fuego" disabled={true} onDelete={onDelete} />);
-    expect(screen.getByRole("button", { name: "Confirmar eliminación de carta" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación de carta" }));
+    const confirm = within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Eliminar carta",
+    });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
     expect(onDelete).not.toHaveBeenCalled();
   });
 });

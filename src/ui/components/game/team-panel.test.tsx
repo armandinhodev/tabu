@@ -34,7 +34,7 @@ function makeTeam(players: readonly PlayerView[]): TeamView {
 }
 
 describe("PlayerRow", () => {
-  it("muestra solo el avatar y el nombre", () => {
+  it("shows the player name without an initial avatar", () => {
     render(
       <ul>
         <PlayerRow player={makePlayer()} color="team-1" />
@@ -43,6 +43,7 @@ describe("PlayerRow", () => {
 
     expect(screen.getByText("Ana")).toBeInTheDocument();
     expect(screen.getByText("Ana")).toHaveClass("text-body");
+    expect(screen.queryByText("A", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByText(/listo|pendiente/i)).not.toBeInTheDocument();
   });
@@ -57,17 +58,15 @@ describe("PlayerRow", () => {
     expect(screen.getByText("host")).toBeInTheDocument();
   });
 
-  it("usa el avatar neutro cuando el jugador no tiene equipo", () => {
+  it("does not render an avatar for unassigned players", () => {
     const { container } = render(
       <ul>
         <PlayerRow player={makePlayer()} color="team-1" neutral />
       </ul>,
     );
 
-    const avatar = container.querySelector("span[aria-hidden]");
-
-    expect(avatar?.className).toContain("bg-surface-3");
-    expect(avatar?.className).not.toContain("bg-team-1");
+    expect(screen.getByText("Ana")).toBeVisible();
+    expect(container.querySelector("span[aria-hidden]")).toBeNull();
   });
 });
 

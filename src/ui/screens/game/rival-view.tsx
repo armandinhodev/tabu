@@ -1,7 +1,7 @@
 "use client";
 
 import { StickyFooter } from "@/ui/components/ui/screen";
-import { RoleBanner, ScoreBoard, TabooWords } from "@/ui/components/game/taboo-words";
+import { ScoreBoard, TabooWords } from "@/ui/components/game/taboo-words";
 import { teamNameOf } from "@/ui/components/game/team-colors";
 import type { RoleViewProps } from "./role-view-props";
 
@@ -16,8 +16,6 @@ export function RivalView({ state, turn, busy, reportedWord, onReport }: RoleVie
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <RoleBanner role="RIVAL" />
-
       <section className="flex flex-col gap-3" aria-label="Puntajes" aria-live="polite">
         <div className="flex items-center justify-between gap-3">
           <span className="text-caption text-fg-subtle uppercase">Turno de {activeTeamName}</span>
@@ -30,7 +28,7 @@ export function RivalView({ state, turn, busy, reportedWord, onReport }: RoleVie
       </section>
 
       <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface-2 p-5">
-        <p className="font-display text-word font-extrabold break-words text-fg uppercase">
+        <p className="font-display text-h2 font-extrabold break-words text-fg uppercase md:text-h1">
           {turn.word}
         </p>
 

@@ -14,12 +14,11 @@ export function PlayerRow({
 }: {
   readonly player: PlayerView;
   readonly color: string;
-  /** Sin equipo asignado: avatar neutro, sin color de equipo. */
+  /** Uses neutral styling when the player has no assigned team. */
   readonly neutral?: boolean;
   readonly isDescriptor?: boolean;
 }) {
   const palette = neutral ? NEUTRAL_PALETTE : teamPalette(color);
-  const initial = player.name.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <li
@@ -29,16 +28,6 @@ export function PlayerRow({
         isDescriptor && ["-mx-2 rounded-md border px-2 py-2", palette.border, palette.soft],
       )}
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "grid size-8 shrink-0 place-items-center rounded-pill text-body-sm font-semibold",
-          palette.soft,
-          palette.text,
-        )}
-      >
-        {initial}
-      </span>
       <span
         className={`min-w-0 flex-1 truncate text-body ${isDescriptor ? `font-semibold ${palette.text}` : "text-fg"}`}
       >

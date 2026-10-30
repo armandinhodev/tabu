@@ -11,6 +11,36 @@ vi.mock("react", async () => {
 
 afterEach(cleanup);
 
+it.each([true, false])("omits turn announcements but preserves other activity (%s)", (active) => {
+  render(
+    <GuessChat
+      active={active}
+      onGuess={vi.fn()}
+      messages={[
+        { id: 1, kind: "turn", text: "Comienza el turno de Equipo 1. Describe Ana." },
+        { id: 2, kind: "turn", text: "Finalizó el turno de Equipo 1." },
+        { id: 3, kind: "score", text: "Acierto para Equipo 1 (+1 punto)." },
+        { id: 4, kind: "notice", text: "La partida continúa." },
+      ]}
+    />,
+  );
+  expect(screen.queryByText(/Comienza el turno/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Finalizó el turno/)).not.toBeInTheDocument();
+  expect(screen.getByText("Acierto para Equipo 1 (+1 punto).")).toBeVisible();
+  expect(screen.getByText("La partida continúa.")).toBeVisible();
+});
+
+it("shows the empty state when only turn announcements exist", () => {
+  render(
+    <GuessChat
+      active={false}
+      onGuess={vi.fn()}
+      messages={[{ id: 1, kind: "turn", text: "Comienza el turno de Equipo 1." }]}
+    />,
+  );
+  expect(screen.getByText("Todavía no hay actividad.")).toBeVisible();
+});
+
 it("distinguishes correct and incorrect private feedback with labels, colors and icons", () => {
   render(
     <GuessChat

@@ -15,7 +15,8 @@ registro: solo un nombre. La palabra objetivo y la lista de palabras prohibidas 
 todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo adivina.
 
 - **Quien describe**: ve _Comenzar turno_ antes de que arranque el reloj. Durante el turno ve la
-  palabra, los chips informativos y _Saltar esta carta_. No hay botón para saltar el turno.
+  palabra, los chips informativos y _Saltar esta carta_, a la derecha de la palabra objetivo.
+  En móvil, el botón muestra el ícono de salto. No hay botón para saltar el turno.
 - **Equipo que adivina**: ve la carta en blanco y escribe la respuesta en un **chat privado**; el
   servidor la verifica contra la carta activa y le confirma el acierto.
 - **Equipos rivales**: ven la palabra y los chips **reportables** al toque durante el turno activo.
@@ -30,9 +31,14 @@ Stack: Next.js 15 (App Router) + TypeScript estricto, Socket.IO 4.8 sobre un ser
 MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI y Vitest.
 
 Durante el turno, el cronómetro aparece en el sidebar derecho, apilado arriba en móvil. El panel de
+puntajes enfrenta los nombres y resultados de dos equipos; con tres o cuatro, muestra una fila de
+bloques con el nombre arriba y el puntaje debajo. El equipo activo se destaca con su color.
+El panel de
 actividad combina respuestas privadas y avisos públicos: quienes adivinan pueden escribir; el
 descriptor y los rivales solo ven notificaciones. Los avisos muestran la palabra saltada, quién
 marcó una prohibida, la carta anulada y el equipo penalizado, con colores, etiquetas e íconos.
+El panel no repite los avisos de inicio o fin del turno: esa información se consulta en el sidebar.
+La lista de jugadores muestra nombres y distintivos de rol, sin avatares con iniciales.
 Las respuestas y su confirmación nunca se comparten. Los avisos se conservan al cambiar de carta
 dentro del mismo turno y se reinician al seleccionar el turno siguiente, salir o cambiar de sala.
 
@@ -124,6 +130,10 @@ además de las reglas para palabras prohibidas (hasta 500 caracteres). La temát
 se editan en campos multilínea; vaciar las reglas y guardar las elimina para futuras generaciones.
 También se archiva y se restaura. Archivar y eliminar abren un diálogo con el nombre del mazo y
 las consecuencias; cancelar o pulsar Escape lo cierra sin realizar cambios.
+Las confirmaciones del admin destacan el nombre de la carta o del mazo y explican si la acción
+es recuperable. Los botones usan etiquetas directas: **Archivar mazo**, **Eliminar mazo** y
+**Eliminar carta**. El contenido largo se desplaza sin ocultar los botones. El foco inicial está en cancelar;
+también se puede cerrar con el botón **Cerrar confirmación**, sin ejecutar la acción.
 El archivado es recuperable: no borra nada, conserva las cartas,
 los hallazgos de validación, el historial y el mismo identificador público, y el mazo deja de
 aceptar generaciones, reemplazos o cambios de cartas hasta restaurarlo. El catálogo muestra
@@ -210,6 +220,8 @@ El endpoint administrativo `PUT /api/admin/decks/:deckId/cards/:cardId` recibe `
 cada término admite hasta 200 caracteres. El `PATCH {excluded}` existente no cambia.
 
 **Eliminar carta** solicita confirmación con el nombre de la carta antes del borrado definitivo.
+El reemplazo por IA reintenta objetivos vacíos o repetidos dentro del presupuesto del trabajo
+(hasta tres intentos). Si no obtiene un objetivo nuevo, la carta y su historial se conservan.
 Cancelar o pulsar Escape no elimina nada. Se bloquea durante generaciones o reemplazos y en
 mazos archivados. Solo se quita la carta seleccionada; se conservan el mazo, las demás cartas y
 el historial de objetivos usados para evitar que futuras generaciones repitan el objetivo eliminado.
@@ -241,6 +253,28 @@ después recibe sus actualizaciones. Si la conexión se interrumpe, el trabajo c
 MongoDB y el panel vuelve a sincronizarse al recuperar la conexión. El proxy debe permitir
 WebSocket; los sockets de las partidas permanecen separados del canal administrativo.
 
+#### Composición del panel
+
+El tablero coordina y las piezas presentan. `src/ui/admin/admin-dashboard.tsx` conserva la sesión,
+el socket de progreso, el trabajo en curso y los borradores de los formularios;
+`src/ui/admin/dashboard/` contiene las piezas, cada una con una responsabilidad.
+
+| Archivo                             | Responsabilidad                                         |
+| ----------------------------------- | ------------------------------------------------------- |
+| `dashboard/types.ts`                | Pestañas, tipos de vista y contratos compartidos.       |
+| `dashboard/api-client.ts`           | Cliente HTTP del panel y error tipado de respuesta.     |
+| `dashboard/generation-request.ts`   | Cantidad válida y peticiones de generación y reemplazo. |
+| `dashboard/create-deck-form.tsx`    | Formulario de creación de un mazo.                      |
+| `dashboard/generation-feedback.tsx` | Progreso en vivo y resultado final del trabajo.         |
+| `dashboard/deck-catalog.tsx`        | Catálogo de mazos administrados.                        |
+| `dashboard/deck-workspace.tsx`      | Encabezado y subpestañas del mazo abierto.              |
+| `dashboard/generate-cards-form.tsx` | Panel desplegable para pedir más cartas.                |
+| `dashboard/card-list.tsx`           | Búsqueda, filtro y paginación del listado de cartas.    |
+| `dashboard/managed-card.tsx`        | Carta con sus acciones de edición, exclusión y borrado. |
+
+`CardEditor`, `CardDeletion`, `DeckManagement` y `ModelSettings` se reutilizan tal cual: las piezas
+nuevas no duplican su comportamiento ni cambian la interfaz que ve el administrador.
+
 ### Si ves una pantalla en blanco con `invariant expected layout router to be mounted`
 
 Es un `.next` mezclado: `next build` y `next dev` escriben en la misma carpeta y el segundo arranque
@@ -258,6 +292,9 @@ Jugar: abrí la app en el teléfono o el navegador, poné tu nombre, **Crear par
 equipos, tiempo por turno de 30/60/90/120 s y cuántas palabras prohibidas tiene cada carta, de 1 a 6)
 y compartí el código de 6 caracteres. Los demás entran con **Unirse con código**. Cuando cada equipo
 tenga el mínimo de jugadores, el host toca **Comenzar partida**.
+
+La pantalla separa la selección del mazo de las reglas y muestra un resumen antes de **Crear sala**.
+Los saltos se configuran de 0 a 5 por turno: saltar no resta puntos y 0 desactiva los saltos.
 
 ### Variables de entorno
 

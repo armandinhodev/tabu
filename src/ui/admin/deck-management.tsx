@@ -10,7 +10,7 @@ import {
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
 import { Textarea } from "@/ui/components/ui/textarea";
-import { ConfirmDialog } from "@/ui/components/ui/dialog";
+import { AdminConfirmDialog } from "./admin-confirm-dialog";
 
 /** Carta administrada tal como la ve el panel. */
 export type AdminCardView = {
@@ -226,22 +226,26 @@ export function DeckManagement({
           </Button>
         )}
       </div>
-      <ConfirmDialog
+      <AdminConfirmDialog
         open={confirming && !archived}
+        intent="archive"
         onOpenChange={setConfirming}
-        title="Archivar mazo"
-        description={`Se archivará el mazo «${current.name}». Sus cartas e historial se conservarán y podrás restaurarlo después.`}
-        confirmLabel="Confirmar archivado"
+        title="¿Archivar este mazo?"
+        targetName={current.name}
+        targetLabel="Mazo"
+        description="Sus cartas e historial se conservarán. Podrás restaurarlo después."
+        confirmLabel="Archivar mazo"
         disabled={locked}
         onConfirm={() => void archive()}
       />
-      <ConfirmDialog
+      <AdminConfirmDialog
         open={confirmingDeletion && archived}
         onOpenChange={setConfirmingDeletion}
-        title="Eliminar mazo definitivamente"
-        description={`Se eliminarán el mazo, sus cartas y su historial: «${current.name}». Esta acción no se puede deshacer.`}
-        confirmLabel="Confirmar eliminación definitiva"
-        cancelLabel="Cancelar eliminación"
+        title="¿Eliminar este mazo?"
+        targetName={current.name}
+        targetLabel="Mazo"
+        description="Se eliminarán el mazo, todas sus cartas y su historial. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar mazo"
         disabled={locked}
         onConfirm={() => void remove()}
       />

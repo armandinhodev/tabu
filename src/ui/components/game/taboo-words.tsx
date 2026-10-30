@@ -31,15 +31,14 @@ export function TabooWords({
   reportedWord = null,
   disabled = false,
 }: TabooWordsProps) {
-  const heading =
-    variant === "informative" ? "No digas estas palabras" : "Reportá si la dice";
-
   return (
     <div className="flex flex-col gap-3">
-      <p className="flex items-center gap-2 text-caption uppercase text-warning">
-        <AlertTriangle aria-hidden="true" className="size-4 shrink-0" />
-        {heading}
-      </p>
+      {variant === "reportable" ? (
+        <p className="flex items-center gap-2 text-caption text-warning uppercase">
+          <AlertTriangle aria-hidden="true" className="size-4 shrink-0" />
+          Reportá si la dice
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-2">
         {words.map((word) => {
           const reported = reportedWord === word;
@@ -79,31 +78,67 @@ interface ScoreBoardProps {
   readonly className?: string;
 }
 
-/** Chips de puntaje (§6): fondo del color al 18 %, borde y cifra en el color. */
+/** Facing scores for two teams; one compact row for larger games. */
 export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) {
+  const facing = teams.length === 2;
+
   return (
-    <ul className={cn("grid grid-cols-2 gap-2", className)} aria-label="Puntajes">
-      {teams.map((team) => {
+    <ul
+      className={cn(
+        "relative grid items-stretch",
+        facing
+          ? "grid-cols-2 gap-6"
+          : teams.length === 3
+            ? "grid-cols-3 gap-2"
+            : "grid-cols-4 gap-2",
+        className,
+      )}
+      aria-label="Puntajes"
+    >
+      {teams.map((team, index) => {
         const palette = teamPalette(team.color);
+        const active = team.id === activeTeamId;
 
         return (
           <li
             key={team.id}
-            aria-current={team.id === activeTeamId ? "true" : undefined}
+            aria-current={active ? "true" : undefined}
             className={cn(
-              "flex h-12 items-center justify-between gap-2 rounded-md border px-3",
-              palette.soft,
-              palette.border,
-              team.id === activeTeamId && "ring-2 ring-inset ring-fg/40",
+              "flex min-w-0 items-center gap-2 rounded-md border py-3",
+              facing
+                ? ["justify-between px-3", index === 1 && "flex-row-reverse"]
+                : "flex-col px-2 text-center",
+              active ? [palette.soft, palette.border] : "border-line bg-surface",
             )}
           >
-            <span className={cn("truncate text-caption uppercase", palette.text)}>{team.name}</span>
-            <span className={cn("font-mono text-h2 font-bold tabular-nums", palette.text)}>
+            <span
+              className={cn(
+                "min-w-0 flex-1 font-semibold break-words",
+                facing ? ["text-body-sm", index === 1 && "text-right"] : "w-full text-caption",
+                active ? palette.text : "text-fg-muted",
+              )}
+            >
+              {team.name}
+            </span>
+            <span
+              className={cn(
+                "shrink-0 font-mono text-h2 font-bold tabular-nums",
+                active ? palette.text : "text-fg",
+              )}
+            >
               {team.score}
             </span>
           </li>
         );
       })}
+      {facing ? (
+        <li
+          aria-hidden="true"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-h3 text-fg-muted"
+        >
+          :
+        </li>
+      ) : null}
     </ul>
   );
 }

@@ -99,7 +99,9 @@ function appearanceFor(message: GuessMessage): MessageAppearance {
 export function GuessChat({ active, messages, onGuess, disabled = false }: GuessChatProps) {
   const [answer, setAnswer] = useState("");
   const logRef = useRef<HTMLUListElement>(null);
-  const visibleMessages = active ? messages : messages.filter(isPublicMessage);
+  const visibleMessages = messages.filter(
+    (message) => message.kind !== "turn" && (active || isPublicMessage(message)),
+  );
   const PanelIcon = active ? MessageCircle : Bell;
 
   useEffect(() => {
@@ -134,7 +136,7 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
           <p className="mt-1 text-body-sm text-fg-muted">
             {active
               ? "Tus respuestas son privadas. Los avisos de la partida son visibles para todos."
-              : "Cartas saltadas, penalizaciones y cambios de turno."}
+              : "Aciertos, cartas saltadas y penalizaciones."}
           </p>
         </div>
       </header>
