@@ -95,7 +95,8 @@ describe("AdminWorker", () => {
     running.push(worker);
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
     store.seed(queuedJob());
-    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+    provider.objectiveQueue = [["fuego"]];
+    provider.candidateBatchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
 
     worker.start();
     await waitFor(() => store.completed.length === 1);
@@ -129,7 +130,7 @@ describe("AdminWorker", () => {
 
     let started = 0;
 
-    provider.proposeCards = async (input) => {
+    provider.proposeObjectives = async (input) => {
       started += 1;
 
       return new Promise((_resolve, reject) => {
@@ -188,7 +189,8 @@ describe("AdminWorker", () => {
     running.push(worker);
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
     store.seed(queuedJob());
-    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+    provider.objectiveQueue = [["fuego"]];
+    provider.candidateBatchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
 
     worker.start();
     await waitFor(() => store.completed.length === 1);
@@ -209,7 +211,8 @@ describe("AdminWorker", () => {
     running.push(worker);
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
     store.seed(queuedJob());
-    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+    provider.objectiveQueue = [["fuego"]];
+    provider.candidateBatchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
 
     worker.start();
     await waitFor(() => store.completed.length === 1);
@@ -217,7 +220,7 @@ describe("AdminWorker", () => {
 
     const stored = await store.findById("job-1");
     expect(stored?.status).toBe("completed");
-    expect(provider.batchCalls).toHaveLength(1);
+    expect(provider.candidateBatchCalls).toHaveLength(1);
     expect(store.failed).toEqual([]);
   });
 });

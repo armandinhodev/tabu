@@ -454,4 +454,77 @@ describe("createDeepSeekProvider", () => {
 
     expect(provider.available).toBe(false);
   });
+
+  it("asks only for objectives and never for their forbidden words in the same call", async () => {
+    const { fetch, calls } = fakeFetch(
+      completion('{"objectives":["fuego","agua","extra","cuarto"]}'),
+    );
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    const result = await provider.proposeObjectives({
+      theme: "Objetos",
+      count: 3,
+      excludedObjectives: ["arbol"],
+    });
+
+    expect(result.data.objectives).toEqual(["fuego", "agua", "extra"]);
+    expect(promptOf(calls)).toContain('Tema: "Objetos"');
+    expect(promptOf(calls)).toContain("Propone 3 objetivos");
+    expect(promptOf(calls)).toContain("arbol");
+    expect(promptOf(calls)).toContain('{"objectives"');
+    expect(promptOf(calls)).not.toContain("candidates");
+    expect(result.usage).toEqual({ inputTokens: 11, outputTokens: 13 });
+  });
+
+  it("keeps only the newest objectives inside the bounded objective prompt", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"objectives":[]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    await provider.proposeObjectives({
+      theme: "Objetos",
+      count: 10,
+      excludedObjectives: Array.from({ length: 1200 }, (_, index) => `objetivo${index}`),
+    });
+
+    expect(promptOf(calls)).not.toContain("objetivo0,");
+    expect(promptOf(calls)).toContain("objetivo1199");
+  });
+
+  it("asks the forbidden words for exactly the requested objectives", async () => {
+    const { fetch, calls } = fakeFetch(
+      completion(
+        '{"cards":[{"objective":"fuego","candidates":["a","b","c","d","e","f","g","h","i","j","k","l","m"]},{"objective":"agua","candidates":["rio"]}]}',
+      ),
+    );
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    const result = await provider.proposeCandidatesBatch({
+      theme: "Objetos",
+      objectives: ["fuego", "agua"],
+    });
+
+    expect(promptOf(calls)).toContain('1) "fuego"');
+    expect(promptOf(calls)).toContain('2) "agua"');
+    expect(promptOf(calls)).toContain("Para cada uno de estos 2 objetivos");
+    expect(result.data.cards[0]?.candidates).toHaveLength(12);
+    expect(result.data.cards[1]).toEqual({ objective: "agua", candidates: ["rio"] });
+  });
+
+  it("rejects an objectives response that does not match the schema", async () => {
+    const { fetch } = fakeFetch(completion('{"cards":[{"objective":"fuego","candidates":[]}]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    await expect(
+      provider.proposeObjectives({ theme: "Objetos", count: 1, excludedObjectives: [] }),
+    ).rejects.toMatchObject({ status: 503, code: "provider_invalid_response" });
+  });
+
+  it("rejects a candidate batch response that does not match the schema", async () => {
+    const { fetch } = fakeFetch(completion('{"objectives":["fuego"]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    await expect(
+      provider.proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] }),
+    ).rejects.toMatchObject({ status: 503, code: "provider_invalid_response" });
+  });
 });

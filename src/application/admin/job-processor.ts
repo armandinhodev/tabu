@@ -1,5 +1,5 @@
 import { normalizeWord } from "../../domain/value-objects/TabooWords";
-import { evaluateCard, SELECTED_TABOO_WORDS } from "./candidates";
+import { evaluateCard, isObjectiveText, SELECTED_TABOO_WORDS } from "./candidates";
 import { AdminError } from "./errors";
 import { DEFAULT_DEEPSEEK_MODEL } from "./settings";
 import type {
@@ -192,37 +192,90 @@ async function runGeneration(
   };
 
   let current = deck;
+  // Objetivos ya validados que todavía no tienen carta. Vive dentro del
+  // reclamo: si el proceso se cae, el reintento vuelve a pedir objetivos con la
+  // lista de usados al día en vez de persistir una cola nueva.
+  let pending: string[] = [];
+  let emptyObjectiveRuns = 0;
 
   while (state.processed < job.requested) {
-    if (state.attempts >= job.maxAttempts) {
-      break;
+    if (pending.length === 0) {
+      if (state.attempts >= job.maxAttempts) {
+        break;
+      }
+
+      if (state.calls >= job.maxCalls) {
+        break;
+      }
+
+      const missing = job.requested - state.processed;
+
+      await renewLease(deps, job, fence);
+
+      const collected = await requestObjectives(deps, job, fence, state, {
+        theme: current.theme,
+        ...(current.allowProperNames ? { allowProperNames: true } : {}),
+        count: missing,
+        excludedObjectives: current.usedObjectives,
+        ...(signal === undefined ? {} : { signal }),
+      });
+
+      state.usage = addUsage(state.usage, collected.usage);
+
+      pending = acceptObjectives(collected.objectives, {
+        ...(current.allowProperNames ? { allowProperNames: true } : {}),
+        used: current.usedObjectives,
+        limit: missing,
+      });
+
+      if (pending.length === 0) {
+        // Dos llamadas seguidas sin un solo objetivo nuevo: el tema se agotó.
+        emptyObjectiveRuns += 1;
+
+        if (emptyObjectiveRuns >= 2) {
+          break;
+        }
+
+        continue;
+      }
+
+      emptyObjectiveRuns = 0;
     }
 
     if (state.calls >= job.maxCalls) {
       break;
     }
 
-    const missing = job.requested - state.processed;
-    const count = Math.min(job.batchSize, missing);
+    const chunk = pending.slice(0, job.batchSize);
 
     await renewLease(deps, job, fence);
 
-    const result = await requestBatch(deps, job, fence, state, {
+    const batch = await requestCandidatesBatch(deps, job, fence, state, {
       theme: current.theme,
       ...(current.allowProperNames ? { allowProperNames: true } : {}),
-      count,
-      excludedObjectives: current.usedObjectives,
+      objectives: chunk,
       ...(signal === undefined ? {} : { signal }),
     });
 
-    state.usage = addUsage(state.usage, result.usage);
+    state.usage = addUsage(state.usage, batch.usage);
 
-    for (const proposed of result.cards) {
+    // El proveedor puede devolver los objetivos con otra ortografía: se
+    // empareja por clave normalizada y nunca se crea una carta no pedida.
+    const candidatesByObjective = new Map<string, readonly string[]>();
+
+    for (const proposed of batch.cards) {
+      const proposedKey = normalizeWord(proposed.objective.normalize("NFC").trim());
+
+      if (!candidatesByObjective.has(proposedKey)) {
+        candidatesByObjective.set(proposedKey, proposed.candidates);
+      }
+    }
+
+    for (const objective of chunk) {
       if (state.processed >= job.requested) {
         break;
       }
 
-      const objective = proposed.objective.normalize("NFC").trim();
       const key = normalizeWord(objective);
 
       if (key.length === 0 || current.usedObjectives.includes(key)) {
@@ -240,7 +293,7 @@ async function runGeneration(
         theme: current.theme,
         ...(current.allowProperNames ? { allowProperNames: true } : {}),
         objective,
-        proposed,
+        proposed: { candidates: candidatesByObjective.get(key) ?? [] },
         previousWords: [],
         signal,
       });
@@ -263,6 +316,8 @@ async function runGeneration(
       await publishSafely(deps, job.deckId, fence, deps.clock.now().toISOString());
       await saveCheckpoint(deps, job, fence, state);
     }
+
+    pending = pending.slice(chunk.length);
   }
 
   if (state.processed < job.requested) {
@@ -459,6 +514,104 @@ async function buildCard(
     createdAt: deps.clock.now().toISOString(),
     updatedAt: deps.clock.now().toISOString(),
   };
+}
+
+/**
+ * Filtra los objetivos que devolvió el proveedor antes de gastar una llamada en
+ * sus prohibidas: descarta los mal formados y los que ya están usados o se
+ * repiten dentro del mismo lote. Conserva el orden del proveedor.
+ */
+export function acceptObjectives(
+  proposed: readonly string[],
+  input: {
+    readonly allowProperNames?: boolean;
+    /** Objetivos ya usados en el mazo (normalizados). */
+    readonly used: readonly string[];
+    readonly limit: number;
+  },
+): string[] {
+  const seen = new Set(input.used.map(normalizeWord));
+  const accepted: string[] = [];
+
+  for (const raw of proposed) {
+    if (accepted.length >= input.limit) {
+      break;
+    }
+
+    const objective = raw.normalize("NFC").trim();
+
+    if (!isObjectiveText(objective, input.allowProperNames)) {
+      continue;
+    }
+
+    const key = normalizeWord(objective);
+
+    if (key.length === 0 || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    accepted.push(objective);
+  }
+
+  return accepted;
+}
+
+/** Fase 1 de la generación: pide objetivos y nada más. */
+async function requestObjectives(
+  deps: ProcessJobDeps,
+  job: AdminJob,
+  fence: JobFence,
+  state: JobState,
+  input: {
+    theme: string;
+    count: number;
+    allowProperNames?: boolean;
+    excludedObjectives: readonly string[];
+    signal?: AbortSignal;
+  },
+): Promise<{ objectives: readonly string[]; usage: ProviderUsage }> {
+  await reserveCall(deps, job, fence, state, true);
+
+  const result = await deps.provider.proposeObjectives({
+    model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
+    ...(input.allowProperNames ? { allowProperNames: true } : {}),
+    theme: input.theme,
+    count: input.count,
+    excludedObjectives: input.excludedObjectives,
+    ...(input.signal === undefined ? {} : { signal: input.signal }),
+  });
+
+  return { objectives: result.data.objectives, usage: result.usage };
+}
+
+/** Fase 2: las prohibidas de un lote de objetivos, en una sola llamada. */
+async function requestCandidatesBatch(
+  deps: ProcessJobDeps,
+  job: AdminJob,
+  fence: JobFence,
+  state: JobState,
+  input: {
+    theme: string;
+    objectives: readonly string[];
+    allowProperNames?: boolean;
+    signal?: AbortSignal;
+  },
+): Promise<{
+  cards: readonly { objective: string; candidates: readonly string[] }[];
+  usage: ProviderUsage;
+}> {
+  await reserveCall(deps, job, fence, state, false);
+
+  const result = await deps.provider.proposeCandidatesBatch({
+    model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
+    ...(input.allowProperNames ? { allowProperNames: true } : {}),
+    theme: input.theme,
+    objectives: input.objectives,
+    ...(input.signal === undefined ? {} : { signal: input.signal }),
+  });
+
+  return { cards: result.data.cards, usage: result.usage };
 }
 
 /** Lote inicial: una llamada trae objetivo y prohibidas de cada carta. */

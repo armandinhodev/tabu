@@ -93,9 +93,70 @@ export class FakeProvider implements GenerationProvider {
   }[] = [];
   batchQueue: ProposedCard[][] = [];
   completionQueue: string[][] = [];
+  readonly objectiveCalls: {
+    model?: import("../settings").DeepSeekModel;
+    allowProperNames?: boolean;
+    theme: string;
+    count: number;
+    excludedObjectives: readonly string[];
+  }[] = [];
+  readonly candidateBatchCalls: {
+    model?: import("../settings").DeepSeekModel;
+    allowProperNames?: boolean;
+    theme: string;
+    objectives: readonly string[];
+  }[] = [];
+  objectiveQueue: string[][] = [];
+  candidateBatchQueue: ProposedCard[][] = [];
+  objectiveError: unknown = null;
+  candidateBatchError: unknown = null;
   usagePerCall: ProviderUsage = { inputTokens: 3, outputTokens: 5 };
   batchError: unknown = null;
   completionError: unknown = null;
+
+  async proposeObjectives(input: {
+    model?: import("../settings").DeepSeekModel;
+    allowProperNames?: boolean;
+    theme: string;
+    count: number;
+    excludedObjectives: readonly string[];
+    signal?: AbortSignal;
+  }): Promise<ProviderResult<{ objectives: readonly string[] }>> {
+    this.objectiveCalls.push({
+      ...(input.model === undefined ? {} : { model: input.model }),
+      ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
+      theme: input.theme,
+      count: input.count,
+      excludedObjectives: [...input.excludedObjectives],
+    });
+
+    if (this.objectiveError !== null) {
+      throw this.objectiveError;
+    }
+
+    return { data: { objectives: this.objectiveQueue.shift() ?? [] }, usage: this.usagePerCall };
+  }
+
+  async proposeCandidatesBatch(input: {
+    model?: import("../settings").DeepSeekModel;
+    allowProperNames?: boolean;
+    theme: string;
+    objectives: readonly string[];
+    signal?: AbortSignal;
+  }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
+    this.candidateBatchCalls.push({
+      ...(input.model === undefined ? {} : { model: input.model }),
+      ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
+      theme: input.theme,
+      objectives: [...input.objectives],
+    });
+
+    if (this.candidateBatchError !== null) {
+      throw this.candidateBatchError;
+    }
+
+    return { data: { cards: this.candidateBatchQueue.shift() ?? [] }, usage: this.usagePerCall };
+  }
 
   async proposeCards(input: {
     model?: import("../settings").DeepSeekModel;

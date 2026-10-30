@@ -98,16 +98,31 @@ function build() {
   return { decks, jobs, provider, clock, ids, log, deps, claim };
 }
 
+/**
+ * Cola una tanda de cartas en las dos fases del proveedor: los objetivos en la
+ * primera llamada y sus prohibidas en el lote de candidatas.
+ */
+function queueCards(
+  provider: FakeProvider,
+  cards: readonly { objective: string; candidates: readonly string[] }[],
+): void {
+  provider.objectiveQueue.push(cards.map((card) => card.objective));
+  provider.candidateBatchQueue.push(
+    cards.map((card) => ({ objective: card.objective, candidates: [...card.candidates] })),
+  );
+}
+
 describe("processClaimedJob (batch flow)", () => {
   it.each([undefined, "deepseek-v4-pro" as const])(
-    "dispatches the persisted model to batch and completion (%s)",
+    "dispatches the persisted model to both provider phases (%s)",
     async (model) => {
       const { decks, provider, deps, claim } = build();
       decks.seed({ id: "deck-1", name: "General", theme: "General" });
-      provider.batchQueue.push([{ objective: "fuego", candidates: SIX_WORDS.slice(0, 5) }]);
+      queueCards(provider, [{ objective: "fuego", candidates: SIX_WORDS.slice(0, 5) }]);
       provider.completionQueue.push([SIX_WORDS[5]!]);
       await processClaimedJob(deps, claim(buildJob({ requested: 1, ...(model ? { model } : {}) })));
-      expect(provider.batchCalls[0]).toHaveProperty("model", model ?? "deepseek-flash");
+      expect(provider.objectiveCalls[0]).toHaveProperty("model", model ?? "deepseek-flash");
+      expect(provider.candidateBatchCalls[0]).toHaveProperty("model", model ?? "deepseek-flash");
       expect(provider.completionCalls[0]).toHaveProperty("model", model ?? "deepseek-flash");
     },
   );
@@ -116,7 +131,8 @@ describe("processClaimedJob (batch flow)", () => {
     const names = ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"];
     deps.spell = new FakeSpellChecker(new Set());
     decks.seed({ id: "deck-1", name: "Series", theme: "Series", allowProperNames: true });
-    provider.batchQueue.push([{ objective: "Juego de tronos", candidates: names }]);
+    provider.objectiveQueue.push(["Juego de tronos"]);
+    provider.candidateBatchQueue.push([{ objective: "Juego de tronos", candidates: names }]);
     provider.completionError = new Error("No completion should be requested");
     await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
     expect(provider.completionCalls).toHaveLength(0);
@@ -138,6 +154,7 @@ describe("processClaimedJob (batch flow)", () => {
       const candidates = allowProperNames
         ? ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"]
         : SIX_WORDS;
+      const objective = allowProperNames ? "Juego de tronos" : "fuego";
       if (allowProperNames) deps.spell = new FakeSpellChecker(new Set(["fuego"]));
       const deck = decks.seed({
         id: "deck-1",
@@ -156,9 +173,11 @@ describe("processClaimedJob (batch flow)", () => {
         createdAt: deck.createdAt,
         updatedAt: deck.updatedAt,
       });
-      provider.batchQueue.push([
-        { objective: "Juego de tronos", candidates: candidates.slice(0, 3) },
-      ]);
+      if (kind === "replace") {
+        provider.batchQueue.push([{ objective, candidates: candidates.slice(0, 3) }]);
+      } else {
+        queueCards(provider, [{ objective, candidates: candidates.slice(0, 3) }]);
+      }
       provider.completionQueue.push(candidates.slice(3));
       await processClaimedJob(
         deps,
@@ -170,16 +189,18 @@ describe("processClaimedJob (batch flow)", () => {
           }),
         ),
       );
+      const batchCall =
+        kind === "replace" ? provider.batchCalls[0] : provider.candidateBatchCalls[0];
       if (allowProperNames) {
-        expect(provider.batchCalls[0]).toHaveProperty("allowProperNames", true);
+        expect(batchCall).toHaveProperty("allowProperNames", true);
         expect(provider.completionCalls[0]).toHaveProperty("allowProperNames", true);
       } else {
-        expect(provider.batchCalls[0]).not.toHaveProperty("allowProperNames");
+        expect(batchCall).not.toHaveProperty("allowProperNames");
         expect(provider.completionCalls[0]).not.toHaveProperty("allowProperNames");
       }
-      expect(deck.cards.find((card) => card.word === "Juego de tronos")).toMatchObject({
-        excluded: !allowProperNames,
-        issues: allowProperNames ? [] : ["malformed_objective"],
+      expect(deck.cards.find((card) => card.word === objective)).toMatchObject({
+        excluded: false,
+        issues: [],
         taboo: candidates,
       });
     },
@@ -187,35 +208,40 @@ describe("processClaimedJob (batch flow)", () => {
   it.each([
     [50, 1],
     [51, 2],
-    [800, 16],
-    [1200, 24],
+    [400, 8],
   ])(
-    "completes %i cards in %i provider batches without exceeding fifty per call",
-    async (requested, expectedCalls) => {
+    "completes %i cards with one objective call and %i candidate batches",
+    async (requested, expectedBatches) => {
       const { decks, jobs, provider, deps, claim } = build();
-      const objectives = generatedWords(requested, "o");
+      const objectives = generatedWords(requested);
       deps.spell = new FakeSpellChecker(new Set([...objectives, ...SIX_WORDS]));
       decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-      const propose = provider.proposeCards.bind(provider);
-      let offset = 0;
-      provider.proposeCards = async (input) => {
-        provider.batchQueue.push(
+      provider.objectiveQueue.push(objectives);
+
+      const batches: { objective: string; candidates: readonly string[] }[][] = [];
+
+      for (let offset = 0; offset < objectives.length; offset += 50) {
+        batches.push(
           objectives
-            .slice(offset, offset + input.count)
+            .slice(offset, offset + 50)
             .map((objective) => ({ objective, candidates: [...SIX_WORDS] })),
         );
-        offset += input.count;
-        return propose(input);
-      };
+      }
+
+      provider.candidateBatchQueue = batches;
+      const expectedBatchSizes = batches.map((batch) => batch.length);
+
       const publish = decks.publishProjection.bind(decks);
       decks.publishProjection = async (input) => {
         decks.projections.length = 0;
         await publish(input);
       };
       await processClaimedJob(deps, claim(buildJob({ requested, ...jobLimitsFor(requested) })));
-      expect(provider.batchCalls).toHaveLength(expectedCalls);
-      expect(provider.batchCalls.map((call) => call.count)).toEqual(
-        Array.from({ length: expectedCalls }, (_, index) => Math.min(50, requested - index * 50)),
+      expect(provider.objectiveCalls).toHaveLength(1);
+      expect(provider.objectiveCalls[0]?.count).toBe(requested);
+      expect(provider.candidateBatchCalls).toHaveLength(expectedBatches);
+      expect(provider.candidateBatchCalls.map((call) => call.objectives.length)).toEqual(
+        expectedBatchSizes,
       );
       expect(provider.completionCalls).toHaveLength(0);
       const saved = decks.decks.get("deck-1")!;
@@ -225,39 +251,67 @@ describe("processClaimedJob (batch flow)", () => {
       expect(await jobs.findById("job-1")).toMatchObject({
         status: "completed",
         processed: requested,
-        calls: expectedCalls,
+        calls: expectedBatches + 1,
       });
       expect(jobs.completed).toEqual(["job-1"]);
     },
   );
 
   it.each(["short", "duplicate"] as const)(
-    "fills only the remaining card after a %s fifty-card response",
+    "tops up objectives after a %s objective response",
     async (mode) => {
       const { decks, jobs, provider, deps, claim } = build();
-      const objectives = generatedWords(50, "o");
+      const objectives = generatedWords(50);
       decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-      const first = objectives
-        .slice(0, 49)
-        .map((objective) => ({ objective, candidates: [...SIX_WORDS] }));
+      const first = objectives.slice(0, 49);
       if (mode === "duplicate") first.push(first[0]!);
-      provider.batchQueue = [first, [{ objective: objectives[49]!, candidates: [...SIX_WORDS] }]];
+      provider.objectiveQueue = [first, [objectives[49]!]];
+      provider.candidateBatchQueue = [
+        first.map((objective) => ({ objective, candidates: [...SIX_WORDS] })),
+        [{ objective: objectives[49]!, candidates: [...SIX_WORDS] }],
+      ];
       await processClaimedJob(
         deps,
-        claim(buildJob({ requested: 50, batchSize: 50, maxAttempts: 3, maxCalls: 53 })),
+        claim(buildJob({ requested: 50, batchSize: 50, maxAttempts: 3, maxCalls: 60 })),
       );
-      expect(provider.batchCalls.map((call) => call.count)).toEqual([50, 1]);
+      expect(provider.objectiveCalls.map((call) => call.count)).toEqual([50, 1]);
+      expect(provider.candidateBatchCalls.map((call) => call.objectives.length)).toEqual([49, 1]);
       expect(decks.decks.get("deck-1")?.cards).toHaveLength(50);
       expect(jobs.completed).toEqual(["job-1"]);
     },
   );
 
+  it("discards objectives the provider was not asked for and repeats inside one batch", async () => {
+    const { decks, provider, deps, claim } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    provider.objectiveQueue = [["fuego", "Fuego", "agua", "dos\npalabras", "arbol"]];
+    provider.candidateBatchQueue = [
+      [
+        { objective: "fuego", candidates: [...SIX_WORDS] },
+        { objective: "inventado", candidates: [...SIX_WORDS] },
+        { objective: "agua", candidates: ["rio", "mar", "liquido", "arbol", "tronco", "hoja"] },
+        { objective: "arbol", candidates: ["tronco", "hoja", "bosque", "rama", "sombra", "pino"] },
+      ],
+    ];
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 3 })));
+
+    expect(provider.objectiveCalls).toHaveLength(1);
+    expect(provider.candidateBatchCalls[0]?.objectives).toEqual(["fuego", "agua", "arbol"]);
+    expect(decks.decks.get("deck-1")?.cards.map((card) => card.word)).toEqual([
+      "fuego",
+      "agua",
+      "arbol",
+    ]);
+  });
+
   it("renews ownership within a fifty-card batch that takes longer than the lease to persist", async () => {
     const { decks, jobs, provider, deps, claim, clock } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [
-      generatedWords(50, "o").map((objective) => ({ objective, candidates: [...SIX_WORDS] })),
-    ];
+    queueCards(
+      provider,
+      generatedWords(50).map((objective) => ({ objective, candidates: [...SIX_WORDS] })),
+    );
     const publish = decks.publishProjection.bind(decks);
     decks.publishProjection = async (input) => {
       await publish(input);
@@ -265,43 +319,43 @@ describe("processClaimedJob (batch flow)", () => {
     };
     await processClaimedJob(
       deps,
-      claim(buildJob({ requested: 50, batchSize: 50, maxAttempts: 3, maxCalls: 53 })),
+      claim(buildJob({ requested: 50, batchSize: 50, maxAttempts: 3, maxCalls: 60 })),
     );
-    expect(provider.batchCalls).toHaveLength(1);
+    expect(provider.candidateBatchCalls).toHaveLength(1);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(50);
     expect(jobs.completed).toEqual(["job-1"]);
   });
 
-  it("requests five cards in a single provider call", async () => {
+  it("requests five objectives and then one candidate batch", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [
-      [
-        { objective: "fuego", candidates: [...SIX_WORDS] },
-        { objective: "agua", candidates: ["rio", "mar", "liquido", "arbol", "tronco", "hoja"] },
-        {
-          objective: "arbol",
-          candidates: ["tronco", "hoja", "bosque", "rama", "hojarasca", "sombra"],
-        },
-        {
-          objective: "montaña",
-          candidates: ["cumbre", "sendero", "altura", "ladera", "valle", "pico"],
-        },
-        {
-          objective: "puente",
-          candidates: ["viga", "calzada", "charco", "arcada", "pilar", "ronda"],
-        },
-      ],
-    ];
+    queueCards(provider, [
+      { objective: "fuego", candidates: [...SIX_WORDS] },
+      { objective: "agua", candidates: ["rio", "mar", "liquido", "arbol", "tronco", "hoja"] },
+      {
+        objective: "arbol",
+        candidates: ["tronco", "hoja", "bosque", "rama", "hojarasca", "sombra"],
+      },
+      {
+        objective: "montaña",
+        candidates: ["cumbre", "sendero", "altura", "ladera", "valle", "pico"],
+      },
+      {
+        objective: "puente",
+        candidates: ["viga", "calzada", "charco", "arcada", "pilar", "ronda"],
+      },
+    ]);
 
     await processClaimedJob(deps, claim(buildJob({ requested: 5 })));
 
-    expect(provider.batchCalls).toHaveLength(1);
-    expect(provider.batchCalls[0]?.count).toBe(5);
+    expect(provider.objectiveCalls).toHaveLength(1);
+    expect(provider.objectiveCalls[0]?.count).toBe(5);
+    expect(provider.candidateBatchCalls).toHaveLength(1);
+    expect(provider.candidateBatchCalls[0]?.objectives).toHaveLength(5);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(5);
   });
 
-  it("generates fifty cards in ten provider calls", async () => {
+  it("generates fifty cards in eleven provider calls", async () => {
     const { decks, jobs, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
 
@@ -323,23 +377,25 @@ describe("processClaimedJob (batch flow)", () => {
       queue.push(cards);
     }
 
-    provider.batchQueue = queue;
+    provider.objectiveQueue = [objectives];
+    provider.candidateBatchQueue = queue;
 
     await processClaimedJob(deps, claim(buildJob({ requested: 50 })));
 
-    expect(provider.batchCalls).toHaveLength(10);
+    expect(provider.objectiveCalls).toHaveLength(1);
+    expect(provider.candidateBatchCalls).toHaveLength(10);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(50);
     expect(jobs.completed).toEqual(["job-1"]);
   });
 
-  it("recovers a short batch with bounded attempts and never completes falsely", async () => {
+  it("gives up after two objective calls without a single new objective", async () => {
     const { decks, jobs, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [[], [], [], [], []];
+    provider.objectiveQueue = [[], [], [], [], []];
 
     await processClaimedJob(deps, claim(buildJob({ requested: 5, maxAttempts: 3, maxCalls: 8 })));
 
-    expect(provider.batchCalls.length).toBeLessThanOrEqual(3);
+    expect(provider.objectiveCalls).toHaveLength(2);
     expect(jobs.completed).toEqual([]);
     expect(jobs.failed[0]?.error).toContain("Only 0 of 5 cards");
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(0);
@@ -348,18 +404,16 @@ describe("processClaimedJob (batch flow)", () => {
   it("keeps a forbidden word that another card already used", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [
-      [
-        {
-          objective: "fuego",
-          candidates: ["agua", "llama", "chimenea", "brasa", "fogon", "hoguera"],
-        },
-        {
-          objective: "arbol",
-          candidates: ["agua", "tronco", "hoja", "bosque", "rama", "tronquito"],
-        },
-      ],
-    ];
+    queueCards(provider, [
+      {
+        objective: "fuego",
+        candidates: ["agua", "llama", "chimenea", "brasa", "fogon", "hoguera"],
+      },
+      {
+        objective: "arbol",
+        candidates: ["agua", "tronco", "hoja", "bosque", "rama", "tronquito"],
+      },
+    ]);
 
     await processClaimedJob(deps, claim(buildJob({ requested: 2 })));
 
@@ -374,9 +428,9 @@ describe("processClaimedJob (per-card completion)", () => {
   it("asks for one completion when a card has fewer than six recognized words", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [
-      [{ objective: "fuego", candidates: ["llama", "chimenea", "brasa", "fogon", "hoguera"] }],
-    ];
+    queueCards(provider, [
+      { objective: "fuego", candidates: ["llama", "chimenea", "brasa", "fogon", "hoguera"] },
+    ]);
     provider.completionQueue = [["incendio"]];
 
     await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
@@ -405,7 +459,7 @@ describe("processClaimedJob (per-card completion)", () => {
   it("does not ask for a completion when the card already has six valid words", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+    queueCards(provider, [{ objective: "fuego", candidates: [...SIX_WORDS] }]);
 
     await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
 
@@ -416,7 +470,7 @@ describe("processClaimedJob (per-card completion)", () => {
   it("keeps the card excluded with the review fallback when the completion is not enough", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [[{ objective: "fuego", candidates: ["llama", "chimenea", "brasa"] }]];
+    queueCards(provider, [{ objective: "fuego", candidates: ["llama", "chimenea", "brasa"] }]);
     provider.completionQueue = [["fogon"]];
 
     await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
@@ -434,7 +488,7 @@ describe("processClaimedJob (budget and recovery)", () => {
   it("reserves the provider call before sending the request", async () => {
     const { decks, jobs, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchError = new Error("connection reset");
+    provider.objectiveError = new Error("connection reset");
     await processClaimedJob(deps, claim(buildJob({ requested: 5 })));
 
     const stored = await jobs.findById("job-1");
@@ -446,12 +500,10 @@ describe("processClaimedJob (budget and recovery)", () => {
   it("reconciles the processed count after a crash between the append and the checkpoint", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [
-      [
-        { objective: "fuego", candidates: [...SIX_WORDS] },
-        { objective: "agua", candidates: ["rio", "mar", "liquido", "arbol", "tronco", "hoja"] },
-      ],
-    ];
+    queueCards(provider, [
+      { objective: "fuego", candidates: [...SIX_WORDS] },
+      { objective: "agua", candidates: ["rio", "mar", "liquido", "arbol", "tronco", "hoja"] },
+    ]);
 
     const crashing = new FakeJobStore();
     let crashes = 1;
@@ -479,9 +531,11 @@ describe("processClaimedJob (budget and recovery)", () => {
     // Reinicio: el trabajo persiste una llamada reservada y ninguna tarjeta.
     const stored = await crashing.findById("job-1");
     expect(stored?.processed).toBe(0);
-    expect(stored?.calls).toBe(1);
+    // Una llamada de objetivos y otra del lote de prohibidas.
+    expect(stored?.calls).toBe(2);
 
-    provider.batchQueue = [
+    provider.objectiveQueue = [["agua"]];
+    provider.candidateBatchQueue = [
       [{ objective: "agua", candidates: ["rio", "mar", "liquido", "arbol", "tronco", "hoja"] }],
     ];
 
@@ -563,6 +617,8 @@ describe("processClaimedJob (guards)", () => {
     await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
 
     // Falla terminal: no vuelve a la cola y no llama al proveedor.
+    expect(provider.objectiveCalls).toHaveLength(0);
+    expect(provider.candidateBatchCalls).toHaveLength(0);
     expect(provider.batchCalls).toHaveLength(0);
     expect(jobs.released).toEqual([]);
     expect(jobs.completed).toEqual([]);
@@ -574,7 +630,7 @@ describe("processClaimedJob (guards)", () => {
   it("publishes nothing when the lease was lost", async () => {
     const { decks, jobs, provider, deps } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+    queueCards(provider, [{ objective: "fuego", candidates: [...SIX_WORDS] }]);
 
     const staleStore = new FakeDeckStore();
     staleStore.seed({ id: "deck-1", name: "General", theme: "Objetos" });
@@ -605,7 +661,7 @@ describe("processClaimedJob (guards)", () => {
 
     // Otro worker reclama el mazo con un token más nuevo mientras la petición
     // está en vuelo.
-    provider.proposeCards = async () => {
+    provider.proposeObjectives = async () => {
       await decks.claimDeck({
         deckId: "deck-1",
         jobId: "job-1",
@@ -615,7 +671,7 @@ describe("processClaimedJob (guards)", () => {
       });
 
       return {
-        data: { cards: [{ objective: "fuego", candidates: [...SIX_WORDS] }] },
+        data: { objectives: ["fuego"] },
         usage: { inputTokens: 1, outputTokens: 1 },
       };
     };
@@ -630,7 +686,7 @@ describe("processClaimedJob (guards)", () => {
   it("keeps the provider error redacted", async () => {
     const { decks, jobs, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchError = new Error("raw provider failure with sk-secret-token");
+    provider.objectiveError = new Error("raw provider failure with sk-secret-token");
 
     await processClaimedJob(deps, claim(buildJob()));
 
@@ -641,27 +697,28 @@ describe("processClaimedJob (guards)", () => {
   it("records the provider usage", async () => {
     const { decks, jobs, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+    queueCards(provider, [{ objective: "fuego", candidates: [...SIX_WORDS] }]);
     provider.usagePerCall = { inputTokens: 11, outputTokens: 13 };
 
     await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
 
     const stored = await jobs.findById("job-1");
-    expect(stored?.inputTokens).toBe(11);
-    expect(stored?.outputTokens).toBe(13);
+    // Dos llamadas: la de objetivos y la del lote de prohibidas.
+    expect(stored?.inputTokens).toBe(22);
+    expect(stored?.outputTokens).toBe(26);
   });
 
   it("keeps the durable outcome unchanged when no progress publisher is configured", async () => {
     const { decks, jobs, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
-    provider.batchQueue = [[{ objective: "fuego", candidates: [...SIX_WORDS] }]];
+    queueCards(provider, [{ objective: "fuego", candidates: [...SIX_WORDS] }]);
 
     await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
 
     const stored = await jobs.findById("job-1");
     expect(stored?.status).toBe("completed");
     expect(stored?.processed).toBe(1);
-    expect(provider.batchCalls).toHaveLength(1);
+    expect(provider.candidateBatchCalls).toHaveLength(1);
     expect(jobs.failed).toEqual([]);
   });
 });

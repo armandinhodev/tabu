@@ -155,7 +155,7 @@ describe("administrative HTTP boundary", () => {
       expect(mocks.update).not.toHaveBeenCalled();
     },
   );
-  it.each([51, 800, 1200])("accepts a generation request for %i cards", async (count) => {
+  it.each([51, 400])("accepts a generation request for %i cards", async (count) => {
     mocks.generate.mockResolvedValue({ id: "job-1", status: "queued", requested: count });
     const response = await generate(request("POST", { count }), context);
     expect(response.status).toBe(202);
@@ -165,8 +165,8 @@ describe("administrative HTTP boundary", () => {
     expect(mocks.generate).toHaveBeenCalledWith(deckId, { count });
   });
 
-  it("rejects 1201 cards before calling the job service", async () => {
-    const response = await generate(request("POST", { count: 1201 }), context);
+  it("rejects 401 cards before calling the job service", async () => {
+    const response = await generate(request("POST", { count: 401 }), context);
     expect(response.status).toBe(400);
     expect(mocks.generate).not.toHaveBeenCalled();
   });

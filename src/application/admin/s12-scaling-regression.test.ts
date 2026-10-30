@@ -86,33 +86,62 @@ function cardsOf(objectives: string[]) {
   return objectives.map((objective) => ({ objective, candidates: [...SIX_WORDS] }));
 }
 
+function batchesOf(objectives: string[]): { objective: string; candidates: readonly string[] }[][] {
+  const batches: { objective: string; candidates: readonly string[] }[][] = [];
+
+  for (let offset = 0; offset < objectives.length; offset += 50) {
+    batches.push(cardsOf(objectives.slice(offset, offset + 50)));
+  }
+
+  return batches;
+}
+
 describe("S12 scaled generation boundaries", () => {
-  it("asks only for the remainder in the final batch", async () => {
+  it("asks for every objective once and caps each candidate batch at fifty", async () => {
     const { decks, jobs, provider, deps, claim } = build();
-    const cards = cardsOf(generatedWords(56));
-    provider.batchQueue = [cards.slice(0, 50), cards.slice(50)];
+    const objectives = generatedWords(56);
+    provider.objectiveQueue = [objectives];
+    provider.candidateBatchQueue = batchesOf(objectives);
+
     await processClaimedJob(deps, claim(buildJob({ requested: 56, ...jobLimitsFor(56) })));
-    expect(provider.batchCalls.map((call) => call.count)).toEqual([50, 6]);
+
+    expect(provider.objectiveCalls.map((call) => call.count)).toEqual([56]);
+    expect(provider.candidateBatchCalls.map((call) => call.objectives.length)).toEqual([50, 6]);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(56);
     expect(new Set(decks.decks.get("deck-1")?.cards.map((card) => card.word)).size).toBe(56);
     expect(jobs.completed).toEqual(["job-1"]);
   });
 
-  it("recovers a short first batch without overshooting or completing below the total", async () => {
+  it("recovers a short objective response without overshooting or completing below the total", async () => {
     const { decks, jobs, provider, deps, claim } = build();
-    const cards = cardsOf(generatedWords(100));
-    provider.batchQueue = [cards.slice(0, 49), cards.slice(49, 99), cards.slice(99)];
+    const objectives = generatedWords(100);
+    provider.objectiveQueue = [
+      objectives.slice(0, 49),
+      objectives.slice(49, 99),
+      objectives.slice(99),
+    ];
+    provider.candidateBatchQueue = [
+      cardsOf(objectives.slice(0, 49)),
+      cardsOf(objectives.slice(49, 99)),
+      cardsOf(objectives.slice(99)),
+    ];
+
     await processClaimedJob(deps, claim(buildJob({ requested: 100, ...jobLimitsFor(100) })));
-    expect(provider.batchCalls.map((call) => call.count)).toEqual([50, 50, 1]);
+
+    expect(provider.objectiveCalls.map((call) => call.count)).toEqual([100, 51, 1]);
+    expect(provider.candidateBatchCalls.map((call) => call.objectives.length)).toEqual([49, 50, 1]);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(100);
     expect(new Set(decks.decks.get("deck-1")?.cards.map((card) => card.word)).size).toBe(100);
     expect(await jobs.findById("job-1")).toMatchObject({ status: "completed", processed: 100 });
   });
 
-  it("fails explicitly and retains completed cards when later batches are empty", async () => {
+  it("fails explicitly and retains completed cards when the theme runs out of objectives", async () => {
     const { decks, jobs, provider, deps, claim } = build();
-    provider.batchQueue = [cardsOf(generatedWords(50)), [], [], []];
+    provider.objectiveQueue = [generatedWords(50), [], []];
+    provider.candidateBatchQueue = [cardsOf(generatedWords(50))];
+
     await processClaimedJob(deps, claim(buildJob({ requested: 60, ...jobLimitsFor(60) })));
+
     expect(jobs.completed).toEqual([]);
     expect(jobs.failed).toEqual([{ id: "job-1", error: "Only 50 of 60 cards could be generated" }]);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(50);
@@ -122,12 +151,17 @@ describe("S12 scaled generation boundaries", () => {
 
   it("keeps the batch size and budget stored in an existing job", async () => {
     const { decks, jobs, provider, deps, claim } = build();
-    provider.batchQueue = [cardsOf(generatedWords(5))];
+    const objectives = generatedWords(5);
+    provider.objectiveQueue = [objectives];
+    provider.candidateBatchQueue = [cardsOf(objectives)];
+
     await processClaimedJob(
       deps,
       claim(buildJob({ requested: 5, batchSize: 5, maxAttempts: 3, maxCalls: 8 })),
     );
-    expect(provider.batchCalls.map((call) => call.count)).toEqual([5]);
+
+    expect(provider.objectiveCalls.map((call) => call.count)).toEqual([5]);
+    expect(provider.candidateBatchCalls.map((call) => call.objectives.length)).toEqual([5]);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(5);
     expect(jobs.completed).toEqual(["job-1"]);
     expect(await jobs.findById("job-1")).toMatchObject({

@@ -140,11 +140,16 @@ no con la dirección de escucha `HOST` (que puede ser `0.0.0.0`). El proxy debe 
 `Host` público y el protocolo original. No se confía en `X-Forwarded-Host`; no configurar un
 proxy que reescriba esos valores sin una política explícita de confianza y verificación.
 
-Desde el panel se indica nombre, temática y cantidad de cartas (1–1200 por trabajo). El modelo DeepSeek configurado
-propone hasta 12 candidatas ordenadas por objetivo, en solicitudes de hasta 50 cartas. Por ejemplo,
-800 cartas requieren 16 lotes completos; el último lote pide solo la cantidad que falta. El servidor
+Desde el panel se indica nombre, temática y cantidad de cartas (1–400 por trabajo). La generación
+tiene dos fases: primero el modelo propone los objetivos del trabajo en una sola llamada, el
+servidor descarta los repetidos o mal formados, y después pide las prohibidas de esos objetivos en
+lotes de hasta 50. Así no se gasta una llamada en las prohibidas de un objetivo que iba a
+descartarse. Por ejemplo, 200 cartas requieren una llamada de objetivos y cuatro lotes de
+prohibidas; el último pide solo la cantidad que falta. El servidor
 descarta frases y duplicados, verifica la ortografía sobre el texto original con `nspell` y conserva
 las primeras seis prohibidas válidas. No usa Jev, puntuaciones mínimas ni cortes de confianza.
+Si el tema no alcanza para la cantidad pedida, el trabajo termina explícitamente e informa cuántas
+cartas se generaron en vez de completarse a medias.
 
 La opción **Permitir nombres propios y títulos** se configura al crear o editar cada mazo y está
 desactivada por defecto. Al activarla, los próximos objetivos pueden ser nombres o títulos de

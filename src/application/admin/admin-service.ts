@@ -40,12 +40,14 @@ export const RECOVERY_BATCH_LIMIT = 20;
 /**
  * Presupuesto persistido de un trabajo.
  *
- * - `maxAttempts`: lotes normales (`ceil(count / batchSize)`) más los
- *   reintentos para recuperar un lote corto.
- * - `maxCalls`: los intentos de lote más, como máximo, UN completion por
- *   carta (nunca se rellenan cartas con palabras inventadas).
+ * - `maxAttempts`: llamadas de fase 1 (objetivos). Normalmente alcanza con una
+ *   porque trae todo el faltante; los reintentos cubren una respuesta corta.
+ * - `maxCalls`: las llamadas de objetivos más un lote de prohibidas por cada
+ *   `batchSize` objetivos más, como máximo, UN completion por carta (nunca se
+ *   rellenan cartas con palabras inventadas).
  *
- * For 1200 cards: 24 normal batches, 26 attempts and at most 1226 calls.
+ * For 400 cards: 3 objective calls, 8 candidate batches and up to 400
+ * completions: at most 411 calls.
  */
 export function jobLimitsFor(requested: number, base?: Partial<AdminJobLimits>): AdminJobLimits {
   const batchSize = Math.min(
@@ -53,9 +55,9 @@ export function jobLimitsFor(requested: number, base?: Partial<AdminJobLimits>):
     Math.max(1, base?.batchSize ?? DEFAULT_BATCH_SIZE),
   );
   const leaseMs = base?.leaseMs ?? DEFAULT_LEASE_MS;
-  const batches = Math.ceil(requested / batchSize);
-  const maxAttempts = batches + MAX_BATCH_RETRIES;
-  const maxCalls = maxAttempts + requested;
+  const maxAttempts = 1 + MAX_BATCH_RETRIES;
+  const candidateBatches = Math.ceil(requested / batchSize);
+  const maxCalls = maxAttempts + candidateBatches + requested;
 
   return { maxCalls, maxAttempts, batchSize, leaseMs };
 }

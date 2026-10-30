@@ -28,6 +28,22 @@ export function isSingleWord(value: string): boolean {
   return SINGLE_WORD.test(value);
 }
 
+/**
+ * `true` cuando el texto puede ser objetivo de una carta.
+ *
+ * Con nombres propios habilitados se aceptan títulos de varias palabras con
+ * números y puntuación habitual; sin la opción, una sola palabra. Es la misma
+ * regla que aplica `evaluateCard`, expuesta para validar objetivos antes de
+ * gastar una llamada en sus prohibidas.
+ */
+export function isObjectiveText(value: string, allowProperNames: boolean | undefined): boolean {
+  const text = value.normalize("NFC").trim();
+
+  if (allowProperNames !== true) return isSingleWord(text);
+
+  return /\p{L}/u.test(text) && /^[\p{L}\p{M}\p{N} \p{Pd}'’":;,.!?¡¿()&]+$/u.test(text);
+}
+
 /** Resultado de evaluar el objetivo y los candidatos de una carta. */
 export interface EvaluatedCard {
   /** Objetivo normalizado a NFC (se conserva la ortografía original). */
@@ -154,9 +170,7 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
 
   // Opt-in titles may contain spaces, numbers and ordinary title punctuation,
   // but must contain a letter and must not contain controls or markup.
-  const objectiveStructural = input.allowProperNames
-    ? /\p{L}/u.test(objective) && /^[\p{L}\p{M}\p{N} \p{Pd}'’":;,.!?¡¿()&]+$/u.test(objective)
-    : isSingleWord(objective);
+  const objectiveStructural = isObjectiveText(objective, input.allowProperNames);
   const objectiveRecognized = objectiveStructural && spell.isRecognized(objective);
 
   const issues: CardIssue[] = [];

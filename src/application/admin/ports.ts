@@ -137,16 +137,43 @@ export interface ProposedCard {
 }
 
 /**
- * Proveedor de generación. La implementación real llama a DeepSeek Flash con
- * un endpoint fijo; la interfaz permite inyectar un doble en los tests.
+ * Proveedor de generación. La implementación real llama a DeepSeek con un
+ * endpoint fijo; la interfaz permite inyectar un doble en los tests.
  */
 export interface GenerationProvider {
   /** `false` cuando falta la configuración: la generación no se puede encolar. */
   readonly available: boolean;
   /**
-   * Lote inicial: devuelve hasta `count` cartas, cada una con su objetivo y
-   * hasta doce candidatas ordenadas. Una sola respuesta trae objetivo y
-   * prohibidas de cada carta.
+   * Fase 1 de la generación: devuelve objetivos y nada más.
+   *
+   * Se pide el faltante completo en una sola llamada para poder descartar los
+   * repetidos antes de gastar una llamada en sus prohibidas.
+   */
+  proposeObjectives(input: {
+    readonly model?: DeepSeekModel;
+    readonly allowProperNames?: boolean;
+    readonly theme: string;
+    readonly count: number;
+    /** Objetivos ya usados en el mazo (normalizados): hay que evitarlos. */
+    readonly excludedObjectives: readonly string[];
+    readonly signal?: AbortSignal;
+  }): Promise<ProviderResult<{ objectives: readonly string[] }>>;
+  /**
+   * Fase 2 de la generación: para cada objetivo pedido devuelve hasta doce
+   * candidatas ordenadas. Los objetivos devueltos que no fueron pedidos se
+   * descartan.
+   */
+  proposeCandidatesBatch(input: {
+    readonly model?: DeepSeekModel;
+    readonly allowProperNames?: boolean;
+    readonly theme: string;
+    readonly objectives: readonly string[];
+    readonly signal?: AbortSignal;
+  }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>>;
+  /**
+   * Carta única (reemplazo): devuelve un objetivo nuevo con sus candidatas en
+   * una sola llamada. Para un solo objetivo no hay nada que deduplicar en
+   * bloque, así que una llamada combinada cuesta menos que dos.
    */
   proposeCards(input: {
     readonly model?: DeepSeekModel;

@@ -139,7 +139,7 @@ describe("AdminService.queueGeneration", () => {
     decks.seed({ id: "deck-1", name: "General", theme: "General" });
 
     await expectAdminError(service.queueGeneration("deck-1", 0), 400, "invalid_input");
-    await expectAdminError(service.queueGeneration("deck-1", 1201), 400, "invalid_input");
+    await expectAdminError(service.queueGeneration("deck-1", 401), 400, "invalid_input");
     await expectAdminError(service.queueGeneration("deck-1", 1.5), 400, "invalid_input");
   });
 
@@ -195,9 +195,10 @@ describe("AdminService.queueGeneration", () => {
     expect(job.processed).toBe(0);
     expect(job.deckId).toBe("deck-1");
     expect(job.batchSize).toBe(5);
-    // Un lote normal + dos reintentos de lote corto + un completion por carta.
+    // Una llamada de objetivos + dos reintentos, un lote de prohibidas y hasta
+    // un completion por carta.
     expect(job.maxAttempts).toBe(3);
-    expect(job.maxCalls).toBe(8);
+    expect(job.maxCalls).toBe(9);
   });
 
   it("computes a budget that covers fifty cards", async () => {
@@ -206,19 +207,19 @@ describe("AdminService.queueGeneration", () => {
 
     const job = await service.queueGeneration("deck-1", 50);
 
-    // Diez lotes normales, dos reintentos y hasta un completion por carta.
-    expect(job.maxAttempts).toBe(12);
-    expect(job.maxCalls).toBe(62);
+    // Una llamada de objetivos, dos reintentos, diez lotes de prohibidas y
+    // hasta un completion por carta.
+    expect(job.maxAttempts).toBe(3);
+    expect(job.maxCalls).toBe(63);
   });
 
   it.each([
-    [1, 3, 4],
-    [50, 3, 53],
-    [51, 4, 55],
-    [800, 18, 818],
-    [1200, 26, 1226],
+    [1, 3, 5],
+    [50, 3, 54],
+    [51, 3, 56],
+    [400, 3, 411],
   ])(
-    "persists a fifty-card runtime batch and bounded budget for %i cards",
+    "persists a fifty-card candidate batch and bounded budget for %i cards",
     async (requested, maxAttempts, maxCalls) => {
       const { service, decks, jobs } = build(DEFAULT_ADMIN_LIMITS);
       decks.seed({ id: "deck-1", name: "General", theme: "General" });

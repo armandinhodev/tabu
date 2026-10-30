@@ -33,6 +33,9 @@ export const DEEPSEEK_TIMEOUT_MS = 20_000;
 /** Large initial batches get a bounded deadline below the default 60-second lease. */
 export const DEEPSEEK_BATCH_TIMEOUT_MS = 45_000;
 
+/** The single objectives call is long but happens once per job: more room than a batch. */
+export const DEEPSEEK_OBJECTIVES_TIMEOUT_MS = 90_000;
+
 /** Candidatos máximos por carta (S5). */
 export const MAX_CANDIDATES_PER_CARD = 12;
 
@@ -66,6 +69,7 @@ const completionSchema = z.object({
 });
 
 const candidatesSchema = z.object({ candidates: z.array(z.string()) });
+const objectivesSchema = z.object({ objectives: z.array(z.string()) });
 const cardsSchema = z.object({
   cards: z.array(
     z.object({
@@ -99,6 +103,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
     signal: AbortSignal | undefined,
     requestedCards = 1,
     model: DeepSeekModel = DEFAULT_DEEPSEEK_MODEL,
+    timeoutMs?: number,
   ): Promise<{ payload: unknown; usage: ProviderUsage }> {
     if (!DEEPSEEK_MODELS.includes(model)) {
       throw new AdminError(400, "invalid_model", "Unsupported DeepSeek model");
@@ -108,7 +113,9 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       () => {
         controller.abort();
       },
-      options.timeoutMs ?? (requestedCards > 5 ? DEEPSEEK_BATCH_TIMEOUT_MS : DEEPSEEK_TIMEOUT_MS),
+      options.timeoutMs ??
+        timeoutMs ??
+        (requestedCards > 5 ? DEEPSEEK_BATCH_TIMEOUT_MS : DEEPSEEK_TIMEOUT_MS),
     );
     const onAbort = (): void => {
       controller.abort();
@@ -198,7 +205,9 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
     available: apiKey.length > 0,
 
     async proposeCards(input): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
-      const excluded = input.excludedObjectives.slice(-MAX_GENERATION_COUNT);
+      // A replacement must never fail because the newest objectives were
+      // trimmed from the prompt, so the whole list goes in.
+      const excluded = input.excludedObjectives;
       const avoid = excluded.length > 0 ? excluded.join(", ") : "ninguno";
 
       const { payload, usage } = await request(
@@ -239,6 +248,95 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       return {
         data: {
           cards: parsed.data.cards.slice(0, input.count).map((card) => ({
+            objective: card.objective,
+            candidates: card.candidates.slice(0, MAX_CANDIDATES_PER_CARD),
+          })),
+        },
+        usage,
+      };
+    },
+
+    async proposeObjectives(input): Promise<ProviderResult<{ objectives: readonly string[] }>> {
+      // Repeats are discarded locally, so the bounded prompt keeps the newest
+      // used objectives and pays nothing for an objective that comes back again.
+      const excluded = input.excludedObjectives.slice(-MAX_GENERATION_COUNT);
+      const avoid = excluded.length > 0 ? excluded.join(", ") : "ninguno";
+
+      const { payload, usage } = await request(
+        [
+          `Tema: "${input.theme}".`,
+          `Propone ${input.count} objetivos distintos de cartas de taboo para ese tema.`,
+          input.allowProperNames
+            ? 'Cada objetivo puede ser un nombre propio o un título de varias palabras, como "Juego de tronos", con su ortografía correcta.'
+            : "Cada objetivo es una sola palabra en español, de cuatro a doce letras,",
+          input.allowProperNames
+            ? "y tiene que poder describirse sin nombrarlo."
+            : "que cualquiera pueda describir sin decirla.",
+          "Los objetivos no se repiten entre sí.",
+          `No repitas ninguno de estos objetivos ya usados en el mazo: ${avoid}.`,
+          'Responde con {"objectives":["...","..."]}.',
+        ].join(" "),
+        input.signal,
+        input.count,
+        input.model,
+        DEEPSEEK_OBJECTIVES_TIMEOUT_MS,
+      );
+
+      const parsed = objectivesSchema.safeParse(payload);
+
+      if (!parsed.success) {
+        throw new AdminError(
+          503,
+          "provider_invalid_response",
+          "The generation provider returned an invalid response",
+        );
+      }
+
+      return {
+        data: { objectives: parsed.data.objectives.slice(0, input.count) },
+        usage,
+      };
+    },
+
+    async proposeCandidatesBatch(
+      input,
+    ): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
+      const objectives = input.objectives.map((objective, index) => `${index + 1}) "${objective}"`);
+
+      const { payload, usage } = await request(
+        [
+          `Tema: "${input.theme}".`,
+          `Para cada uno de estos ${input.objectives.length} objetivos, da hasta 12 palabras prohibidas`,
+          input.allowProperNames
+            ? "en español, que pueden ser nombres propios y títulos de varias palabras,"
+            : "en español, cada una de una sola palabra,",
+          "ordenadas de la mejor a la peor para que no las adivine quien ve el objetivo.",
+          ...(input.allowProperNames
+            ? ["No uses partes del objetivo como palabras prohibidas."]
+            : []),
+          `Objetivos: ${objectives.join(" ")}.`,
+          "Devuelve exactamente esos objetivos, con el mismo texto y en el mismo orden.",
+          'Responde con {"cards":[{"objective":"...","candidates":["..."]}]}.',
+        ].join(" "),
+        input.signal,
+        input.objectives.length,
+        input.model,
+        DEEPSEEK_BATCH_TIMEOUT_MS,
+      );
+
+      const parsed = cardsSchema.safeParse(payload);
+
+      if (!parsed.success) {
+        throw new AdminError(
+          503,
+          "provider_invalid_response",
+          "The generation provider returned an invalid response",
+        );
+      }
+
+      return {
+        data: {
+          cards: parsed.data.cards.slice(0, input.objectives.length).map((card) => ({
             objective: card.objective,
             candidates: card.candidates.slice(0, MAX_CANDIDATES_PER_CARD),
           })),

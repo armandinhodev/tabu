@@ -260,7 +260,7 @@ describe("AdminDashboard", () => {
     );
     expect(socketMock.disconnect).not.toHaveBeenCalled();
   });
-  it.each([800, 1200])(
+  it.each([50, 400])(
     "submits %i cards from creation without splitting the browser request",
     async (count) => {
       render(<AdminDashboard />);
@@ -270,7 +270,7 @@ describe("AdminDashboard", () => {
         target: { value: "Sports for adults" },
       });
       const quantity = screen.getByLabelText("Cantidad de cartas");
-      expect(quantity).toHaveAttribute("max", "1200");
+      expect(quantity).toHaveAttribute("max", "400");
       fireEvent.change(quantity, { target: { value: String(count) } });
       fireEvent.click(screen.getByRole("button", { name: "Crear y generar" }));
       await waitFor(() =>
@@ -284,11 +284,11 @@ describe("AdminDashboard", () => {
     },
   );
 
-  it.each([800, 1200])("submits %i additional cards as one durable job", async (count) => {
+  it.each([50, 400])("submits %i additional cards as one durable job", async (count) => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
     const quantity = screen.getByLabelText("Cantidad para generar");
-    expect(quantity).toHaveAttribute("max", "1200");
+    expect(quantity).toHaveAttribute("max", "400");
     fireEvent.change(quantity, { target: { value: String(count) } });
     fireEvent.click(screen.getByRole("button", { name: `Generar ${count} cartas más` }));
     await waitFor(() =>
@@ -300,28 +300,28 @@ describe("AdminDashboard", () => {
     );
   });
 
-  it("rejects more than twelve hundred cards without creating a deck or generation job", async () => {
+  it("rejects more than four hundred cards without creating a deck or generation job", async () => {
     render(<AdminDashboard />);
     fireEvent.click(await screen.findByRole("tab", { name: "Crear mazo" }));
     fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Sports" } });
     fireEvent.change(screen.getByLabelText("Temática e indicaciones"), {
       target: { value: "Sports for adults" },
     });
-    fireEvent.change(screen.getByLabelText("Cantidad de cartas"), { target: { value: "1201" } });
+    fireEvent.change(screen.getByLabelText("Cantidad de cartas"), { target: { value: "401" } });
     fireEvent.submit(screen.getByRole("button", { name: "Crear y generar" }).closest("form")!);
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "La cantidad debe ser un entero entre 1 y 1200.",
+      "La cantidad debe ser un entero entre 1 y 400.",
     );
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 
-  it("rejects more than twelve hundred additional cards before queueing", async () => {
+  it("rejects more than four hundred additional cards before queueing", async () => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
-    fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "1201" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generar 1201 cartas más" }));
+    fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "401" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generar 401 cartas más" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "La cantidad debe ser un entero entre 1 y 1200.",
+      "La cantidad debe ser un entero entre 1 y 400.",
     );
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
