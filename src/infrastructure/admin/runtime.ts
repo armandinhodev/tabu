@@ -154,6 +154,7 @@ function runtime(): AdminRuntime {
     ids,
     limits,
     settings: new MongoAdminSettingsStore(),
+    loadSpell: loadSpanishSpellChecker,
   });
 
   const worker = new AdminWorker({
@@ -184,8 +185,21 @@ export async function getAdminDeck(id: string): Promise<ManagedDeck> {
   return runtime().service.getDeck(id);
 }
 
+export async function deleteAdminCard(deckId: string, cardId: string): Promise<{ id: string }> {
+  return runtime().service.deleteCard(deckId, cardId);
+}
+
+export async function updateAdminCard(
+  deckId: string,
+  cardId: string,
+  input: { word: string; taboo: readonly string[] },
+): Promise<ManagedCard> {
+  return runtime().service.updateCard(deckId, cardId, input);
+}
+
 /** Crea un mazo administrable vacío. */
 export async function createAdminDeck(input: {
+  rules?: string | undefined;
   allowProperNames?: boolean | undefined;
   name: string;
   theme: string;
@@ -203,6 +217,7 @@ export async function createAdminDeck(input: {
 export async function updateAdminDeck(
   id: string,
   input: {
+    rules?: string | undefined;
     name?: string | undefined;
     theme?: string | undefined;
     allowProperNames?: boolean | undefined;

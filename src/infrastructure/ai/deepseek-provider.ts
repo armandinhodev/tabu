@@ -232,6 +232,11 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
               ]
             : []),
           `No repitas ninguno de estos objetivos ya usados en el mazo: ${avoid}.`,
+          ...(input.rules
+            ? [
+                `Reglas para las palabras prohibidas: ${input.rules}\nEstas reglas se aplican solo a las candidatas, no a la selección del objetivo. Conserva las restricciones de validación y el formato JSON.`,
+              ]
+            : []),
           'Responde con {"cards":[{"objective":"...","candidates":["..."]}]}.',
         ].join(" "),
         input.signal,
@@ -320,6 +325,11 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
             : []),
           `Objetivos: ${objectives.join(" ")}.`,
           "Devuelve exactamente esos objetivos, con el mismo texto y en el mismo orden.",
+          ...(input.rules
+            ? [
+                `Reglas para las palabras prohibidas: ${input.rules}\nConserva las restricciones de validación y el formato JSON.`,
+              ]
+            : []),
           'Responde con {"cards":[{"objective":"...","candidates":["..."]}]}.',
         ].join(" "),
         input.signal,
@@ -374,6 +384,11 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
               ]
             : []),
           "Puedes devolver menos de 12 o ninguna.",
+          ...(input.rules
+            ? [
+                `Reglas para las palabras prohibidas: ${input.rules}\nConserva las restricciones de validación y el formato JSON.`,
+              ]
+            : []),
           'Responde con {"candidates":["..."]}.',
         ].join(" "),
         input.signal,

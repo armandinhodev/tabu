@@ -52,6 +52,43 @@ function promptOf(calls: { init: RequestInit }[]): string {
 }
 
 describe("createDeepSeekProvider", () => {
+  it("adds deck rules only to forbidden-word requests and keeps the default prompts unchanged", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[],"objectives":[]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+    const rules = "Priorizar asociaciones comunes.\nEvitar referencias oscuras.";
+    for (const method of ["proposeCards", "proposeCandidatesBatch", "proposeCandidates"] as const) {
+      const input = {
+        theme: "Food",
+        count: 1,
+        excludedObjectives: [],
+        objectives: ["fuego"],
+        objective: "fuego",
+        previousWords: [],
+        selected: [],
+        rejected: [],
+      };
+      calls.length = 0;
+      await provider[method](input);
+      const original = promptOf(calls);
+      calls.length = 0;
+      await provider[method]({ ...input, ...{ rules } });
+      expect(promptOf(calls)).toContain(rules);
+      expect(promptOf(calls)).toContain("Reglas para las palabras prohibidas:");
+      calls.length = 0;
+      await provider[method]({ ...input, ...{ rules: "" } });
+      expect(promptOf(calls)).toBe(original);
+    }
+    calls.length = 0;
+    await provider.proposeObjectives({
+      theme: "Food",
+      count: 1,
+      excludedObjectives: [],
+      ...{ rules },
+    });
+    expect(promptOf(calls)).not.toContain(rules);
+    expect(promptOf(calls)).not.toContain("Reglas para las palabras prohibidas:");
+  });
+
   it("rejects an unsupported model before making a provider request", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });

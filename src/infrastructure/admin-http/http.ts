@@ -42,6 +42,9 @@ export async function adminResponse(
     const failureStatus = safeStatus(error);
     const knownCodes: Record<string, string> = {
       name_taken: "Ya existe un mazo con ese nombre.",
+      objective_taken: "Ese objetivo ya existe o ya se usó en este mazo.",
+      card_changed: "El mazo cambió durante la edición. Actualiza y vuelve a intentarlo.",
+      spell_unavailable: "El diccionario no está disponible. Intenta nuevamente más tarde.",
       not_enough_words: "La carta necesita seis prohibidas antes de poder habilitarse.",
       provider_unavailable: "Configura DEEPSEEK_API_KEY en el servidor para generar cartas.",
       mongo_unavailable: "MongoDB no está disponible. Actualiza antes de reintentar.",

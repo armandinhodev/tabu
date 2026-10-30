@@ -2,9 +2,14 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
-import { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "@/application/admin/deck-limits";
+import {
+  MAX_DECK_NAME_LENGTH,
+  MAX_DECK_THEME_LENGTH,
+  MAX_DECK_RULES_LENGTH,
+} from "@/application/admin/deck-limits";
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
+import { Textarea } from "@/ui/components/ui/textarea";
 import { ConfirmDialog } from "@/ui/components/ui/dialog";
 
 /** Carta administrada tal como la ve el panel. */
@@ -20,6 +25,7 @@ export type AdminCardView = {
 
 /** Mazo administrable tal como lo ve el panel. */
 export type AdminDeckView = {
+  rules?: string;
   allowProperNames?: boolean;
   id: string;
   name: string;
@@ -67,6 +73,7 @@ export function DeckManagement({
 }: DeckManagementProps) {
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
+  const [rules, setRules] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [confirmingDeletion, setConfirmingDeletion] = useState(false);
   const [allowProperNames, setAllowProperNames] = useState(false);
@@ -74,10 +81,11 @@ export function DeckManagement({
   useEffect(() => {
     setName(deck?.name ?? "");
     setTheme(deck?.theme ?? "");
+    setRules(deck?.rules ?? "");
     setConfirming(false);
     setConfirmingDeletion(false);
     setAllowProperNames(deck?.allowProperNames ?? false);
-  }, [deck?.id, deck?.name, deck?.theme, deck?.allowProperNames]);
+  }, [deck?.id, deck?.name, deck?.theme, deck?.rules, deck?.allowProperNames]);
 
   if (deck === null) {
     return null;
@@ -97,6 +105,7 @@ export function DeckManagement({
         body: JSON.stringify({
           name: name.trim(),
           theme: theme.trim(),
+          ...(rules.trim() !== (current.rules ?? "") ? { rules: rules.trim() } : {}),
           ...(allowProperNames || current.allowProperNames !== undefined
             ? { allowProperNames }
             : {}),
@@ -150,9 +159,9 @@ export function DeckManagement({
             disabled={locked}
           />
         </label>
-        <label className="space-y-2">
+        <label className="space-y-2 md:col-span-2">
           <span className="block text-body-sm text-fg-muted">Temática a editar</span>
-          <Input
+          <Textarea
             value={theme}
             onChange={(event) => setTheme(event.target.value)}
             maxLength={MAX_DECK_THEME_LENGTH}
@@ -160,6 +169,20 @@ export function DeckManagement({
             disabled={locked}
           />
         </label>
+        <label className="space-y-2 md:col-span-2">
+          <span className="block text-body-sm text-fg-muted">Reglas para palabras prohibidas</span>
+          <Textarea
+            value={rules}
+            onChange={(event) => setRules(event.target.value)}
+            maxLength={MAX_DECK_RULES_LENGTH}
+            disabled={locked}
+            aria-describedby="edit-deck-rules-hint"
+          />
+        </label>
+        <p id="edit-deck-rules-hint" className="text-body-sm text-fg-muted md:col-span-2">
+          Opcional. Hasta {MAX_DECK_RULES_LENGTH} caracteres. Deja el campo vacío para quitar las
+          reglas.
+        </p>
         <label className="flex items-center gap-2 md:col-span-2">
           <input
             type="checkbox"
@@ -170,34 +193,39 @@ export function DeckManagement({
           <span>Permitir nombres propios y títulos</span>
         </label>
         <p className="text-body-sm text-fg-muted md:col-span-2">
-          La nueva temática se aplica a las próximas generaciones. Las cartas actuales no se
-          regeneran.
+          Los cambios de temática y reglas se aplican a las próximas generaciones. Las cartas
+          actuales no se regeneran.
         </p>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Button type="submit" size="sm" disabled={locked}>
             Guardar cambios
           </Button>
-          {archived ? (
-            <>
-              <Button variant="ghost" size="sm" disabled={locked} onClick={() => void restore()}>
-                Restaurar mazo
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={locked}
-                onClick={() => setConfirmingDeletion(true)}
-              >
-                Eliminar definitivamente
-              </Button>
-            </>
-          ) : (
-            <Button variant="ghost" size="sm" disabled={locked} onClick={() => setConfirming(true)}>
-              Archivar mazo
-            </Button>
-          )}
         </div>
       </form>
+      <div
+        className="flex flex-wrap gap-2 border-t border-line pt-4"
+        aria-label="Archivado y eliminación del mazo"
+      >
+        {archived ? (
+          <>
+            <Button variant="ghost" size="sm" disabled={locked} onClick={() => void restore()}>
+              Restaurar mazo
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={locked}
+              onClick={() => setConfirmingDeletion(true)}
+            >
+              Eliminar definitivamente
+            </Button>
+          </>
+        ) : (
+          <Button variant="ghost" size="sm" disabled={locked} onClick={() => setConfirming(true)}>
+            Archivar mazo
+          </Button>
+        )}
+      </div>
       <ConfirmDialog
         open={confirming && !archived}
         onOpenChange={setConfirming}

@@ -14,11 +14,13 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "@/application/admin/generation-limits";
+import { MAX_GENERATION_COUNT } from "@/application/admin/generation-limits";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
+import { Textarea } from "@/ui/components/ui/textarea";
+import { MAX_DECK_RULES_LENGTH } from "@/application/admin/deck-limits";
 import { Spinner } from "@/ui/components/ui/spinner";
 import {
   createAdminSocket,
@@ -29,6 +31,9 @@ import {
 import { AdminLogin } from "./login/admin-login";
 import { DeckManagement, type AdminDeckView } from "./deck-management";
 import { ModelSettings } from "./model-settings";
+import { CardEditor } from "./card-editor";
+import { CardDeletion } from "./card-deletion";
+import { normalizeWord } from "@/domain/value-objects/TabooWords";
 
 const ADMIN_TABS = [
   ["create", "Crear mazo"],
@@ -36,6 +41,12 @@ const ADMIN_TABS = [
   ["settings", "Configuración"],
 ] as const;
 type AdminTab = (typeof ADMIN_TABS)[number][0];
+
+const DECK_TABS = [
+  ["cards", "Cartas"],
+  ["settings", "Ajustes"],
+] as const;
+type DeckTab = (typeof DECK_TABS)[number][0];
 
 type DeckView = AdminDeckView;
 type JobView = {
@@ -117,12 +128,23 @@ export function AdminDashboard() {
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
+  const [rules, setRules] = useState("");
   const [allowProperNames, setAllowProperNames] = useState(false);
   const [count, setCount] = useState("5");
   const [onlyExcluded, setOnlyExcluded] = useState(false);
+  const [cardSearch, setCardSearch] = useState("");
   const [cardsPage, setCardsPage] = useState(1);
-  useEffect(() => setCardsPage(1), [selectedId, onlyExcluded]);
+  useEffect(() => setCardsPage(1), [selectedId, onlyExcluded, cardSearch]);
   const [activeTab, setActiveTab] = useState<AdminTab>("decks");
+  const [deckTab, setDeckTab] = useState<DeckTab>("cards");
+  const [showGeneration, setShowGeneration] = useState(false);
+  const deckTabRefs = useRef<Partial<Record<DeckTab, HTMLButtonElement | null>>>({});
+  useEffect(() => {
+    setDeckTab("cards");
+    setShowGeneration(false);
+    setCardSearch("");
+  }, [selectedId]);
+  const [dismissedJobId, setDismissedJobId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const tabRefs = useRef<Partial<Record<AdminTab, HTMLButtonElement | null>>>({});
   const [connection, setConnection] = useState<AdminConnectionState>("idle");
@@ -330,9 +352,24 @@ export function AdminDashboard() {
   }
 
   function trackJob(next: JobView) {
+    setDismissedJobId(null);
     setJob(next);
     setJobId(next.id);
     rememberJob(next.id);
+  }
+
+  function selectTab(next: AdminTab) {
+    if (next !== activeTab && (job?.status === "completed" || job?.status === "failed")) {
+      setDismissedJobId(job.id);
+    }
+    setActiveTab(next);
+  }
+
+  function selectDeckTab(next: DeckTab) {
+    if (next !== deckTab && (job?.status === "completed" || job?.status === "failed")) {
+      setDismissedJobId(job.id);
+    }
+    setDeckTab(next);
   }
 
   async function requestGeneration(amount: number, request: () => Promise<JobView>) {
@@ -405,14 +442,16 @@ export function AdminDashboard() {
           body: JSON.stringify({
             name: name.trim(),
             theme: theme.trim(),
+            ...(rules.trim() ? { rules: rules.trim() } : {}),
             ...(allowProperNames ? { allowProperNames: true } : {}),
           }),
         });
         setSelectedId(created.id);
         setDeck(created);
-        setActiveTab("decks");
+        selectTab("decks");
         setName("");
         setTheme("");
+        setRules("");
         setAllowProperNames(false);
         trackJob(
           await api<JobView>(`/api/admin/decks/${encodeURIComponent(created.id)}/generate`, {
@@ -429,7 +468,13 @@ export function AdminDashboard() {
 
   const running = job?.status === "queued" || job?.status === "running";
   const cards = deck?.cards ?? [];
-  const filteredCards = onlyExcluded ? cards.filter((card) => card.excluded) : cards;
+  const searchQuery = normalizeWord(cardSearch);
+  const filteredCards = cards.filter(
+    (card) =>
+      (!onlyExcluded || card.excluded) &&
+      (!searchQuery ||
+        [card.word, ...card.taboo].some((term) => normalizeWord(term).includes(searchQuery))),
+  );
   const cardsPerPage = 20;
   const totalPages = Math.max(1, Math.ceil(filteredCards.length / cardsPerPage));
   const currentPage = Math.min(cardsPage, totalPages);
@@ -526,7 +571,7 @@ export function AdminDashboard() {
             aria-selected={activeTab === value}
             tabIndex={activeTab === value ? 0 : -1}
             className={`min-h-11 rounded-md px-4 font-display font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${activeTab === value ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"}`}
-            onClick={() => setActiveTab(value)}
+            onClick={() => selectTab(value)}
             onKeyDown={(event) => {
               const index = ADMIN_TABS.findIndex(([tab]) => tab === value);
               let nextIndex: number;
@@ -539,7 +584,7 @@ export function AdminDashboard() {
               else return;
               const next = ADMIN_TABS[nextIndex]![0];
               event.preventDefault();
-              setActiveTab(next);
+              selectTab(next);
               tabRefs.current[next]?.focus();
             }}
           >
@@ -581,9 +626,13 @@ export function AdminDashboard() {
               disabled={busy}
             />
           </label>
-          <label className="space-y-2">
-            <span>Cantidad de cartas</span>
+          <div className="space-y-2">
+            <label htmlFor="create-card-count" className="block">
+              Cantidad de cartas
+            </label>
             <Input
+              id="create-card-count"
+              aria-describedby="create-generation-limit"
               type="number"
               min={1}
               max={MAX_GENERATION_COUNT}
@@ -593,41 +642,71 @@ export function AdminDashboard() {
               required
               disabled={busy}
             />
-          </label>
+            <span id="create-generation-limit" className="block text-body-sm text-fg-muted">
+              Máximo {MAX_GENERATION_COUNT} cartas por generación.
+            </span>
+          </div>
           <label className="space-y-2 md:col-span-2">
             <span>Temática e indicaciones</span>
-            <Input
+            <Textarea
               value={theme}
               onChange={(event) => setTheme(event.target.value)}
               maxLength={500}
               required
               disabled={busy}
-              placeholder="Ejemplo: deportes para público general, sin nombres propios"
+              placeholder="Ejemplo: deportes para público general"
             />
           </label>
+          <label className="space-y-2 md:col-span-2">
+            <span>Reglas para buscar palabras prohibidas</span>
+            <Textarea
+              value={rules}
+              onChange={(event) => setRules(event.target.value)}
+              maxLength={MAX_DECK_RULES_LENGTH}
+              disabled={busy}
+              aria-describedby="forbidden-rules-hint"
+              placeholder="Ejemplo: priorizar asociaciones comunes y evitar términos técnicos."
+            />
+          </label>
+          <p id="forbidden-rules-hint" className="text-body-sm text-fg-muted md:col-span-2">
+            Opcional. Hasta {MAX_DECK_RULES_LENGTH} caracteres. Estas reglas se aplican a las
+            palabras prohibidas, no a la selección de objetivos.
+          </p>
           <label className="flex items-center gap-2 md:col-span-2">
             <input
               type="checkbox"
               checked={allowProperNames}
               onChange={(event) => setAllowProperNames(event.target.checked)}
               disabled={busy}
+              aria-describedby="proper-names-help"
             />
             <span>Permitir nombres propios y títulos</span>
           </label>
-          <p className="text-body-sm text-fg-muted md:col-span-2">
-            La generación consume la API configurada en el servidor. Se procesa en lotes de hasta{" "}
-            {DEFAULT_BATCH_SIZE} cartas; cada carta conserva hasta seis prohibidas
-            {allowProperNames
-              ? ", que pueden incluir nombres propios y títulos de varias palabras."
-              : " de una sola palabra."}
-          </p>
+          <details className="rounded-md border border-line px-4 text-body-sm md:col-span-2">
+            <summary className="min-h-11 cursor-pointer py-3 text-fg-muted">
+              ¿Qué permite esta opción?
+            </summary>
+            <div id="proper-names-help" className="space-y-2 pb-4 text-fg-muted">
+              <p>
+                Permite que los objetivos y las palabras prohibidas incluyan nombres propios y
+                títulos de varias palabras, como «Juego de tronos» o «Ned Stark».
+              </p>
+              <p>
+                Los nombres y títulos no se verifican en el diccionario: su ortografía debe
+                revisarse manualmente. Sin esta opción, las prohibidas deben tener una sola palabra
+                y se verifican en el diccionario.
+              </p>
+            </div>
+          </details>
           <Button type="submit" disabled={busy || running || !name.trim() || !theme.trim()}>
             {busy ? "Enviando…" : "Crear y generar"}
           </Button>
         </form>
       </section>
 
-      {(creating !== null || (job !== null && job.status !== "completed")) && (
+      {(creating !== null ||
+        running ||
+        (job?.status === "failed" && job.id !== dismissedJobId)) && (
         <section
           aria-label="Progreso de generación"
           aria-live="polite"
@@ -687,7 +766,7 @@ export function AdminDashboard() {
         </section>
       )}
 
-      {creating === null && job?.status === "completed" && (
+      {creating === null && job?.status === "completed" && job.id !== dismissedJobId && (
         <p role="status" className="flex items-center gap-2 text-body-sm text-success">
           <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />
           Generación completada · {job.processed ?? 0}/{job.requested ?? 0} cartas
@@ -755,7 +834,7 @@ export function AdminDashboard() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setActiveTab("create");
+                    selectTab("create");
                     tabRefs.current.create?.focus();
                   }}
                 >
@@ -786,9 +865,6 @@ export function AdminDashboard() {
                 className={`w-full rounded-md border-2 p-4 text-left break-words transition-colors ${selectedId === item.id ? "border-accent bg-surface" : "border-transparent bg-surface hover:border-line-control"}`}
               >
                 <span className="block font-semibold">{item.name}</span>
-                <span className="mt-1 line-clamp-2 block text-body-sm text-fg-muted">
-                  {item.theme}
-                </span>
                 <span className="mt-1 block text-body-sm text-fg-muted">
                   {item.cards?.length ?? 0} cartas
                 </span>
@@ -828,14 +904,400 @@ export function AdminDashboard() {
                 <div className="rounded-lg border border-line bg-surface-2 p-5">
                   <div className="min-w-0 break-words">
                     <h2 className="font-display text-h3">{deck.name}</h2>
-                    <p className="text-fg-muted">{deck.theme}</p>
+                    <p className="line-clamp-2 whitespace-pre-line text-fg-muted">{deck.theme}</p>
                     <p className="mt-3 text-body-sm text-fg-muted">
                       {cards.filter((card) => !card.excluded).length} disponibles ·{" "}
                       {cards.filter((card) => card.excluded).length} excluidas
                     </p>
                   </div>
                 </div>
-                <div className="rounded-lg border border-line p-5">
+                <div
+                  role="tablist"
+                  aria-label="Secciones del mazo"
+                  className="flex gap-2 border-b border-line pb-2"
+                >
+                  {DECK_TABS.map(([value, label], index) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="tab"
+                      id={`deck-${value}-tab`}
+                      aria-controls={`deck-${value}-panel`}
+                      aria-selected={deckTab === value}
+                      tabIndex={deckTab === value ? 0 : -1}
+                      ref={(element) => {
+                        deckTabRefs.current[value] = element;
+                      }}
+                      className={`min-h-11 rounded-md px-4 font-display font-semibold ${deckTab === value ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"}`}
+                      onClick={() => selectDeckTab(value)}
+                      onKeyDown={(event) => {
+                        let next: DeckTab;
+                        if (event.key === "Home") next = "cards";
+                        else if (event.key === "End") next = "settings";
+                        else if (event.key === "ArrowLeft" || event.key === "ArrowRight")
+                          next = DECK_TABS[(index + 1) % DECK_TABS.length]![0];
+                        else return;
+                        event.preventDefault();
+                        selectDeckTab(next);
+                        deckTabRefs.current[next]?.focus();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <section
+                  role="tabpanel"
+                  id="deck-cards-panel"
+                  aria-labelledby="deck-cards-tab"
+                  tabIndex={0}
+                  hidden={deckTab !== "cards"}
+                  className="space-y-4"
+                >
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={showGeneration}
+                      aria-controls="deck-generation-options"
+                      onClick={() => setShowGeneration((value) => !value)}
+                    >
+                      <Sparkles aria-hidden="true" className="size-4 text-accent" />
+                      Generar más cartas
+                    </Button>
+                  </div>
+                  <section
+                    id="deck-generation-options"
+                    hidden={!showGeneration}
+                    aria-label="Generar más cartas"
+                    className="rounded-lg border border-line p-5"
+                  >
+                    <h3 className="flex items-center gap-2 font-display font-semibold">
+                      <Sparkles aria-hidden="true" className="size-4 text-accent" />
+                      Generar más cartas
+                    </h3>
+                    <p className="mt-1 text-body-sm text-fg-muted">
+                      Las nuevas cartas se agregan al mazo sin modificar las actuales.
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-end gap-3">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="additional-card-count"
+                          className="block text-body-sm text-fg-muted"
+                        >
+                          Cantidad para generar
+                        </label>
+                        <Input
+                          id="additional-card-count"
+                          aria-describedby="additional-generation-limit"
+                          type="number"
+                          min={1}
+                          max={MAX_GENERATION_COUNT}
+                          step={1}
+                          value={count}
+                          onChange={(event) => setCount(event.target.value)}
+                          disabled={busy || running || archived}
+                          className="w-24"
+                        />
+                        <span
+                          id="additional-generation-limit"
+                          className="block text-body-sm text-fg-muted"
+                        >
+                          Máximo {MAX_GENERATION_COUNT} cartas por generación.
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        disabled={busy || running || archived}
+                        onClick={() =>
+                          void act(async () => {
+                            const amount = Number(count);
+                            if (
+                              !Number.isInteger(amount) ||
+                              amount < 1 ||
+                              amount > MAX_GENERATION_COUNT
+                            )
+                              throw new RequestFailure(
+                                400,
+                                `La cantidad debe ser un entero entre 1 y ${MAX_GENERATION_COUNT}.`,
+                              );
+                            await requestGeneration(amount, () =>
+                              api<JobView>(
+                                `/api/admin/decks/${encodeURIComponent(deck.id)}/generate`,
+                                {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ count: amount }),
+                                },
+                              ),
+                            );
+                          })
+                        }
+                      >
+                        Generar {count} cartas más
+                      </Button>
+                    </div>
+                  </section>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+                    <h3 className="font-display text-h3">Revisar cartas</h3>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-line px-3 text-body-sm">
+                      <ListFilter aria-hidden="true" className="size-4 text-fg-muted" />
+                      <input
+                        type="checkbox"
+                        className="size-5 accent-accent"
+                        checked={onlyExcluded}
+                        onChange={(event) => setOnlyExcluded(event.target.checked)}
+                      />
+                      Solo excluidas
+                    </label>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="card-search" className="block text-body-sm text-fg-muted">
+                      Buscar cartas
+                    </label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        id="card-search"
+                        type="search"
+                        value={cardSearch}
+                        onChange={(event) => setCardSearch(event.target.value)}
+                        placeholder="Objetivo o palabra prohibida"
+                        className="min-w-0 flex-1"
+                      />
+                      <Button
+                        variant="quiet"
+                        size="sm"
+                        disabled={!cardSearch}
+                        onClick={() => setCardSearch("")}
+                      >
+                        Limpiar búsqueda
+                      </Button>
+                    </div>
+                    {searchQuery && (
+                      <p role="status" className="text-body-sm text-fg-muted">
+                        Resultados: {filteredCards.length} de {cards.length} cartas
+                      </p>
+                    )}
+                  </div>
+                  {deck && visibleCards.length === 0 && (
+                    <div
+                      role="status"
+                      className="space-y-3 rounded-lg border border-dashed border-line p-6 text-center"
+                    >
+                      <h3 className="font-display font-semibold">
+                        {searchQuery
+                          ? "No hay cartas que coincidan"
+                          : onlyExcluded
+                            ? "No hay cartas excluidas"
+                            : "Este mazo todavía no tiene cartas"}
+                      </h3>
+                      <p className="text-body-sm text-fg-muted">
+                        {searchQuery
+                          ? "Prueba con otra palabra o limpia la búsqueda."
+                          : onlyExcluded
+                            ? "Ninguna carta coincide con este filtro."
+                            : archived
+                              ? "Restaura el mazo para generar nuevas cartas."
+                              : "Genera cartas con las opciones de arriba. El progreso se actualiza automáticamente."}
+                      </p>
+                      {onlyExcluded && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setOnlyExcluded(false);
+                            setCardSearch("");
+                          }}
+                        >
+                          Ver todas las cartas
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    {visibleCards.map((card) => (
+                      <article
+                        key={card.id}
+                        className="min-w-0 rounded-lg border border-line bg-surface-2 p-5"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <h3 className="min-w-0 font-display text-h3 break-words">{card.word}</h3>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-pill px-3 py-1 text-caption ${card.excluded ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
+                          >
+                            {card.excluded ? (
+                              <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+                            ) : (
+                              <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />
+                            )}
+                            {card.excluded
+                              ? "Excluida"
+                              : card.manualOverride
+                                ? "Habilitada manualmente"
+                                : "Disponible"}
+                          </span>
+                        </div>
+                        <p className="mt-4 text-caption text-fg-muted">Palabras prohibidas</p>
+                        <ol className="mt-2 grid grid-cols-2 gap-2">
+                          {card.taboo.map((word, index) => (
+                            <li
+                              key={`${index}-${word}`}
+                              className="rounded-md border border-line bg-surface px-3 py-2 text-body-sm break-words"
+                            >
+                              {word}
+                            </li>
+                          ))}
+                        </ol>
+                        {card.taboo.length < 6 && (
+                          <p
+                            id={`card-${card.id}-incomplete`}
+                            className="mt-3 text-body-sm text-warning"
+                          >
+                            Faltan prohibidas para completar las seis.
+                          </p>
+                        )}
+                        {card.issues.length > 0 && (
+                          <details className="mt-4 text-body-sm">
+                            <summary className="min-h-11 cursor-pointer py-3 text-warning">
+                              Ver advertencias ({card.issues.length})
+                            </summary>
+                            <ul className="mt-2 list-disc space-y-1 pl-5">
+                              {card.issues.map((issue, index) => (
+                                <li key={`${index}-${issue}`}>{issue}</li>
+                              ))}
+                            </ul>
+                            <p className="mt-2 text-fg-muted">
+                              Una palabra desconocida puede ser un regionalismo. Habilitar la carta
+                              no elimina estas advertencias.
+                            </p>
+                          </details>
+                        )}
+                        <CardEditor
+                          card={card}
+                          disabled={busy || running || archived}
+                          onSave={async (input) => {
+                            let saved = false;
+                            await act(async () => {
+                              await api(
+                                `/api/admin/decks/${encodeURIComponent(deck.id)}/cards/${encodeURIComponent(card.id)}`,
+                                {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify(input),
+                                },
+                              );
+                              saved = true;
+                            });
+                            return saved;
+                          }}
+                        />
+                        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
+                          <Button
+                            size="sm"
+                            variant={card.excluded ? "caution" : "ghost"}
+                            aria-describedby={
+                              card.excluded && card.taboo.length < 6
+                                ? `card-${card.id}-incomplete`
+                                : undefined
+                            }
+                            disabled={
+                              busy ||
+                              running ||
+                              archived ||
+                              (card.excluded && card.taboo.length !== 6)
+                            }
+                            onClick={() =>
+                              void act(async () => {
+                                await api(
+                                  `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}`,
+                                  {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ excluded: !card.excluded }),
+                                  },
+                                );
+                              })
+                            }
+                          >
+                            {card.excluded ? "Habilitar de todos modos" : "Excluir"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy || running || archived}
+                            onClick={() =>
+                              void act(async () =>
+                                requestGeneration(1, () =>
+                                  api<JobView>(
+                                    `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}/replace`,
+                                    { method: "POST" },
+                                  ),
+                                ),
+                              )
+                            }
+                          >
+                            Reemplazar con IA
+                          </Button>
+                          <CardDeletion
+                            word={card.word}
+                            disabled={busy || running || archived}
+                            onDelete={async () => {
+                              await act(async () => {
+                                await api(
+                                  `/api/admin/decks/${encodeURIComponent(deck.id)}/cards/${encodeURIComponent(card.id)}`,
+                                  { method: "DELETE" },
+                                );
+                              });
+                            }}
+                          />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {deck && filteredCards.length > 0 && (
+                    <nav
+                      aria-label="Paginación de cartas"
+                      className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
+                    >
+                      <p className="text-body-sm text-fg-muted" aria-live="polite">
+                        Mostrando {pageStart + 1}–
+                        {Math.min(pageStart + cardsPerPage, filteredCards.length)} de{" "}
+                        {filteredCards.length} cartas
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={currentPage === 1}
+                          onClick={() => setCardsPage(currentPage - 1)}
+                        >
+                          <ChevronLeft aria-hidden="true" className="size-4" />
+                          Anterior
+                        </Button>
+                        <span aria-current="page" className="text-body-sm">
+                          Página {currentPage} de {totalPages}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={currentPage === totalPages}
+                          onClick={() => setCardsPage(currentPage + 1)}
+                        >
+                          Siguiente
+                          <ChevronRight aria-hidden="true" className="size-4" />
+                        </Button>
+                      </div>
+                    </nav>
+                  )}
+                </section>
+                <section
+                  role="tabpanel"
+                  id="deck-settings-panel"
+                  aria-labelledby="deck-settings-tab"
+                  tabIndex={0}
+                  hidden={deckTab !== "settings"}
+                  className="rounded-lg border border-line p-5"
+                >
                   <h3 className="mb-4 font-display font-semibold">Ajustes del mazo</h3>
                   <DeckManagement
                     deck={deck}
@@ -846,255 +1308,8 @@ export function AdminDashboard() {
                     onArchived={handleArchived}
                     onDeleted={handleDeleted}
                   />
-                </div>
-                <section
-                  aria-label="Generar más cartas"
-                  className="rounded-lg border border-line p-5"
-                >
-                  <h3 className="flex items-center gap-2 font-display font-semibold">
-                    <Sparkles aria-hidden="true" className="size-4 text-accent" />
-                    Generar más cartas
-                  </h3>
-                  <p className="mt-1 text-body-sm text-fg-muted">
-                    Las nuevas cartas se agregan al mazo sin modificar las actuales.
-                  </p>
-                  <div className="mt-4 flex flex-wrap items-end gap-3">
-                    <label className="space-y-2">
-                      <span className="block text-body-sm text-fg-muted">
-                        Cantidad para generar
-                      </span>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={MAX_GENERATION_COUNT}
-                        step={1}
-                        value={count}
-                        onChange={(event) => setCount(event.target.value)}
-                        disabled={busy || running || archived}
-                        className="w-24"
-                      />
-                    </label>
-                    <Button
-                      variant="ghost"
-                      disabled={busy || running || archived}
-                      onClick={() =>
-                        void act(async () => {
-                          const amount = Number(count);
-                          if (
-                            !Number.isInteger(amount) ||
-                            amount < 1 ||
-                            amount > MAX_GENERATION_COUNT
-                          )
-                            throw new RequestFailure(
-                              400,
-                              `La cantidad debe ser un entero entre 1 y ${MAX_GENERATION_COUNT}.`,
-                            );
-                          await requestGeneration(amount, () =>
-                            api<JobView>(
-                              `/api/admin/decks/${encodeURIComponent(deck.id)}/generate`,
-                              {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ count: amount }),
-                              },
-                            ),
-                          );
-                        })
-                      }
-                    >
-                      Generar {count} cartas más
-                    </Button>
-                  </div>
                 </section>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
-                  <h3 className="font-display text-h3">Revisar cartas</h3>
-                  <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-line px-3 text-body-sm">
-                    <ListFilter aria-hidden="true" className="size-4 text-fg-muted" />
-                    <input
-                      type="checkbox"
-                      className="size-5 accent-accent"
-                      checked={onlyExcluded}
-                      onChange={(event) => setOnlyExcluded(event.target.checked)}
-                    />
-                    Solo excluidas
-                  </label>
-                </div>
               </>
-            )}
-            {deck && visibleCards.length === 0 && (
-              <div
-                role="status"
-                className="space-y-3 rounded-lg border border-dashed border-line p-6 text-center"
-              >
-                <h3 className="font-display font-semibold">
-                  {onlyExcluded ? "No hay cartas excluidas" : "Este mazo todavía no tiene cartas"}
-                </h3>
-                <p className="text-body-sm text-fg-muted">
-                  {onlyExcluded
-                    ? "Ninguna carta coincide con este filtro."
-                    : archived
-                      ? "Restaura el mazo para generar nuevas cartas."
-                      : "Genera cartas con las opciones de arriba. El progreso se actualiza automáticamente."}
-                </p>
-                {onlyExcluded && (
-                  <Button variant="ghost" size="sm" onClick={() => setOnlyExcluded(false)}>
-                    Ver todas las cartas
-                  </Button>
-                )}
-              </div>
-            )}
-            <div className="grid gap-4 xl:grid-cols-2">
-              {visibleCards.map((card) => (
-                <article
-                  key={card.id}
-                  className="min-w-0 rounded-lg border border-line bg-surface-2 p-5"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <h3 className="min-w-0 font-display text-h3 break-words">{card.word}</h3>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-pill px-3 py-1 text-caption ${card.excluded ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
-                    >
-                      {card.excluded ? (
-                        <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-                      ) : (
-                        <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />
-                      )}
-                      {card.excluded
-                        ? "Excluida"
-                        : card.manualOverride
-                          ? "Habilitada manualmente"
-                          : "Disponible"}
-                    </span>
-                  </div>
-                  <p className="mt-4 text-caption text-fg-muted">Palabras prohibidas</p>
-                  <ol className="mt-2 grid grid-cols-2 gap-2">
-                    {card.taboo.map((word, index) => (
-                      <li
-                        key={`${index}-${word}`}
-                        className="rounded-md border border-line bg-surface px-3 py-2 text-body-sm break-words"
-                      >
-                        {word}
-                      </li>
-                    ))}
-                  </ol>
-                  {card.taboo.length < 6 && (
-                    <p id={`card-${card.id}-incomplete`} className="mt-3 text-body-sm text-warning">
-                      Faltan prohibidas para completar las seis.
-                    </p>
-                  )}
-                  {card.issues.length > 0 && (
-                    <details className="mt-4 text-body-sm">
-                      <summary className="min-h-11 cursor-pointer py-3 text-warning">
-                        Ver advertencias ({card.issues.length})
-                      </summary>
-                      <ul className="mt-2 list-disc space-y-1 pl-5">
-                        {card.issues.map((issue, index) => (
-                          <li key={`${index}-${issue}`}>{issue}</li>
-                        ))}
-                      </ul>
-                      <p className="mt-2 text-fg-muted">
-                        Una palabra desconocida puede ser un regionalismo. Habilitar la carta no
-                        elimina estas advertencias.
-                      </p>
-                    </details>
-                  )}
-                  {card.candidates && card.candidates.length > 0 && (
-                    <details className="mt-3 text-body-sm">
-                      <summary className="min-h-11 cursor-pointer py-3">
-                        Ver candidatas y validación
-                      </summary>
-                      <ul className="mt-2 space-y-1">
-                        {card.candidates.map((candidate, index) => (
-                          <li key={`${index}-${candidate.word}`}>
-                            {candidate.word} · {candidate.recognized ? "Reconocida" : "Revisar"}
-                            {candidate.reason ? ` · ${candidate.reason}` : ""}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                  <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
-                    <Button
-                      size="sm"
-                      variant={card.excluded ? "caution" : "ghost"}
-                      aria-describedby={
-                        card.excluded && card.taboo.length < 6
-                          ? `card-${card.id}-incomplete`
-                          : undefined
-                      }
-                      disabled={
-                        busy || running || archived || (card.excluded && card.taboo.length !== 6)
-                      }
-                      onClick={() =>
-                        void act(async () => {
-                          await api(
-                            `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}`,
-                            {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ excluded: !card.excluded }),
-                            },
-                          );
-                        })
-                      }
-                    >
-                      {card.excluded ? "Habilitar de todos modos" : "Excluir"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy || running || archived}
-                      onClick={() =>
-                        void act(async () =>
-                          requestGeneration(1, () =>
-                            api<JobView>(
-                              `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}/replace`,
-                              { method: "POST" },
-                            ),
-                          ),
-                        )
-                      }
-                    >
-                      Reemplazar con IA
-                    </Button>
-                  </div>
-                </article>
-              ))}
-            </div>
-            {deck && filteredCards.length > 0 && (
-              <nav
-                aria-label="Paginación de cartas"
-                className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
-              >
-                <p className="text-body-sm text-fg-muted" aria-live="polite">
-                  Mostrando {pageStart + 1}–
-                  {Math.min(pageStart + cardsPerPage, filteredCards.length)} de{" "}
-                  {filteredCards.length} cartas
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={currentPage === 1}
-                    onClick={() => setCardsPage(currentPage - 1)}
-                  >
-                    <ChevronLeft aria-hidden="true" className="size-4" />
-                    Anterior
-                  </Button>
-                  <span aria-current="page" className="text-body-sm">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCardsPage(currentPage + 1)}
-                  >
-                    Siguiente
-                    <ChevronRight aria-hidden="true" className="size-4" />
-                  </Button>
-                </div>
-              </nav>
             )}
           </section>
         </div>

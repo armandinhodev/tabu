@@ -48,6 +48,52 @@ function renderManagement(overrides: Partial<DeckManagementProps> = {}) {
 }
 
 describe("DeckManagement", () => {
+  it("loads and saves multiline rules and theme, and allows clearing the rules", async () => {
+    const { api } = renderManagement({
+      deck: { ...deck, ...{ rules: "Common associations.\nNo obscure terms." } },
+    });
+    const rules = screen.getByLabelText("Reglas para palabras prohibidas");
+    const theme = screen.getByLabelText("Temática a editar");
+    expect(rules.tagName).toBe("TEXTAREA");
+    expect(theme.tagName).toBe("TEXTAREA");
+    expect(rules).toHaveAttribute("maxlength", "500");
+    expect(rules).toHaveValue("Common associations.\nNo obscure terms.");
+    fireEvent.change(rules, { target: { value: "  Familiar terms.\nAvoid jargon.  " } });
+    fireEvent.change(theme, { target: { value: "  Food\nand drinks  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenLastCalledWith(
+        "/api/admin/decks/deck-1",
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: "General",
+            theme: "Food\nand drinks",
+            rules: "Familiar terms.\nAvoid jargon.",
+          }),
+        }),
+      ),
+    );
+    fireEvent.change(rules, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenLastCalledWith(
+        "/api/admin/decks/deck-1",
+        expect.objectContaining({
+          body: JSON.stringify({ name: "General", theme: "Food\nand drinks", rules: "" }),
+        }),
+      ),
+    );
+  });
+
+  it.each([{ busy: true }, { running: true }])(
+    "locks the rules and theme textareas during operations (%j)",
+    (lock) => {
+      renderManagement(lock);
+      expect(screen.getByLabelText("Reglas para palabras prohibidas")).toBeDisabled();
+      expect(screen.getByLabelText("Temática a editar")).toBeDisabled();
+    },
+  );
+
   it("offers permanent deletion only when archived and requires confirmation", async () => {
     const { api, onDeleted } = renderManagement({ deck: archivedDeck });
     fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));

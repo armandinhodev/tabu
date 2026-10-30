@@ -206,3 +206,18 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
 export function canOverride(evaluated: Pick<EvaluatedCard, "structuralWords">): boolean {
   return evaluated.structuralWords.length >= SELECTED_TABOO_WORDS;
 }
+
+/** Persist only selected terms; discarded proposals are transient validation data. */
+export function selectedCandidates(
+  evaluated: Pick<EvaluatedCard, "taboo" | "candidates">,
+): AdminCandidate[] {
+  const selected = new Set(evaluated.taboo.map(normalizeWord));
+  return evaluated.candidates
+    .filter(
+      (candidate) =>
+        selected.has(normalizeWord(candidate.word)) &&
+        (candidate.valid || candidate.reason === "not_in_dictionary"),
+    )
+    .slice(0, SELECTED_TABOO_WORDS)
+    .map((candidate) => ({ ...candidate }));
+}

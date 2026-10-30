@@ -103,6 +103,127 @@ describe("Mongo admin stores", () => {
   });
 
   describe("MongoAdminDeckStore", () => {
+    it("deletes exactly one card under revision, job, archive and deletion guards", async () => {
+      const update = stub(AdminDeckModel, "findOneAndUpdate", deckDocument());
+      await new MongoAdminDeckStore().deleteCard({
+        deckId: "deck-1",
+        cardId: "card-1",
+        previousWord: "FÚEGO",
+        expectedRevision: 2,
+        now: NOW,
+      });
+      expect(update.mock.calls[0]?.[0]).toMatchObject({
+        _id: "deck-1",
+        "cards.id": "card-1",
+        revision: 2,
+        "activeJob.jobId": { $exists: false },
+        archivedAt: { $exists: false },
+        deletionPending: { $ne: true },
+      });
+      expect(update.mock.calls[0]?.[1]).toMatchObject({
+        $pull: { cards: { id: "card-1" } },
+        $addToSet: { usedObjectives: "fuego" },
+        $inc: { revision: 1 },
+      });
+      expect(update.mock.calls[0]?.[1] as Record<string, unknown>).not.toHaveProperty("$unset");
+    });
+
+    it("edits card content atomically with revision, uniqueness and job guards", async () => {
+      const edited = card({ word: "agua", taboo: ["rio", "mar"] });
+      const update = stub(
+        AdminDeckModel,
+        "findOneAndUpdate",
+        new AdminDeckModel(deckDocument({ cards: [edited] })),
+      );
+      await new MongoAdminDeckStore().updateCard({
+        deckId: "deck-1",
+        cardId: "card-1",
+        card: edited,
+        previousWord: "fuego",
+        expectedRevision: 2,
+        now: NOW,
+      });
+      expect(update.mock.calls[0]?.[0]).toMatchObject({
+        _id: "deck-1",
+        revision: 2,
+        "cards.id": "card-1",
+        "activeJob.jobId": { $exists: false },
+        archivedAt: { $exists: false },
+        usedObjectives: { $ne: "agua" },
+      });
+      const changes = update.mock.calls[0]?.[1] as Record<string, Record<string, unknown>>;
+      expect(changes.$set?.["cards.$[card]"]).toMatchObject({
+        id: "card-1",
+        word: "agua",
+        taboo: ["rio", "mar"],
+      });
+      expect(changes.$addToSet?.usedObjectives).toEqual({ $each: ["fuego", "agua"] });
+      expect(changes.$inc).toEqual({ revision: 1 });
+    });
+
+    it("refuses a stale manual edit instead of overwriting a newer deck", async () => {
+      const update = stub(AdminDeckModel, "findOneAndUpdate", null);
+      stub(AdminDeckModel, "findById", deckDocument({ revision: 3, cards: [card()] }));
+      await expect(
+        new MongoAdminDeckStore().updateCard({
+          deckId: "deck-1",
+          cardId: "card-1",
+          card: card(),
+          previousWord: "fuego",
+          expectedRevision: 2,
+          now: NOW,
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["New rules.\nNo jargon.", ""])(
+      "persists rules-only edits under the existing job guard (%s)",
+      async (rules) => {
+        stub(AdminDeckModel, "findById", deckDocument({ rules: "Old" }));
+        const update = stub(AdminDeckModel, "findOneAndUpdate", deckDocument({ rules }));
+        expect(
+          await new MongoAdminDeckStore().updateMetadata({
+            deckId: "deck-1",
+            now: NOW,
+            ...{ rules },
+          }),
+        ).toHaveProperty("rules", rules);
+        expect(update.mock.calls[0]?.[0]).toMatchObject({
+          _id: "deck-1",
+          "activeJob.jobId": { $exists: false },
+        });
+        const set = (update.mock.calls[0]?.[1] as { $set: Record<string, unknown> }).$set;
+        expect(set).toMatchObject({ rules });
+        expect(set).not.toHaveProperty("name");
+        expect(set).not.toHaveProperty("theme");
+        expect(set).not.toHaveProperty("cards");
+      },
+    );
+
+    it("persists optional rules and maps them back without changing legacy documents", async () => {
+      const rules = "Use common associations.\nAvoid obscure names.";
+      stub(AdminDeckModel, "findOne", null);
+      stub(DeckModel, "findOne", null);
+      vi.spyOn(AdminDeckModel, "init").mockResolvedValue(undefined as never);
+      const document = new AdminDeckModel(deckDocument({ rules }));
+      const create = vi.spyOn(AdminDeckModel, "create").mockResolvedValue(document as never);
+      const store = new MongoAdminDeckStore();
+      expect(
+        await store.create({
+          id: "deck-1",
+          name: "General",
+          theme: "Objects",
+          language: "es",
+          now: NOW,
+          ...{ rules },
+        }),
+      ).toHaveProperty("rules", rules);
+      expect(create.mock.calls[0]?.[0]).toHaveProperty("rules", rules);
+      stub(AdminDeckModel, "findById", new AdminDeckModel(deckDocument()));
+      expect(await store.findById("deck-1")).not.toHaveProperty("rules");
+    });
+
     it("only writes a card when the lease is still owned", async () => {
       const spy = stub(AdminDeckModel, "findOneAndUpdate", deckDocument());
       const store = new MongoAdminDeckStore();

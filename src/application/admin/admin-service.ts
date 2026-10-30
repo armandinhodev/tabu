@@ -1,4 +1,10 @@
-import { SELECTED_TABOO_WORDS } from "./candidates";
+import {
+  SELECTED_TABOO_WORDS,
+  evaluateCard,
+  isObjectiveText,
+  selectedCandidates,
+} from "./candidates";
+import { normalizeWord } from "../../domain/value-objects/TabooWords";
 import { AdminError, adminConflict, adminInvalid, adminNotFound, adminUnavailable } from "./errors";
 import type {
   AdminDeckStore,
@@ -7,10 +13,16 @@ import type {
   AdminJobStore,
   AdminClock,
   GenerationProvider,
+  SpellChecker,
 } from "./ports";
 import type { AdminJob, AdminJobKind, AdminLanguage, ManagedCard, ManagedDeck } from "./types";
 import { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
-import { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "./deck-limits";
+import {
+  MAX_DECK_NAME_LENGTH,
+  MAX_DECK_THEME_LENGTH,
+  MAX_DECK_RULES_LENGTH,
+  MAX_CARD_TEXT_LENGTH,
+} from "./deck-limits";
 import { DEFAULT_DEEPSEEK_MODEL, type AdminSettingsStore } from "./settings";
 
 export { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
@@ -46,7 +58,7 @@ export const RECOVERY_BATCH_LIMIT = 20;
  *   `batchSize` objetivos más, como máximo, UN completion por carta (nunca se
  *   rellenan cartas con palabras inventadas).
  *
- * For 400 cards: 3 objective calls, 8 candidate batches and up to 400
+ * For 600 cards: 3 objective calls, 12 candidate batches and up to 600
  * completions: at most 411 calls.
  */
 export function jobLimitsFor(requested: number, base?: Partial<AdminJobLimits>): AdminJobLimits {
@@ -63,6 +75,7 @@ export function jobLimitsFor(requested: number, base?: Partial<AdminJobLimits>):
 }
 
 export interface AdminServiceDeps {
+  readonly loadSpell?: () => Promise<SpellChecker>;
   readonly settings?: Pick<AdminSettingsStore, "get">;
   readonly decks: AdminDeckStore;
   readonly jobs: AdminJobStore;
@@ -73,6 +86,7 @@ export interface AdminServiceDeps {
 }
 
 export interface CreateDeckCommand {
+  readonly rules?: string | undefined;
   readonly allowProperNames?: boolean | undefined;
   readonly name: string;
   readonly theme: string;
@@ -121,6 +135,15 @@ export class AdminService {
   }
 
   async createDeck(command: CreateDeckCommand): Promise<ManagedDeck> {
+    if (command.rules !== undefined && typeof command.rules !== "string") {
+      throw adminInvalid("The forbidden-word rules must be text");
+    }
+    const rules = command.rules?.trim();
+    if (rules !== undefined && rules.length > MAX_DECK_RULES_LENGTH) {
+      throw adminInvalid(
+        `The forbidden-word rules cannot exceed ${MAX_DECK_RULES_LENGTH} characters`,
+      );
+    }
     if (command.allowProperNames !== undefined && typeof command.allowProperNames !== "boolean") {
       throw adminInvalid("The proper-name option must be a boolean");
     }
@@ -149,6 +172,7 @@ export class AdminService {
     }
 
     return this.deps.decks.create({
+      ...(rules ? { rules } : {}),
       id: this.deps.ids.next(),
       name,
       theme,
@@ -169,6 +193,7 @@ export class AdminService {
   async updateDeck(
     id: string,
     command: {
+      readonly rules?: string | undefined;
       readonly name?: string | undefined;
       readonly theme?: string | undefined;
       readonly allowProperNames?: boolean | undefined;
@@ -177,10 +202,20 @@ export class AdminService {
     const hasName = command.name !== undefined;
     const hasTheme = command.theme !== undefined;
 
+    if (command.rules !== undefined && typeof command.rules !== "string") {
+      throw adminInvalid("The forbidden-word rules must be text");
+    }
+    const rules = command.rules?.trim();
+    if (rules !== undefined && rules.length > MAX_DECK_RULES_LENGTH) {
+      throw adminInvalid(
+        `The forbidden-word rules cannot exceed ${MAX_DECK_RULES_LENGTH} characters`,
+      );
+    }
+
     if (command.allowProperNames !== undefined && typeof command.allowProperNames !== "boolean") {
       throw adminInvalid("The proper-name option must be a boolean");
     }
-    if (!hasName && !hasTheme && command.allowProperNames === undefined) {
+    if (!hasName && !hasTheme && command.allowProperNames === undefined && rules === undefined) {
       throw adminInvalid("The deck name or the deck theme is required");
     }
 
@@ -212,6 +247,7 @@ export class AdminService {
     await this.assertNoActiveJob(id);
 
     const updated = await this.deps.decks.updateMetadata({
+      ...(rules === undefined ? {} : { rules }),
       deckId: id,
       ...(name === undefined ? {} : { name }),
       ...(theme === undefined ? {} : { theme }),
@@ -360,6 +396,110 @@ export class AdminService {
     }
 
     return updatedCard;
+  }
+
+  /** Removes a card while retaining its objective in the used-word history. */
+  async deleteCard(deckId: string, cardId: string): Promise<{ id: string }> {
+    const deck = await this.getDeck(deckId);
+    this.assertDeckIsNotArchived(deck);
+    const card = deck.cards.find((candidate) => candidate.id === cardId);
+    if (!card) throw adminNotFound(`No card with id "${cardId}" in the deck`);
+    await this.recoverStaleAdmissions();
+    await this.assertNoActiveJob(deckId);
+    const now = this.now();
+    await this.deps.decks.deleteCard({
+      deckId,
+      cardId,
+      previousWord: card.word,
+      expectedRevision: deck.revision,
+      now,
+    });
+    await this.deps.decks.publishProjection({ deckId, now });
+    return { id: cardId };
+  }
+
+  /** Re-evaluates a manual edit without reusing an earlier inclusion override. */
+  async updateCard(
+    deckId: string,
+    cardId: string,
+    input: { word: string; taboo: readonly string[] },
+  ): Promise<ManagedCard> {
+    if (
+      typeof input.word !== "string" ||
+      !Array.isArray(input.taboo) ||
+      input.taboo.length < 1 ||
+      input.taboo.length > SELECTED_TABOO_WORDS ||
+      input.taboo.some((word) => typeof word !== "string")
+    ) {
+      throw adminInvalid("A card needs an objective and between one and six forbidden terms");
+    }
+    const word = input.word.normalize("NFC").trim();
+    const taboo = input.taboo.map((term) => term.normalize("NFC").trim());
+    if (
+      word.length > MAX_CARD_TEXT_LENGTH ||
+      taboo.some((term) => !term || term.length > MAX_CARD_TEXT_LENGTH)
+    )
+      throw adminInvalid("Invalid card text length");
+    const deck = await this.getDeck(deckId);
+    this.assertDeckIsNotArchived(deck);
+    const original = deck.cards.find((card) => card.id === cardId);
+    if (!original) throw adminNotFound(`No card with id "${cardId}" in the deck`);
+    if (!isObjectiveText(word, deck.allowProperNames))
+      throw adminInvalid("Invalid objective format");
+    const key = normalizeWord(word);
+    if (
+      deck.cards.some((card) => card.id !== cardId && normalizeWord(card.word) === key) ||
+      (normalizeWord(original.word) !== key && deck.usedObjectives.includes(key))
+    ) {
+      throw adminConflict(
+        "objective_taken",
+        "The objective already exists or has already been used in this deck",
+      );
+    }
+    await this.recoverStaleAdmissions();
+    await this.assertNoActiveJob(deckId);
+    if (!this.deps.loadSpell)
+      throw adminUnavailable("spell_unavailable", "The dictionary is not available");
+    const evaluated = evaluateCard(
+      {
+        objective: word,
+        candidates: taboo,
+        ...(deck.allowProperNames ? { allowProperNames: true } : {}),
+      },
+      await this.deps.loadSpell(),
+    );
+    if (
+      evaluated.candidates.some(
+        (candidate) => !candidate.valid && candidate.reason !== "not_in_dictionary",
+      )
+    )
+      throw adminInvalid(
+        "Forbidden terms must have valid format, be distinct and not repeat the objective",
+      );
+    const now = this.now();
+    const card: ManagedCard = {
+      id: original.id,
+      word: evaluated.objective,
+      taboo: [...evaluated.taboo],
+      excluded: original.excluded || evaluated.doubtful,
+      manualOverride: false,
+      issues: [...evaluated.issues],
+      candidates: selectedCandidates(evaluated),
+      ...(original.sourceJobId === undefined ? {} : { sourceJobId: original.sourceJobId }),
+      ...(original.sourceIndex === undefined ? {} : { sourceIndex: original.sourceIndex }),
+      createdAt: original.createdAt,
+      updatedAt: now,
+    };
+    const updated = await this.deps.decks.updateCard({
+      deckId,
+      cardId,
+      card,
+      previousWord: original.word,
+      expectedRevision: deck.revision,
+      now,
+    });
+    await this.deps.decks.publishProjection({ deckId, now });
+    return updated.cards.find((candidate) => candidate.id === cardId)!;
   }
 
   /**

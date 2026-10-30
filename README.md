@@ -96,10 +96,19 @@ cambiar de pestaña, y el formulario conserva los datos todavía no enviados.
 Al crear, generar más cartas o reemplazar una carta, el progreso muestra de inmediato
 **Preparando solicitud a DeepSeek…**, seguido del estado de cola o de espera de las primeras
 cartas. Al completar el trabajo, la barra desaparece y queda una confirmación breve;
-si falla, el error permanece visible.
+si falla, el error permanece visible. El resumen de un trabajo finalizado se descarta al cambiar
+de pestaña y no reaparece al volver; un trabajo en curso mantiene su progreso visible.
 
-En **Mazos**, el catálogo identifica el mazo seleccionado con texto e icono. El detalle separa
-**Ajustes del mazo**, **Generar más cartas** y **Revisar cartas**. El filtro **Solo excluidas**
+En **Mazos**, el catálogo identifica el mazo seleccionado con texto e icono. Cada mazo abre
+**Cartas** por defecto; allí se revisan las cartas y **Generar más cartas** despliega la cantidad
+a generar. La subpestaña **Ajustes** reúne los datos del mazo y las acciones de archivado o eliminación,
+separadas del formulario. Cambiar de subpestaña conserva los cambios sin guardar, los filtros,
+la página y la cantidad a generar, y no interrumpe el progreso de un trabajo activo.
+**Buscar cartas** se combina con **Solo excluidas** y filtra en vivo por objetivo o palabra prohibida sin distinguir
+mayúsculas ni tildes, sin nuevas peticiones al servidor. La búsqueda se aplica antes de paginar,
+vuelve a la primera página y se limpia al seleccionar otro mazo. **Limpiar búsqueda** restaura el
+listado conservando el filtro de excluidas. Cuando no hay coincidencias se muestra una indicación.
+El filtro **Solo excluidas**
 ofrece volver a todas las cartas cuando no hay coincidencias; los controles de paginación
 aparecen al final de la lista y mantienen las 20 cartas por página.
 
@@ -111,7 +120,9 @@ no modifica los trabajos ya encolados o en curso. Los trabajos antiguos sin mode
 No hay cambio automático entre modelos; la clave de API sigue configurada sólo en el servidor.
 
 En **Mazos** también se edita el nombre y la temática del mazo (hasta 80 y 200 caracteres),
-se archiva y se restaura. Archivar y eliminar abren un diálogo con el nombre del mazo y
+además de las reglas para palabras prohibidas (hasta 500 caracteres). La temática y las reglas
+se editan en campos multilínea; vaciar las reglas y guardar las elimina para futuras generaciones.
+También se archiva y se restaura. Archivar y eliminar abren un diálogo con el nombre del mazo y
 las consecuencias; cancelar o pulsar Escape lo cierra sin realizar cambios.
 El archivado es recuperable: no borra nada, conserva las cartas,
 los hallazgos de validación, el historial y el mismo identificador público, y el mazo deja de
@@ -149,7 +160,13 @@ no con la dirección de escucha `HOST` (que puede ser `0.0.0.0`). El proxy debe 
 `Host` público y el protocolo original. No se confía en `X-Forwarded-Host`; no configurar un
 proxy que reescriba esos valores sin una política explícita de confianza y verificación.
 
-Desde el panel se indica nombre, temática y cantidad de cartas (1–400 por trabajo). La generación
+Desde el panel se indica nombre, temática y cantidad de cartas (1–600 por trabajo).
+**Temática e indicaciones** y **Reglas para buscar palabras prohibidas** son campos multilínea.
+Las reglas son opcionales (hasta 500 caracteres), se configuran al crear o editar el mazo y se conservan
+para las próximas generaciones, los reemplazos y las peticiones para completar cartas.
+Se envían solo al pedir palabras prohibidas, no al seleccionar objetivos, y no reemplazan las
+validaciones del servidor. Los mazos sin reglas mantienen su comportamiento anterior.
+La generación
 tiene dos fases: primero el modelo propone los objetivos del trabajo en una sola llamada, el
 servidor descarta los repetidos o mal formados, y después pide las prohibidas de esos objetivos en
 lotes de hasta 50. Así no se gasta una llamada en las prohibidas de un objetivo que iba a
@@ -157,11 +174,15 @@ descartarse. Por ejemplo, 200 cartas requieren una llamada de objetivos y cuatro
 prohibidas; el último pide solo la cantidad que falta. El servidor
 descarta frases y duplicados, verifica la ortografía sobre el texto original con `nspell` y conserva
 las primeras seis prohibidas válidas. No usa Jev, puntuaciones mínimas ni cortes de confianza.
+Las propuestas se validan antes de seleccionar esas seis, respetando su orden de ranking.
+Las cartas nuevas o editadas conservan solo las candidatas seleccionadas, no las descartadas;
+el panel no muestra el antiguo desplegable de candidatas. No se migran cartas ya guardadas.
 Si el tema no alcanza para la cantidad pedida, el trabajo termina explícitamente e informa cuántas
 cartas se generaron en vez de completarse a medias.
 
 La opción **Permitir nombres propios y títulos** se configura al crear o editar cada mazo y está
-desactivada por defecto. Al activarla, los próximos objetivos pueden ser nombres o títulos de
+desactivada por defecto. Al crear el mazo, **¿Qué permite esta opción?** despliega una explicación
+con ejemplos y las diferencias de validación. Al activarla, los próximos objetivos pueden ser nombres o títulos de
 varias palabras, como `Juego de tronos`, con números y puntuación habitual de títulos. Las seis
 prohibidas también pueden ser nombres propios o títulos de varias palabras, como `Ned Stark`,
 y no pueden repetir el objetivo ni sus componentes individuales.
@@ -175,6 +196,26 @@ Las cartas dudosas o incompletas quedan excluidas automáticamente. El administr
 las advertencias, habilitar explícitamente una carta con seis prohibidas o pedir un reemplazo
 automático. La habilitación manual no elimina los hallazgos del diccionario. Una palabra desconocida
 puede ser un regionalismo; el corrector no verifica significado ni garantiza calidad editorial.
+
+**Editar carta** permite corregir el objetivo y entre una y seis prohibidas sin llamar a DeepSeek.
+**Cancelar edición** no guarda nada. El guardado vuelve a aplicar las validaciones del mazo;
+si la carta es dudosa o incompleta queda excluida. Editar no habilita una carta que ya estaba
+excluida: se usa la acción de habilitación existente, que requiere seis prohibidas.
+No se admiten objetivos duplicados ni objetivos ya usados por otras versiones de cartas;
+se conservan los identificadores, el origen y el historial de palabras usadas para evitar que
+una generación posterior vuelva a proponerlos. El archivado y los trabajos activos bloquean
+la edición. Una revisión atómica impide pisar cambios concurrentes; si el mazo cambió, hay que
+revisar la versión actual antes de reintentar. Las partidas existentes mantienen su copia.
+El endpoint administrativo `PUT /api/admin/decks/:deckId/cards/:cardId` recibe `{word, taboo}`;
+cada término admite hasta 200 caracteres. El `PATCH {excluded}` existente no cambia.
+
+**Eliminar carta** solicita confirmación con el nombre de la carta antes del borrado definitivo.
+Cancelar o pulsar Escape no elimina nada. Se bloquea durante generaciones o reemplazos y en
+mazos archivados. Solo se quita la carta seleccionada; se conservan el mazo, las demás cartas y
+el historial de objetivos usados para evitar que futuras generaciones repitan el objetivo eliminado.
+El catálogo y la paginación se actualizan al terminar; un mazo sin cartas deja de estar disponible
+para nuevas partidas. Las partidas existentes mantienen su copia. La API usa
+`DELETE /api/admin/decks/:deckId/cards/:cardId`, sin cambiar los métodos de edición o exclusión.
 
 Generar y reemplazar consume la API de DeepSeek. Los trabajos se guardan en MongoDB, tienen
 límites de intentos y se procesan desde el servidor personalizado; no iniciar con `next start`.

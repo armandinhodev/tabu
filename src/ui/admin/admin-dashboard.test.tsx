@@ -151,13 +151,322 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it("keeps a card visible and displays the error when deletion fails", async () => {
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/api/admin/decks/deck-1/cards/card-1" && init?.method === "DELETE")
+          return Response.json({ error: "El mazo cambió. Reintenta." }, { status: 409 });
+        return originalFetch(url, init);
+      }),
+    );
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar carta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación de carta" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("El mazo cambió. Reintenta.");
+    expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("live-searches objectives and forbidden terms before pagination and the excluded filter", async () => {
+    const cards = Array.from({ length: 41 }, (_, index) => ({
+      ...card,
+      id: `search-${index}`,
+      word: `Word ${index + 1}`,
+      excluded: false,
+    }));
+    cards[20] = { ...card, id: "search-20", word: "Nube", taboo: ["Árbol"], excluded: false };
+    cards[40] = { ...card, id: "search-40", word: "Árbol", taboo: ["fruto"], excluded: true };
+    catalog = [{ ...deck, cards }];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "Word 1" });
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    const reads = requests.length;
+    const search = screen.getByRole("searchbox", { name: "Buscar cartas" });
+    fireEvent.change(search, { target: { value: "  ARBOL  " } });
+    expect(screen.getByRole("heading", { name: "Árbol" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Nube" })).toBeVisible();
+    expect(screen.getByText("Página 1 de 1")).toBeVisible();
+    expect(screen.getByText("Resultados: 2 de 41 cartas")).toBeVisible();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Solo excluidas" }));
+    expect(screen.queryByRole("heading", { name: "Nube" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Cartas" }));
+    expect(search).toHaveValue("  ARBOL  ");
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar búsqueda" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Solo excluidas" }));
+    expect(screen.getByRole("heading", { name: "Word 1" })).toBeVisible();
+    expect(screen.getByText("Página 1 de 3")).toBeVisible();
+    expect(requests).toHaveLength(reads);
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("explains an empty search and resets it when selecting another deck", async () => {
+    catalog = [deck, { ...deck, id: "other", name: "Other", cards: [{ ...card, word: "nube" }] }];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    const search = screen.getByRole("searchbox", { name: "Buscar cartas" });
+    fireEvent.change(search, { target: { value: "inexistente" } });
+    expect(screen.getByText("No hay cartas que coincidan")).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "jaula" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Limpiar búsqueda" }));
+    expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
+    fireEvent.change(search, { target: { value: "jaula" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Other/ }));
+    expect(await screen.findByRole("heading", { name: "nube" })).toBeVisible();
+    expect(screen.getByRole("searchbox", { name: "Buscar cartas" })).toHaveValue("");
+  });
+
+  it("deletes the confirmed card and clamps pagination without reconnecting progress", async () => {
+    catalog = [
+      {
+        ...deck,
+        cards: Array.from({ length: 21 }, (_, index) => ({
+          ...card,
+          id: `card-${index + 1}`,
+          word: `Word ${index + 1}`,
+        })),
+      },
+    ];
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/api/admin/decks/deck-1/cards/card-21" && init?.method === "DELETE") {
+          requests.push({ url, method: "DELETE", body: null });
+          catalog = catalog.map((item) => ({
+            ...item,
+            cards: item.cards.filter((entry) => entry.id !== "card-21"),
+          }));
+          return Response.json({ data: { id: "card-21" } });
+        }
+        return originalFetch(url, init);
+      }),
+    );
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "Word 1" });
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar carta" }));
+    expect(requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación de carta" }));
+    await waitFor(() => expect(screen.getByText("Mostrando 1–20 de 20 cartas")).toBeVisible());
+    expect(requests).toContainEqual({
+      url: "/api/admin/decks/deck-1/cards/card-21",
+      method: "DELETE",
+      body: null,
+    });
+    expect(screen.queryByRole("heading", { name: "Word 21" })).not.toBeInTheDocument();
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("does not expose discarded candidates and submits manual card edits through PUT", async () => {
+    catalog = [
+      {
+        ...deck,
+        cards: [
+          { ...card, ...{ candidates: [{ word: "descartada", recognized: false, valid: false }] } },
+        ],
+      },
+    ];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    expect(screen.queryByText("Ver candidatas y validación")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+    fireEvent.change(screen.getByLabelText("Palabra objetivo"), { target: { value: "agua" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar carta" }));
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        url: "/api/admin/decks/deck-1/cards/card-1",
+        method: "PUT",
+        body: { word: "agua", taboo: card.taboo },
+      }),
+    );
+  });
+
+  it("explains the six-hundred-card limit for creation and additional generation", async () => {
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
+    expect(
+      screen.getByRole("spinbutton", { name: "Cantidad para generar" }),
+    ).toHaveAccessibleDescription("Máximo 600 cartas por generación.");
+    expect(
+      within(screen.getByRole("tabpanel", { name: "Cartas" })).getByText(
+        "Máximo 600 cartas por generación.",
+      ),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Crear mazo" }));
+    expect(
+      screen.getByRole("spinbutton", { name: "Cantidad de cartas" }),
+    ).toHaveAccessibleDescription("Máximo 600 cartas por generación.");
+    expect(
+      within(screen.getByRole("tabpanel", { name: "Crear mazo" })).getByText(
+        "Máximo 600 cartas por generación.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("dismisses a finished process summary when navigating deck subtabs", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+    await screen.findByRole("tab", { name: "Ajustes" });
+    await screen.findByText("Generación completada · 5/5 cartas");
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
+    expect(screen.queryByText(/Generación completada/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Cartas" }));
+    expect(screen.queryByText(/Generación completada/)).not.toBeInTheDocument();
+  });
+
+  it("opens cards by default and preserves unsaved settings across deck subtabs", async () => {
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    expect(screen.getByRole("tab", { name: "Cartas" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("button", { name: "Guardar cambios" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
+    expect(screen.queryByRole("heading", { name: "jaula" })).not.toBeInTheDocument();
+    const theme = screen.getByLabelText("Temática a editar");
+    const rules = screen.getByLabelText("Reglas para palabras prohibidas");
+    fireEvent.change(theme, { target: { value: "Unsaved theme" } });
+    fireEvent.change(rules, { target: { value: "Unsaved rules" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Cartas" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
+    expect(theme).toHaveValue("Unsaved theme");
+    expect(rules).toHaveValue("Unsaved rules");
+    expect(requests.filter((request) => request.method !== "GET")).toHaveLength(0);
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("supports deck subtab keyboard navigation and keeps live progress visible", async () => {
+    jobPayload = { id: "job-1", status: "running", requested: 5, processed: 2 };
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+    const cardsTab = await screen.findByRole("tab", { name: "Cartas" });
+    await screen.findByText(/2\/5 cartas/);
+    const subscribed = socketMock.subscribe.mock.calls.length;
+    cardsTab.focus();
+    fireEvent.keyDown(cardsTab, { key: "ArrowRight" });
+    const settings = screen.getByRole("tab", { name: "Ajustes" });
+    expect(settings).toHaveFocus();
+    expect(settings).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/2\/5 cartas/)).toBeVisible();
+    fireEvent.keyDown(settings, { key: "Home" });
+    expect(cardsTab).toHaveFocus();
+    fireEvent.keyDown(cardsTab, { key: "End" });
+    expect(settings).toHaveFocus();
+    fireEvent.keyDown(settings, { key: "ArrowLeft" });
+    expect(cardsTab).toHaveFocus();
+    expect(socketMock.subscribe.mock.calls).toHaveLength(subscribed);
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("reveals generation on demand, preserves its quantity and resets the view for another deck", async () => {
+    catalog = [deck, { ...deck, id: "other", name: "Other" }];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    const toggle = screen.getByRole("button", { name: "Generar más cartas" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(
+      screen.queryByRole("spinbutton", { name: "Cantidad para generar" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Cartas" }));
+    expect(screen.getByLabelText("Cantidad para generar")).toHaveValue(7);
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Other/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Cartas" })).toHaveAttribute("aria-selected", "true"),
+    );
+    expect(screen.getByRole("button", { name: "Generar más cartas" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("replaces the generation legend with expandable help for proper names and titles", async () => {
+    render(<AdminDashboard />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Crear mazo" }));
+    const form = screen.getByRole("tabpanel", { name: "Crear mazo" });
+    expect(within(form).queryByText(/La generación consume la API/)).not.toBeInTheDocument();
+    const help = within(form).getByText("¿Qué permite esta opción?");
+    const details = help.closest("details")!;
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(help);
+    expect(details).toHaveAttribute("open");
+    expect(within(details).getByText(/Juego de tronos/)).toBeVisible();
+    const option = within(form).getByRole("checkbox", {
+      name: "Permitir nombres propios y títulos",
+    });
+    expect(option).toHaveAccessibleDescription(/objetivos y las palabras prohibidas/);
+    fireEvent.click(option);
+    expect(option).toBeChecked();
+    expect(details).toHaveAttribute("open");
+    fireEvent.click(help);
+    expect(details).not.toHaveAttribute("open");
+  });
+
+  it("creates a deck with multiline theme and forbidden-word rules", async () => {
+    render(<AdminDashboard />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Crear mazo" }));
+    const theme = screen.getByLabelText("Temática e indicaciones");
+    expect(theme.tagName).toBe("TEXTAREA");
+    const rules = screen.getByLabelText("Reglas para buscar palabras prohibidas");
+    expect(rules.tagName).toBe("TEXTAREA");
+    expect(rules).not.toBeRequired();
+    fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Cocina" } });
+    fireEvent.change(theme, { target: { value: "Comidas\ny bebidas" } });
+    fireEvent.change(rules, {
+      target: { value: "Evitar ingredientes raros.\nPriorizar asociaciones comunes." },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Mazos" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Crear mazo" }));
+    expect(rules).toHaveValue("Evitar ingredientes raros.\nPriorizar asociaciones comunes.");
+    fireEvent.click(screen.getByRole("button", { name: "Crear y generar" }));
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        url: "/api/admin/decks",
+        method: "POST",
+        body: {
+          name: "Cocina",
+          theme: "Comidas\ny bebidas",
+          rules: "Evitar ingredientes raros.\nPriorizar asociaciones comunes.",
+        },
+      }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Crear mazo" }));
+    expect(rules).toHaveValue("");
+  });
+
+  it("keeps catalogue entries concise while preserving the theme in deck details", async () => {
+    catalog = [{ ...deck, theme: "A detailed description of this deck" }];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    const entry = screen.getByRole("button", { name: /^General/ });
+    expect(within(entry).getByText("General")).toBeVisible();
+    expect(within(entry).getByText("1 cartas")).toBeVisible();
+    expect(
+      within(entry).queryByText("A detailed description of this deck"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Cartas del mazo" })).getByText(
+        "A detailed description of this deck",
+        { selector: "p" },
+      ),
+    ).toBeVisible();
+  });
+
   it("identifies the selected deck and separates editing, generation and card review", async () => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
     const selected = screen.getByRole("button", { name: /^General/ });
     expect(selected).toHaveAttribute("aria-current", "true");
     expect(within(selected).getByText("Seleccionado")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Ajustes del mazo" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Ajustes del mazo" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
     expect(screen.getByRole("heading", { name: "Generar más cartas" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Revisar cartas" })).toBeVisible();
     const article = screen.getByRole("article");
@@ -239,6 +548,9 @@ describe("AdminDashboard", () => {
     expect(screen.getByRole("button", { name: "Anterior" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
     expect(screen.getByRole("heading", { name: "Word 21" })).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Cartas" }));
+    expect(screen.getByText("Página 2 de 3")).toBeVisible();
     fireEvent.click(
       within(screen.getByRole("heading", { name: "Word 21" }).closest("article")!).getByRole(
         "button",
@@ -293,6 +605,7 @@ describe("AdminDashboard", () => {
     catalog = [archivedDeck];
     render(<AdminDashboard />);
     fireEvent.click(await screen.findByRole("checkbox", { name: "Mostrar archivados" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Ajustes" }));
     fireEvent.click(await screen.findByRole("button", { name: "Eliminar definitivamente" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar eliminación definitiva" }));
     await waitFor(() =>
@@ -390,6 +703,8 @@ describe("AdminDashboard", () => {
       render(<AdminDashboard />);
       await screen.findByRole("heading", { name: "jaula" });
       await act(async () => resolveJobResponse?.(Response.json({ data: jobPayload })));
+      if (operation === "generate")
+        fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
       fireEvent.click(
         screen.getByRole("button", {
           name: operation === "generate" ? "Generar 5 cartas más" : "Reemplazar con IA",
@@ -456,7 +771,56 @@ describe("AdminDashboard", () => {
     render(<AdminDashboard />);
     expect(await screen.findByRole("alert")).toHaveTextContent("DeepSeek no respondió");
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Generar 5 cartas más" })).toBeEnabled();
+    fireEvent.click(await screen.findByRole("button", { name: "Generar más cartas" }));
+    expect(screen.getByRole("button", { name: "Generar 5 cartas más" })).toBeEnabled();
+  });
+
+  it.each(["completed", "failed"] as const)(
+    "dismisses the %s summary on tab navigation without reviving it on return",
+    async (status) => {
+      jobPayload = {
+        id: "job-1",
+        status,
+        processed: 5,
+        requested: 5,
+        ...(status === "failed" ? { error: "Provider unavailable" } : {}),
+      };
+      sessionStorage.setItem("tabu:admin-job", "job-1");
+      render(<AdminDashboard />);
+      const message =
+        status === "completed" ? "Generación completada · 5/5 cartas" : "Provider unavailable";
+      expect(await screen.findByText(message)).toBeVisible();
+      fireEvent.click(screen.getByRole("tab", { name: "Crear mazo" }));
+      expect(screen.queryByText(message)).not.toBeInTheDocument();
+      fireEvent.keyDown(screen.getByRole("tab", { name: "Crear mazo" }), { key: "ArrowRight" });
+      expect(screen.getByRole("tabpanel", { name: "Mazos" })).toBeVisible();
+      expect(screen.queryByText(message)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("region", { name: "Progreso de generación" }),
+      ).not.toBeInTheDocument();
+      expect(sessionStorage.getItem("tabu:admin-job")).toBe("job-1");
+      expect(socketMock.disconnect).not.toHaveBeenCalled();
+    },
+  );
+
+  it("dismisses a completed summary with keyboard navigation and shows the next process", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+    await screen.findByText("Generación completada · 5/5 cartas");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Mazos" }), { key: "Home" });
+    expect(screen.queryByText(/Generación completada/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Mazos" }));
+    await screen.findByRole("heading", { name: "jaula" });
+    deferGenerateResponse = true;
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generar 5 cartas más" }));
+    expect(screen.getByRole("status", { name: "Preparando solicitud a DeepSeek…" })).toBeVisible();
+    await act(async () =>
+      resolveGenerateResponse?.(
+        Response.json({ data: { id: "job-2", status: "completed", requested: 5, processed: 5 } }),
+      ),
+    );
+    expect(screen.getByText("Generación completada · 5/5 cartas")).toBeVisible();
   });
 
   it("shows a spinner while the deck catalog loads", async () => {
@@ -474,7 +838,7 @@ describe("AdminDashboard", () => {
     expect(screen.queryByRole("status", { name: "Cargando mazos…" })).toBeNull();
   });
 
-  it.each([50, 400])(
+  it.each([50, 400, 600])(
     "submits %i cards from creation without splitting the browser request",
     async (count) => {
       render(<AdminDashboard />);
@@ -484,7 +848,7 @@ describe("AdminDashboard", () => {
         target: { value: "Sports for adults" },
       });
       const quantity = screen.getByLabelText("Cantidad de cartas");
-      expect(quantity).toHaveAttribute("max", "400");
+      expect(quantity).toHaveAttribute("max", "600");
       fireEvent.change(quantity, { target: { value: String(count) } });
       fireEvent.click(screen.getByRole("button", { name: "Crear y generar" }));
       await waitFor(() =>
@@ -498,11 +862,12 @@ describe("AdminDashboard", () => {
     },
   );
 
-  it.each([50, 400])("submits %i additional cards as one durable job", async (count) => {
+  it.each([50, 400, 600])("submits %i additional cards as one durable job", async (count) => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
     const quantity = screen.getByLabelText("Cantidad para generar");
-    expect(quantity).toHaveAttribute("max", "400");
+    expect(quantity).toHaveAttribute("max", "600");
     fireEvent.change(quantity, { target: { value: String(count) } });
     fireEvent.click(screen.getByRole("button", { name: `Generar ${count} cartas más` }));
     await waitFor(() =>
@@ -514,28 +879,29 @@ describe("AdminDashboard", () => {
     );
   });
 
-  it("rejects more than four hundred cards without creating a deck or generation job", async () => {
+  it("rejects more than six hundred cards without creating a deck or generation job", async () => {
     render(<AdminDashboard />);
     fireEvent.click(await screen.findByRole("tab", { name: "Crear mazo" }));
     fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Sports" } });
     fireEvent.change(screen.getByLabelText("Temática e indicaciones"), {
       target: { value: "Sports for adults" },
     });
-    fireEvent.change(screen.getByLabelText("Cantidad de cartas"), { target: { value: "401" } });
+    fireEvent.change(screen.getByLabelText("Cantidad de cartas"), { target: { value: "601" } });
     fireEvent.submit(screen.getByRole("button", { name: "Crear y generar" }).closest("form")!);
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "La cantidad debe ser un entero entre 1 y 400.",
+      "La cantidad debe ser un entero entre 1 y 600.",
     );
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 
-  it("rejects more than four hundred additional cards before queueing", async () => {
+  it("rejects more than six hundred additional cards before queueing", async () => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
-    fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "401" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generar 401 cartas más" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
+    fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "601" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generar 601 cartas más" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "La cantidad debe ser un entero entre 1 y 400.",
+      "La cantidad debe ser un entero entre 1 y 600.",
     );
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
@@ -606,6 +972,7 @@ describe("AdminDashboard", () => {
   it("keeps the additional-generation quantity editable from the decks tab", async () => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
     fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Generar 7 cartas más" }));
     await waitFor(() =>
@@ -903,6 +1270,7 @@ describe("AdminDashboard", () => {
     render(<AdminDashboard />);
 
     await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
     fireEvent.click(screen.getByRole("button", { name: "Archivar mazo" }));
     fireEvent.click(await screen.findByRole("button", { name: "Confirmar archivado" }));
 
@@ -949,6 +1317,7 @@ describe("AdminDashboard", () => {
 
     fireEvent.click(await screen.findByLabelText("Mostrar archivados"));
     await screen.findByRole("heading", { name: "Oculto" });
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
     fireEvent.click(screen.getByRole("button", { name: "Restaurar mazo" }));
 
     await waitFor(
@@ -979,6 +1348,7 @@ describe("AdminDashboard", () => {
     const subscriptions = socketMock.subscribe.mock.calls.length;
 
     fireEvent.click(screen.getByLabelText("Mostrar archivados"));
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
     fireEvent.change(screen.getByLabelText("Nombre a editar"), { target: { value: "Nuevo" } });
 
     await waitFor(
@@ -998,6 +1368,7 @@ describe("AdminDashboard", () => {
     render(<AdminDashboard />);
 
     await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("tab", { name: "Ajustes" }));
     fireEvent.change(screen.getByLabelText("Nombre a editar"), { target: { value: "Nuevo" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 

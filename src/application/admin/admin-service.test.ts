@@ -61,6 +61,69 @@ async function expectAdminError(promise: Promise<unknown>, status: number, code:
 }
 
 describe("AdminService.createDeck", () => {
+  it("updates only the rules, trims multiline input and permits removing them", async () => {
+    const { service } = build();
+    const deck = await service.createDeck({ name: "Rules", theme: "General", rules: "Old rules" });
+    const changed = await service.updateDeck(deck.id, {
+      ...{ rules: "  New rules.\nAvoid jargon.  " },
+    });
+    expect(changed).toMatchObject({
+      name: "Rules",
+      theme: "General",
+      rules: "New rules.\nAvoid jargon.",
+      cards: [],
+    });
+    expect(await service.updateDeck(deck.id, { name: "Renamed" })).toHaveProperty(
+      "rules",
+      "New rules.\nAvoid jargon.",
+    );
+    expect(await service.updateDeck(deck.id, { ...{ rules: "  " } })).toHaveProperty("rules", "");
+  });
+
+  it("rejects invalid rule edits before modifying the deck", async () => {
+    const { service } = build();
+    const deck = await service.createDeck({ name: "Rules", theme: "General", rules: "Original" });
+    const before = JSON.stringify(await service.getDeck(deck.id));
+    for (const rules of [null, 1, "x".repeat(501)]) {
+      await expectAdminError(
+        service.updateDeck(deck.id, { ...{ rules: rules as string } }),
+        400,
+        "invalid_input",
+      );
+      expect(JSON.stringify(await service.getDeck(deck.id))).toBe(before);
+    }
+  });
+
+  it("stores optional forbidden-word rules and preserves them on unrelated metadata edits", async () => {
+    const { service } = build();
+    const rules = "Use everyday associations.\nAvoid obscure references.";
+    const deck = await service.createDeck({
+      name: "Cooking",
+      theme: "Food",
+      ...{ rules: `  ${rules}  ` },
+    });
+    expect(await service.getDeck(deck.id)).toHaveProperty("rules", rules);
+    expect(await service.updateDeck(deck.id, { theme: "Drinks" })).toHaveProperty("rules", rules);
+    expect(await service.createDeck({ name: "Legacy", theme: "General" })).not.toHaveProperty(
+      "rules",
+    );
+    expect(
+      await service.createDeck({ name: "Empty", theme: "General", ...{ rules: "  " } }),
+    ).not.toHaveProperty("rules");
+  });
+
+  it("rejects invalid or oversized rules before creating a deck", async () => {
+    const { service, decks } = build();
+    for (const rules of [1, null, "x".repeat(501)]) {
+      await expectAdminError(
+        service.createDeck({ name: "Rules", theme: "General", ...{ rules: rules as string } }),
+        400,
+        "invalid_input",
+      );
+    }
+    expect(await decks.list()).toEqual([]);
+  });
+
   it("creates a managed deck with trimmed values", async () => {
     const { service } = build();
 
@@ -139,7 +202,7 @@ describe("AdminService.queueGeneration", () => {
     decks.seed({ id: "deck-1", name: "General", theme: "General" });
 
     await expectAdminError(service.queueGeneration("deck-1", 0), 400, "invalid_input");
-    await expectAdminError(service.queueGeneration("deck-1", 401), 400, "invalid_input");
+    await expectAdminError(service.queueGeneration("deck-1", 601), 400, "invalid_input");
     await expectAdminError(service.queueGeneration("deck-1", 1.5), 400, "invalid_input");
   });
 
@@ -218,6 +281,7 @@ describe("AdminService.queueGeneration", () => {
     [50, 3, 54],
     [51, 3, 56],
     [400, 3, 411],
+    [600, 3, 615],
   ])(
     "persists a fifty-card candidate batch and bounded budget for %i cards",
     async (requested, maxAttempts, maxCalls) => {

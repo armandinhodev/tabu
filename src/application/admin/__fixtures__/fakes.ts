@@ -77,6 +77,7 @@ export class FakeSpellChecker implements SpellChecker {
 export class FakeProvider implements GenerationProvider {
   available = true;
   readonly batchCalls: {
+    rules?: string;
     model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     theme: string;
@@ -84,6 +85,7 @@ export class FakeProvider implements GenerationProvider {
     excludedObjectives: readonly string[];
   }[] = [];
   readonly completionCalls: {
+    rules?: string;
     model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     objective: string;
@@ -101,6 +103,7 @@ export class FakeProvider implements GenerationProvider {
     excludedObjectives: readonly string[];
   }[] = [];
   readonly candidateBatchCalls: {
+    rules?: string;
     model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     theme: string;
@@ -138,6 +141,7 @@ export class FakeProvider implements GenerationProvider {
   }
 
   async proposeCandidatesBatch(input: {
+    rules?: string;
     model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     theme: string;
@@ -145,6 +149,7 @@ export class FakeProvider implements GenerationProvider {
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
     this.candidateBatchCalls.push({
+      ...(input.rules === undefined ? {} : { rules: input.rules }),
       ...(input.model === undefined ? {} : { model: input.model }),
       ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       theme: input.theme,
@@ -159,6 +164,7 @@ export class FakeProvider implements GenerationProvider {
   }
 
   async proposeCards(input: {
+    rules?: string;
     model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     theme: string;
@@ -167,6 +173,7 @@ export class FakeProvider implements GenerationProvider {
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
     this.batchCalls.push({
+      ...(input.rules === undefined ? {} : { rules: input.rules }),
       ...(input.model === undefined ? {} : { model: input.model }),
       ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       theme: input.theme,
@@ -184,6 +191,7 @@ export class FakeProvider implements GenerationProvider {
   }
 
   async proposeCandidates(input: {
+    rules?: string;
     model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     objective: string;
@@ -193,6 +201,7 @@ export class FakeProvider implements GenerationProvider {
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ candidates: readonly string[] }>> {
     this.completionCalls.push({
+      ...(input.rules === undefined ? {} : { rules: input.rules }),
       ...(input.model === undefined ? {} : { model: input.model }),
       ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       objective: input.objective,
@@ -212,6 +221,7 @@ export class FakeProvider implements GenerationProvider {
 }
 
 interface FakeDeck {
+  rules?: string;
   allowProperNames?: boolean;
   id: string;
   name: string;
@@ -240,6 +250,7 @@ export class FakeDeckStore implements AdminDeckStore {
 
   seed(partial: Partial<ManagedDeck> & { id: string; name: string; theme: string }): FakeDeck {
     const deck: FakeDeck = {
+      ...(partial.rules === undefined ? {} : { rules: partial.rules }),
       ...(partial.allowProperNames === undefined
         ? {}
         : { allowProperNames: partial.allowProperNames }),
@@ -278,6 +289,7 @@ export class FakeDeckStore implements AdminDeckStore {
     }
 
     return this.seed({
+      ...(input.rules === undefined ? {} : { rules: input.rules }),
       id: input.id,
       name: input.name,
       theme: input.theme,
@@ -288,7 +300,63 @@ export class FakeDeckStore implements AdminDeckStore {
     });
   }
 
+  async deleteCard(input: {
+    deckId: string;
+    cardId: string;
+    previousWord: string;
+    expectedRevision: number;
+    now: string;
+  }): Promise<ManagedDeck> {
+    const deck = this.decks.get(input.deckId);
+    if (!deck || !deck.cards.some((card) => card.id === input.cardId))
+      throw adminNotFound("Card not found");
+    if (deck.activeJob) throw adminConflict("job_in_progress", "The deck has an active job");
+    if (deck.archivedAt) throw adminConflict("deck_archived", "The deck is archived");
+    if (deck.revision !== input.expectedRevision)
+      throw adminConflict("card_changed", "The deck changed");
+    deck.cards = deck.cards.filter((card) => card.id !== input.cardId);
+    deck.usedObjectives = [...new Set([...deck.usedObjectives, normalizeWord(input.previousWord)])];
+    deck.revision += 1;
+    deck.updatedAt = input.now;
+    return deck;
+  }
+
+  async updateCard(input: {
+    deckId: string;
+    cardId: string;
+    card: ManagedCard;
+    previousWord: string;
+    expectedRevision: number;
+    now: string;
+  }): Promise<ManagedDeck> {
+    const deck = this.decks.get(input.deckId);
+    const index = deck?.cards.findIndex((card) => card.id === input.cardId) ?? -1;
+    if (!deck || index === -1) throw adminNotFound("Card not found");
+    if (deck.activeJob) throw adminConflict("job_in_progress", "The deck has an active job");
+    if (deck.archivedAt) throw adminConflict("deck_archived", "The deck is archived");
+    const key = normalizeWord(input.card.word);
+    if (
+      deck.revision !== input.expectedRevision ||
+      (normalizeWord(input.previousWord) !== key && deck.usedObjectives.includes(key))
+    )
+      throw adminConflict("card_changed", "The deck changed");
+    deck.cards[index] = { ...input.card, taboo: [...input.card.taboo] };
+    deck.usedObjectives = [
+      ...new Set([...deck.usedObjectives, normalizeWord(input.previousWord), key]),
+    ];
+    deck.proposedWords = [
+      ...new Set([
+        ...deck.proposedWords,
+        ...input.card.candidates.map((candidate) => normalizeWord(candidate.word)),
+      ]),
+    ];
+    deck.revision += 1;
+    deck.updatedAt = input.now;
+    return deck;
+  }
+
   async updateMetadata(input: {
+    rules?: string;
     allowProperNames?: boolean;
     deckId: string;
     name?: string;
@@ -320,6 +388,10 @@ export class FakeDeckStore implements AdminDeckStore {
 
     if (input.theme !== undefined) {
       deck.theme = input.theme;
+    }
+
+    if (input.rules !== undefined) {
+      deck.rules = input.rules;
     }
 
     if (input.allowProperNames !== undefined) {

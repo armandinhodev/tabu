@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "@/application/admin/deck-limits";
+import {
+  MAX_DECK_NAME_LENGTH,
+  MAX_DECK_THEME_LENGTH,
+  MAX_DECK_RULES_LENGTH,
+} from "@/application/admin/deck-limits";
 import { archiveAdminDeck, getAdminDeck, updateAdminDeck } from "@/infrastructure/admin/runtime";
 import { adminBody, adminResponse, requireFound } from "@/infrastructure/admin-http/http";
 
@@ -9,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 const input = z
   .object({
+    rules: z.string().trim().max(MAX_DECK_RULES_LENGTH).optional(),
     allowProperNames: z.boolean().optional(),
     name: z.string().trim().min(1).max(MAX_DECK_NAME_LENGTH).optional(),
     theme: z.string().trim().min(1).max(MAX_DECK_THEME_LENGTH).optional(),
@@ -16,7 +21,10 @@ const input = z
   .strict()
   .refine(
     (value) =>
-      value.name !== undefined || value.theme !== undefined || value.allowProperNames !== undefined,
+      value.name !== undefined ||
+      value.theme !== undefined ||
+      value.allowProperNames !== undefined ||
+      value.rules !== undefined,
     {
       message: "The deck name or the deck theme is required",
     },

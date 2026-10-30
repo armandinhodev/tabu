@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   generate: vi.fn(),
   exclude: vi.fn(),
   replace: vi.fn(),
+  editCard: vi.fn(),
+  deleteCard: vi.fn(),
   job: vi.fn(),
   settings: vi.fn(),
   saveSettings: vi.fn(),
@@ -30,6 +32,8 @@ vi.mock("@/infrastructure/admin/runtime", () => ({
   queueGeneration: mocks.generate,
   setCardExcluded: mocks.exclude,
   queueReplacement: mocks.replace,
+  updateAdminCard: mocks.editCard,
+  deleteAdminCard: mocks.deleteCard,
   getAdminJob: mocks.job,
   getAdminSettings: mocks.settings,
   updateAdminSettings: mocks.saveSettings,
@@ -41,6 +45,8 @@ import { POST as restore } from "./decks/[deckId]/restore/route";
 import { DELETE as remove } from "./decks/[deckId]/permanent/route";
 import { POST as generate } from "./decks/[deckId]/generate/route";
 import { PATCH as exclude } from "./decks/[deckId]/cards/[cardId]/route";
+import { PUT as editCard } from "./decks/[deckId]/cards/[cardId]/route";
+import { DELETE as deleteCard } from "./decks/[deckId]/cards/[cardId]/route";
 import { POST as replace } from "./decks/[deckId]/cards/[cardId]/replace/route";
 import { GET as job } from "./jobs/[jobId]/route";
 import { GET as settings, PATCH as saveSettings } from "./settings/route";
@@ -77,6 +83,80 @@ beforeEach(() => {
 });
 
 describe("administrative HTTP boundary", () => {
+  it("deletes a single card through a separate guarded DELETE method", async () => {
+    mocks.deleteCard.mockResolvedValue({ id: cardId });
+    const response = await deleteCard(request("DELETE"), context);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: { id: cardId } });
+    expect(mocks.deleteCard).toHaveBeenCalledWith(deckId, cardId);
+    expect(mocks.archive).not.toHaveBeenCalled();
+    expect(mocks.exclude).not.toHaveBeenCalled();
+  });
+  it.each([401, 403])("guards card deletion before any mutation (%s)", async (status) => {
+    mocks.guard.mockReturnValue(Response.json({ error: "Denied" }, { status }));
+    expect((await deleteCard(request("DELETE"), context)).status).toBe(status);
+    expect(mocks.deleteCard).not.toHaveBeenCalled();
+  });
+  it("updates manual card content without changing the exclusion PATCH contract", async () => {
+    const input = { word: "agua", taboo: ["rio", "mar"] };
+    mocks.editCard.mockResolvedValue({ id: cardId, ...input, excluded: true });
+    const response = await editCard(request("PUT", input), context);
+    expect(response.status).toBe(200);
+    expect(mocks.editCard).toHaveBeenCalledWith(deckId, cardId, input);
+    expect(await response.json()).toEqual({ data: { id: cardId, ...input, excluded: true } });
+    expect((await exclude(request("PATCH", input), context)).status).toBe(400);
+    expect(mocks.exclude).not.toHaveBeenCalled();
+  });
+  it.each([401, 403])("guards manual card updates before loading data (%s)", async (status) => {
+    mocks.guard.mockReturnValue(Response.json({ error: "Denied" }, { status }));
+    expect((await editCard(request("PUT", { word: "agua", taboo: ["rio"] }), context)).status).toBe(
+      status,
+    );
+    expect(mocks.editCard).not.toHaveBeenCalled();
+  });
+  it.each([
+    { word: "", taboo: ["rio"] },
+    { word: "agua", taboo: [] },
+    { word: "agua", taboo: Array(7).fill("rio") },
+    { word: "agua", taboo: ["rio"], excluded: false },
+  ])("rejects invalid manual bodies (%j)", async (input) => {
+    expect((await editCard(request("PUT", input), context)).status).toBe(400);
+    expect(mocks.editCard).not.toHaveBeenCalled();
+  });
+  it.each(["New rules.\nNo jargon.", ""])(
+    "accepts rules-only edits including clearing (%s)",
+    async (rules) => {
+      mocks.update.mockResolvedValue({ id: deckId, rules });
+      const response = await update(deckRequest("PATCH", { rules }), context);
+      expect(response.status).toBe(200);
+      expect(mocks.update).toHaveBeenCalledWith(deckId, { rules });
+      expect(await response.json()).toEqual({ data: { id: deckId, rules } });
+    },
+  );
+  it.each([null, 1, "x".repeat(501)])("rejects invalid rules-only edits (%s)", async (rules) => {
+    expect((await update(deckRequest("PATCH", { rules }), context)).status).toBe(400);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts optional forbidden-word rules on deck creation", async () => {
+    const rules = "Common associations.\nNo obscure terms.";
+    mocks.create.mockResolvedValue({ id: deckId, rules });
+    const response = await create(request("POST", { name: "Cooking", theme: "Food", rules }));
+    expect(response.status).toBe(201);
+    expect(mocks.create).toHaveBeenCalledWith({ name: "Cooking", theme: "Food", rules });
+    expect(await response.json()).toEqual({ data: { id: deckId, rules } });
+  });
+
+  it.each([1, null, "x".repeat(501)])(
+    "rejects invalid rules before service access (%s)",
+    async (rules) => {
+      expect(
+        (await create(request("POST", { name: "Cooking", theme: "Food", rules }))).status,
+      ).toBe(400);
+      expect(mocks.create).not.toHaveBeenCalled();
+    },
+  );
+
   it("reads and saves the global model through the authenticated boundary", async () => {
     mocks.settings.mockResolvedValue({ model: "deepseek-flash" });
     mocks.saveSettings.mockResolvedValue({ model: "deepseek-v4-pro" });
@@ -155,7 +235,7 @@ describe("administrative HTTP boundary", () => {
       expect(mocks.update).not.toHaveBeenCalled();
     },
   );
-  it.each([51, 400])("accepts a generation request for %i cards", async (count) => {
+  it.each([51, 400, 600])("accepts a generation request for %i cards", async (count) => {
     mocks.generate.mockResolvedValue({ id: "job-1", status: "queued", requested: count });
     const response = await generate(request("POST", { count }), context);
     expect(response.status).toBe(202);
@@ -165,8 +245,8 @@ describe("administrative HTTP boundary", () => {
     expect(mocks.generate).toHaveBeenCalledWith(deckId, { count });
   });
 
-  it("rejects 401 cards before calling the job service", async () => {
-    const response = await generate(request("POST", { count: 401 }), context);
+  it("rejects 601 cards before calling the job service", async () => {
+    const response = await generate(request("POST", { count: 601 }), context);
     expect(response.status).toBe(400);
     expect(mocks.generate).not.toHaveBeenCalled();
   });

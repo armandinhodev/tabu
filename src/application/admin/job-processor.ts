@@ -1,5 +1,10 @@
 import { normalizeWord } from "../../domain/value-objects/TabooWords";
-import { evaluateCard, isObjectiveText, SELECTED_TABOO_WORDS } from "./candidates";
+import {
+  evaluateCard,
+  isObjectiveText,
+  selectedCandidates,
+  SELECTED_TABOO_WORDS,
+} from "./candidates";
 import { AdminError } from "./errors";
 import { DEFAULT_DEEPSEEK_MODEL } from "./settings";
 import type {
@@ -251,6 +256,7 @@ async function runGeneration(
     await renewLease(deps, job, fence);
 
     const batch = await requestCandidatesBatch(deps, job, fence, state, {
+      ...(current.rules ? { rules: current.rules } : {}),
       theme: current.theme,
       ...(current.allowProperNames ? { allowProperNames: true } : {}),
       objectives: chunk,
@@ -288,6 +294,7 @@ async function runGeneration(
       await renewLease(deps, job, fence);
 
       const card = await buildCard(deps, job, fence, state, {
+        ...(current.rules ? { rules: current.rules } : {}),
         id: `${job.id}-${state.processed}`,
         index: state.processed,
         theme: current.theme,
@@ -374,6 +381,7 @@ async function runReplacement(
   await renewLease(deps, job, fence);
 
   const result = await requestBatch(deps, job, fence, state, {
+    ...(deck.rules ? { rules: deck.rules } : {}),
     theme: deck.theme,
     ...(deck.allowProperNames ? { allowProperNames: true } : {}),
     count: 1,
@@ -405,6 +413,7 @@ async function runReplacement(
   }
 
   const card = await buildCard(deps, job, fence, state, {
+    ...(deck.rules ? { rules: deck.rules } : {}),
     id: target.id,
     index: 0,
     theme: deck.theme,
@@ -451,6 +460,7 @@ async function buildCard(
   state: JobState,
   input: {
     id: string;
+    rules?: string;
     allowProperNames?: boolean;
     index: number;
     theme: string;
@@ -479,6 +489,7 @@ async function buildCard(
     await renewLease(deps, job, fence);
 
     const completion = await requestCompletion(deps, job, fence, state, {
+      ...(input.rules ? { rules: input.rules } : {}),
       ...(input.allowProperNames ? { allowProperNames: true } : {}),
       objective: input.objective,
       theme: input.theme,
@@ -508,7 +519,7 @@ async function buildCard(
     excluded: evaluated.doubtful,
     manualOverride: false,
     issues: [...evaluated.issues],
-    candidates: evaluated.candidates.map((candidate) => ({ ...candidate })),
+    candidates: selectedCandidates(evaluated),
     sourceJobId: job.id,
     sourceIndex: input.index,
     createdAt: deps.clock.now().toISOString(),
@@ -592,6 +603,7 @@ async function requestCandidatesBatch(
   fence: JobFence,
   state: JobState,
   input: {
+    rules?: string;
     theme: string;
     objectives: readonly string[];
     allowProperNames?: boolean;
@@ -604,6 +616,7 @@ async function requestCandidatesBatch(
   await reserveCall(deps, job, fence, state, false);
 
   const result = await deps.provider.proposeCandidatesBatch({
+    ...(input.rules ? { rules: input.rules } : {}),
     model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
     ...(input.allowProperNames ? { allowProperNames: true } : {}),
     theme: input.theme,
@@ -621,6 +634,7 @@ async function requestBatch(
   fence: JobFence,
   state: JobState,
   input: {
+    rules?: string;
     theme: string;
     count: number;
     allowProperNames?: boolean;
@@ -634,6 +648,7 @@ async function requestBatch(
   await reserveCall(deps, job, fence, state, true);
 
   const result = await deps.provider.proposeCards({
+    ...(input.rules ? { rules: input.rules } : {}),
     model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
     ...(input.allowProperNames ? { allowProperNames: true } : {}),
     theme: input.theme,
@@ -652,6 +667,7 @@ async function requestCompletion(
   fence: JobFence,
   state: JobState,
   input: {
+    rules?: string;
     objective: string;
     theme: string;
     previousWords: readonly string[];
@@ -664,6 +680,7 @@ async function requestCompletion(
   await reserveCall(deps, job, fence, state, false);
 
   const result = await deps.provider.proposeCandidates({
+    ...(input.rules ? { rules: input.rules } : {}),
     model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
     ...(input.allowProperNames ? { allowProperNames: true } : {}),
     objective: input.objective,

@@ -12,7 +12,7 @@ import type {
   ExpiredDeckFence,
   JobFence,
 } from "../../../../application/admin/ports";
-import type { ManagedDeck } from "../../../../application/admin/types";
+import type { ManagedCard, ManagedDeck } from "../../../../application/admin/types";
 import { normalizeWord } from "../../../../domain/value-objects/TabooWords";
 import { DeckModel } from "../../mongoose/models/DeckModel";
 import { toCardDocument, toManagedDeck } from "../mappers";
@@ -66,6 +66,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
 
     try {
       const document = await AdminDeckModel.create({
+        ...(input.rules === undefined ? {} : { rules: input.rules }),
         _id: input.id,
         name: input.name,
         theme: input.theme,
@@ -102,6 +103,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
    * las cartas ni toca sus hallazgos.
    */
   async updateMetadata(input: {
+    rules?: string;
     allowProperNames?: boolean;
     deckId: string;
     name?: string;
@@ -137,6 +139,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         },
         {
           $set: {
+            ...(input.rules === undefined ? {} : { rules: input.rules }),
             ...(input.allowProperNames === undefined
               ? {}
               : { allowProperNames: input.allowProperNames }),
@@ -457,6 +460,86 @@ export class MongoAdminDeckStore implements AdminDeckStore {
     }
 
     return toManagedDeck(document);
+  }
+
+  async deleteCard(input: {
+    deckId: string;
+    cardId: string;
+    previousWord: string;
+    expectedRevision: number;
+    now: string;
+  }): Promise<ManagedDeck> {
+    assertMongoAvailable();
+    const document = await AdminDeckModel.findOneAndUpdate(
+      {
+        _id: input.deckId,
+        "cards.id": input.cardId,
+        revision: input.expectedRevision,
+        "activeJob.jobId": { $exists: false },
+        archivedAt: { $exists: false },
+        deletionPending: { $ne: true },
+      },
+      {
+        $pull: { cards: { id: input.cardId } },
+        $set: { updatedAt: new Date(input.now) },
+        $inc: { revision: 1 },
+        $addToSet: { usedObjectives: normalizeWord(input.previousWord) },
+      },
+      { new: true },
+    ).exec();
+    if (document !== null) return toManagedDeck(document);
+    const current = await AdminDeckModel.findById(input.deckId).exec();
+    if (current === null || !current.cards.some((card) => card.id === input.cardId))
+      throw adminNotFound("The card or deck no longer exists");
+    if (current.activeJob !== undefined)
+      throw adminConflict("job_in_progress", "The deck has an active generation");
+    if (current.archivedAt !== undefined)
+      throw adminConflict("deck_archived", "Restore the deck before deleting cards");
+    throw adminConflict("card_changed", "The deck changed during deletion");
+  }
+
+  async updateCard(input: {
+    deckId: string;
+    cardId: string;
+    card: ManagedCard;
+    previousWord: string;
+    expectedRevision: number;
+    now: string;
+  }): Promise<ManagedDeck> {
+    assertMongoAvailable();
+    const key = normalizeWord(input.card.word);
+    const previousKey = normalizeWord(input.previousWord);
+    const document = await AdminDeckModel.findOneAndUpdate(
+      {
+        _id: input.deckId,
+        revision: input.expectedRevision,
+        "cards.id": input.cardId,
+        "activeJob.jobId": { $exists: false },
+        archivedAt: { $exists: false },
+        deletionPending: { $ne: true },
+        ...(key === previousKey ? {} : { usedObjectives: { $ne: key } }),
+      },
+      {
+        $set: { "cards.$[card]": toCardDocument(input.card), updatedAt: new Date(input.now) },
+        $inc: { revision: 1 },
+        $addToSet: {
+          usedObjectives: { $each: [previousKey, key] },
+          proposedWords: {
+            $each: input.card.candidates.map((candidate) => normalizeWord(candidate.word)),
+          },
+        },
+      },
+      { new: true, arrayFilters: [{ "card.id": input.cardId }] },
+    ).exec();
+    if (document !== null) return toManagedDeck(document);
+    const current = await AdminDeckModel.findById(input.deckId).exec();
+    if (current === null || !current.cards.some((card) => card.id === input.cardId))
+      throw adminNotFound("The card or deck no longer exists");
+    if (current.activeJob !== undefined)
+      throw adminConflict("job_in_progress", "The deck has an active generation");
+    if (current.archivedAt !== undefined)
+      throw adminConflict("deck_archived", "Restore the deck before editing cards");
+    throw adminConflict("card_changed", "The deck changed during the edit");
   }
 
   /**

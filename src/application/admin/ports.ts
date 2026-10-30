@@ -38,6 +38,7 @@ export interface ClaimedJob {
 
 /** Datos para crear un mazo administrable. */
 export interface CreateDeckInput {
+  readonly rules?: string;
   readonly allowProperNames?: boolean;
   readonly id: string;
   readonly name: string;
@@ -164,6 +165,7 @@ export interface GenerationProvider {
    * descartan.
    */
   proposeCandidatesBatch(input: {
+    readonly rules?: string;
     readonly model?: DeepSeekModel;
     readonly allowProperNames?: boolean;
     readonly theme: string;
@@ -176,6 +178,7 @@ export interface GenerationProvider {
    * bloque, así que una llamada combinada cuesta menos que dos.
    */
   proposeCards(input: {
+    readonly rules?: string;
     readonly model?: DeepSeekModel;
     readonly allowProperNames?: boolean;
     readonly theme: string;
@@ -189,6 +192,7 @@ export interface GenerationProvider {
    * usa cuando la carta todavía no tiene seis palabras válidas.
    */
   proposeCandidates(input: {
+    readonly rules?: string;
     readonly model?: DeepSeekModel;
     readonly allowProperNames?: boolean;
     readonly objective: string;
@@ -217,6 +221,7 @@ export interface AdminDeckStore {
    * active job and with 409 when the new name is already reserved.
    */
   updateMetadata(input: {
+    readonly rules?: string;
     readonly allowProperNames?: boolean;
     readonly deckId: string;
     readonly name?: string | undefined;
@@ -259,6 +264,23 @@ export interface AdminDeckStore {
     readonly cardId: string;
     readonly excluded: boolean;
     readonly manualOverride: boolean;
+    readonly now: string;
+  }): Promise<ManagedDeck>;
+  /** Removes one card under the same revision and active-job guards as editing. */
+  deleteCard(input: {
+    readonly deckId: string;
+    readonly cardId: string;
+    readonly previousWord: string;
+    readonly expectedRevision: number;
+    readonly now: string;
+  }): Promise<ManagedDeck>;
+  /** Manual content update guarded by the evaluated deck revision. */
+  updateCard(input: {
+    readonly deckId: string;
+    readonly cardId: string;
+    readonly card: ManagedCard;
+    readonly previousWord: string;
+    readonly expectedRevision: number;
     readonly now: string;
   }): Promise<ManagedDeck>;
   /**

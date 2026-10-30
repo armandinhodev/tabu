@@ -118,6 +118,33 @@ function queueCards(
 }
 
 describe("processClaimedJob (batch flow)", () => {
+  it("stores only the first six ranked accepted forbidden terms after dictionary validation", async () => {
+    const { decks, provider, deps, claim } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "General" });
+    queueCards(provider, [
+      { objective: "fuego", candidates: ["palabrainexistente", ...SIX_WORDS, "agua"] },
+    ]);
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+    const saved = (await decks.findById("deck-1"))!.cards[0]!;
+    expect(saved.taboo).toEqual(SIX_WORDS);
+    expect(saved.candidates.map((candidate) => candidate.word)).toEqual(SIX_WORDS);
+    expect(saved.excluded).toBe(false);
+    expect(provider.completionCalls).toHaveLength(0);
+  });
+
+  it("sends stored rules to batch and completion calls, not objective selection", async () => {
+    const { decks, provider, deps, claim } = build();
+    const rules = "Prefer common associations.";
+    decks.seed({ id: "deck-1", name: "General", theme: "General", ...{ rules } });
+    queueCards(provider, [{ objective: "fuego", candidates: SIX_WORDS.slice(0, 5) }]);
+    provider.completionQueue.push([SIX_WORDS[5]!]);
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+    expect(provider.objectiveCalls[0]).not.toHaveProperty("rules");
+    expect(provider.candidateBatchCalls[0]).toHaveProperty("rules", rules);
+    expect(provider.completionCalls[0]).toHaveProperty("rules", rules);
+    expect((await decks.findById("deck-1"))?.cards).toHaveLength(1);
+  });
+
   it.each([undefined, "deepseek-v4-pro" as const])(
     "dispatches the persisted model to both provider phases (%s)",
     async (model) => {
@@ -166,6 +193,7 @@ describe("processClaimedJob (batch flow)", () => {
         name: "Series",
         theme: "Series",
         allowProperNames,
+        ...{ rules: "Prefer familiar associations." },
       });
       deck.cards.push({
         id: "old-card",
@@ -196,6 +224,8 @@ describe("processClaimedJob (batch flow)", () => {
       );
       const batchCall =
         kind === "replace" ? provider.batchCalls[0] : provider.candidateBatchCalls[0];
+      expect(batchCall).toHaveProperty("rules", "Prefer familiar associations.");
+      expect(provider.completionCalls[0]).toHaveProperty("rules", "Prefer familiar associations.");
       if (allowProperNames) {
         expect(batchCall).toHaveProperty("allowProperNames", true);
         expect(provider.completionCalls[0]).toHaveProperty("allowProperNames", true);
@@ -214,6 +244,7 @@ describe("processClaimedJob (batch flow)", () => {
     [50, 1],
     [51, 2],
     [400, 8],
+    [600, 12],
   ])(
     "completes %i cards with one objective call and %i candidate batches",
     async (requested, expectedBatches) => {
