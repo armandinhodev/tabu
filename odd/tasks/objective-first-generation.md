@@ -1,0 +1,31 @@
+# Objective-first generation
+Objective: replace the combined objective+candidates batch with an objective-first pipeline and lower the per-job ceiling to 400 cards.
+Branch: `feat/objective-first-generation`; delivery: ask-on-risk.
+Runner: `pnpm exec vitest run`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, Prettier.
+
+## Specs
+- **S1:** User: "Ponele limite 400 y hacelo como te lo plantee yo". `MAX_GENERATION_COUNT` becomes 400 and every surface that validates a count follows it: service, HTTP route, panel inputs and messages, README.
+- **S2:** User: "si se piden 200 cartas, que la primer peticion a deepseek nos retorne esas 200 palabras y luego pedir sus palabras prohibidas en lotes de 50? O sea pedir a deepseek las palabras prohibidas (12) de cada palabra del lote de 50?" Generation asks the provider for objectives only, in one call for the pending amount, and then asks the forbidden words in batches of at most `DEFAULT_BATCH_SIZE` (50) objectives per call. Every provider call is counted before it is sent.
+- **S3:** Objectives returned by the provider are validated and deduplicated locally against the deck's used objectives and the batch itself, so no candidate work is spent on an objective that cannot become a card. Objectives the provider invents that were not requested are discarded.
+- **S4 — assumption:** A short objective response tops up with further objective calls, bounded by `maxAttempts` and by two consecutive calls that add no new objective; cards already appended always survive, and a job that cannot reach the requested amount fails with the existing `incomplete_batch` error instead of reporting success.
+- **S5 — assumption:** A single-card replacement keeps the existing combined call (`proposeCards`): there is nothing to deduplicate in bulk and one combined call is cheaper than two. The pending objective queue lives only inside a claim, so a restart re-requests objectives instead of persisting a new document field.
+- **S6:** No provider key exposure, no automatic model fallback, no paid calls during checks, no unrelated data edits.
+
+## Tasks
+- [x] T1 — S1 — inline; constant plus docs; commit `05edf3e`.
+- [x] T2 — S2-S3 — inline; provider port, prompts and JSON contract; commit `05edf3e`.
+- [x] T3 — S4-S5 — inline; job pipeline, budget and replacement reuse; Risk: item 4; commit `05edf3e` plus correction `5281e52`.
+- [x] T4 — S2-S6 — inline; suites, full checks and independent verification; commits `05edf3e`, `5281e52`.
+
+## Log
+- **L1:** User: "Ponele limite 400 y hacelo como te lo plantee yo"
+- **L2:** User, earlier same conversation: "si se piden 200 cartas, que la primer peticion a deepseek nos retorne esas 200 palabras y luego pedir sus palabras prohibidas en lotes de 50? O sea pedir a deepseek las palabras prohibidas (12) de cada palabra del lote de 50?"
+- **L3:** Evidence for the change: job `6ae3f67410b99abcfa938d2a` requested 1200, stopped at 272 because `attempts` reached `maxAttempts` 26 while `calls` stayed at 26; each batch cost one attempt and produced far fewer usable cards than 50. Root cause accepted by the user: candidate work is spent before knowing whether the objective is usable.
+- **L4:** Approved shape: one objective request for the pending amount, then candidate batches of 50 objectives x 12 words, ceiling 400. RDD is globally disabled; functional verification still applies.
+- **L5:** User, while this delivery was in progress: "El componente de progreso que se muestre al crear el mazo no solo al comenzar el proceso y también agregar spiners para las cargas de la base de datos." Queued as a separate delivery after this one closes; not mixed into these commits.
+- **L6:** Implemented: `proposeObjectives` and `proposeCandidatesBatch` on the port with their own prompts and JSON schemas; `proposeCards` kept for the single-card replacement. `jobLimitsFor` becomes `maxAttempts = 1 + MAX_BATCH_RETRIES` (3) and `maxCalls = maxAttempts + ceil(requested / batchSize) + requested`. The generation loop collects objectives, filters them with `acceptObjectives`, then builds cards from candidate batches of `batchSize`, renewing the lease before every call and every card.
+- **L7:** Observed checks on `05edf3e`: `pnpm typecheck` 0, `pnpm lint` 0, Prettier clean, `pnpm exec vitest run` 703 passed / 30 skipped, `pnpm build` 0. RED evidence for the new pipeline: the candidate's new tests copied onto baseline `da2e2d1` fail 41 times.
+- **L8:** Independent verification (worker `ses_e755fab56ffer9sGgSoWk9wNyJ`) returned one blocker: the objectives call was allowed 90 s while `DEFAULT_LEASE_MS` is 60 s, breaking the documented invariant that a provider call always ends before the lease. A slow objectives call expired the lease mid-flight and left the job `running` with no error, then re-claimed and re-paid the call until `maxAttempts`. S1-S6 and risk probes 1-4 passed.
+- **L9:** Correction under test-first: the new deadline test failed with `expected 90000 to be less than 60000`, then `DEEPSEEK_OBJECTIVES_TIMEOUT_MS` dropped to 50 s with the reason documented in code. Recheck (worker `ses_e7544b0bcffeVb5gbwyoTXZYzQ`) returned `fixed`, no new blocker, with a real-clock probe: a hanging call aborts at 50 010 ms, the job ends `failed` with the redacted provider error and `calls: 1, attempts: 1` (budget not refunded). Full suite after the correction: 706 passed / 30 skipped.
+- **L10:** Advisories accepted without further change: (a) a 400-objective call now has 50 s instead of 90 s, so real DeepSeek latency must be confirmed against the live provider — if it is not enough, the lease is raised together with the deadline, never the deadline alone; (b) a hand-configured lease below 50 s would re-open the gap, and nothing in the repo wires that; (c) `proposeCards` no longer trims the excluded objectives list, which preserves the previous behaviour for decks below the old 1200 cap and keeps replacements correct on larger decks at a small input cost.
+- **L11:** Verifier probe files were not adopted: the same behaviours are already pinned by the repository suites (the verifier's own probes were additive duplicates). Scratch directories on `E:` were removed by the parent.
