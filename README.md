@@ -93,6 +93,15 @@ mazos originales; las partidas que ya comenzaron conservan sus cartas.
 La pestaña **Crear mazo** contiene el formulario de generación; **Mazos** permite revisar las
 cartas y pedir nuevas generaciones o reemplazos. El progreso en vivo se mantiene visible al
 cambiar de pestaña, y el formulario conserva los datos todavía no enviados.
+Al crear, generar más cartas o reemplazar una carta, el progreso muestra de inmediato
+**Preparando solicitud a DeepSeek…**, seguido del estado de cola o de espera de las primeras
+cartas. Al completar el trabajo, la barra desaparece y queda una confirmación breve;
+si falla, el error permanece visible.
+
+En **Mazos**, el catálogo identifica el mazo seleccionado con texto e icono. El detalle separa
+**Ajustes del mazo**, **Generar más cartas** y **Revisar cartas**. El filtro **Solo excluidas**
+ofrece volver a todas las cartas cuando no hay coincidencias; los controles de paginación
+aparecen al final de la lista y mantienen las 20 cartas por página.
 
 En **Configuración**, el logo de DeepSeek acompaña la selección global **Flash / Pro**.
 **Guardar configuración** persiste el modelo en MongoDB para todos los administradores y mazos,

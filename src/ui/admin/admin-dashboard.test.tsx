@@ -151,6 +151,57 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it("identifies the selected deck and separates editing, generation and card review", async () => {
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    const selected = screen.getByRole("button", { name: /^General/ });
+    expect(selected).toHaveAttribute("aria-current", "true");
+    expect(within(selected).getByText("Seleccionado")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Ajustes del mazo" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Generar más cartas" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Revisar cartas" })).toBeVisible();
+    const article = screen.getByRole("article");
+    const pagination = screen.getByRole("navigation", { name: "Paginación de cartas" });
+    expect(
+      article.compareDocumentPosition(pagination) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText("Página 1 de 1")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("explains an empty excluded filter and offers a way back to all cards", async () => {
+    catalog = [{ ...deck, cards: [{ ...card, excluded: false }] }];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Solo excluidas" }));
+    expect(screen.getByText("No hay cartas excluidas")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Ver todas las cartas" }));
+    expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Solo excluidas" })).not.toBeChecked();
+    expect(requests.filter((request) => request.method !== "GET")).toHaveLength(0);
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("offers deck creation from the empty catalogue without losing the draft", async () => {
+    catalog = [];
+    render(<AdminDashboard />);
+    expect(await screen.findByText("Tu catálogo empieza aquí")).toBeVisible();
+    expect(screen.getByText("Selecciona un mazo")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Crear mi primer mazo" }));
+    expect(screen.getByRole("tabpanel", { name: "Crear mazo" })).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Draft" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Mazos" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Crear mi primer mazo" }));
+    expect(screen.getByLabelText("Nombre del mazo")).toHaveValue("Draft");
+  });
+
+  it("connects incomplete-card guidance to the disabled enable action", async () => {
+    catalog = [{ ...deck, cards: [{ ...card, taboo: ["animal"] }] }];
+    render(<AdminDashboard />);
+    const enable = await screen.findByRole("button", { name: "Habilitar de todos modos" });
+    expect(enable).toBeDisabled();
+    expect(enable).toHaveAccessibleDescription("Faltan prohibidas para completar las seis.");
+  });
+
   it("shows the DeepSeek logo and saves the global model across tab visits", async () => {
     render(<AdminDashboard />);
     fireEvent.click(await screen.findByRole("tab", { name: "Configuración" }));
@@ -296,7 +347,7 @@ describe("AdminDashboard", () => {
     expect(progress).toHaveTextContent("Preparando la generación");
     expect(progress).toHaveTextContent("0/120 cartas");
     expect(
-      within(progress).getByRole("status", { name: "Encolando la generación…" }),
+      within(progress).getByRole("status", { name: "Preparando solicitud a DeepSeek…" }),
     ).toBeVisible();
 
     await act(async () => {
@@ -308,11 +359,14 @@ describe("AdminDashboard", () => {
     });
 
     await waitFor(() => expect(progress).toHaveTextContent("0/120 cartas"));
-    expect(within(progress).queryByRole("status", { name: "Encolando la generación…" })).toBeNull();
+    expect(
+      within(progress).getByRole("status", { name: "Solicitud en cola para DeepSeek…" }),
+    ).toBeVisible();
     expect(within(progress).queryByText(/Progreso en vivo/)).toBeNull();
   });
 
   it("shows the connection legend only when the progress channel degrades", async () => {
+    jobPayload = { id: "job-1", status: "running", processed: 0, requested: 5 };
     sessionStorage.setItem("tabu:admin-job", "job-1");
     render(<AdminDashboard />);
 
@@ -325,6 +379,84 @@ describe("AdminDashboard", () => {
     await waitFor(() =>
       expect(within(progress).getByText(/Progreso en vivo/)).toHaveTextContent("Reconectando"),
     );
+  });
+
+  it.each(["generate", "replace"])(
+    "shows immediate feedback for %s after a completed job",
+    async (operation) => {
+      sessionStorage.setItem("tabu:admin-job", "job-1");
+      deferGenerateResponse = true;
+      deferJobResponse = true;
+      render(<AdminDashboard />);
+      await screen.findByRole("heading", { name: "jaula" });
+      await act(async () => resolveJobResponse?.(Response.json({ data: jobPayload })));
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: operation === "generate" ? "Generar 5 cartas más" : "Reemplazar con IA",
+        }),
+      );
+      const progress = screen.getByRole("region", { name: "Progreso de generación" });
+      expect(
+        within(progress).getByRole("status", { name: "Preparando solicitud a DeepSeek…" }),
+      ).toBeVisible();
+      expect(progress).toHaveTextContent(operation === "generate" ? "0/5 cartas" : "0/1 cartas");
+      expect(screen.queryByText(/Generación completada/)).not.toBeInTheDocument();
+      await act(async () =>
+        resolveGenerateResponse?.(
+          Response.json({
+            data: {
+              id: "job-2",
+              status: "running",
+              processed: 0,
+              requested: operation === "generate" ? 5 : 1,
+            },
+          }),
+        ),
+      );
+      expect(
+        within(progress).getByRole("status", {
+          name: "Esperando las primeras cartas de DeepSeek…",
+        }),
+      ).toBeVisible();
+      expect(socketMock.disconnect).not.toHaveBeenCalled();
+    },
+  );
+
+  it("removes the completed progress bar while retaining a success confirmation", async () => {
+    jobPayload = { id: "job-1", status: "running", processed: 0, requested: 5 };
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+    await screen.findByRole("region", { name: "Progreso de generación" });
+    await act(async () =>
+      socketMock.handlers?.onJob({
+        id: "job-1",
+        status: "completed",
+        processed: 5,
+        requested: 5,
+        updatedAt: "2026-10-30T12:00:00.000Z",
+      }),
+    );
+    expect(
+      screen.queryByRole("region", { name: "Progreso de generación" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.getByText("Generación completada · 5/5 cartas")).toBeVisible();
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("keeps failed job feedback visible without an active progress bar", async () => {
+    jobPayload = {
+      id: "job-1",
+      status: "failed",
+      processed: 2,
+      requested: 5,
+      error: "DeepSeek no respondió",
+    };
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("DeepSeek no respondió");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Generar 5 cartas más" })).toBeEnabled();
   });
 
   it("shows a spinner while the deck catalog loads", async () => {
@@ -630,11 +762,12 @@ describe("AdminDashboard", () => {
   });
 
   it("shows the reconnecting state without dropping the tracked job", async () => {
+    jobPayload = { id: "job-1", status: "running", processed: 0, requested: 5 };
     sessionStorage.setItem("tabu:admin-job", "job-1");
     render(<AdminDashboard />);
 
-    await screen.findByRole("heading", { name: "Administración de mazos" });
-    socketMock.handlers?.onState?.("reconnecting");
+    await screen.findByRole("region", { name: "Progreso de generación" });
+    await act(async () => socketMock.handlers?.onState?.("reconnecting"));
 
     expect(await screen.findByText(/Reconectando/)).toBeInTheDocument();
     expect(socketMock.disconnect).not.toHaveBeenCalled();

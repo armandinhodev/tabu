@@ -1,6 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import {
+  Archive,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  ListFilter,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "@/application/admin/generation-limits";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
@@ -98,8 +111,7 @@ export function AdminDashboard() {
   const [job, setJob] = useState<JobView | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
-  // Cantidad pedida mientras el mazo se está creando: el panel de progreso
-  // aparece desde el primer clic, antes de que exista el trabajo.
+  // Show pending feedback before the server has returned a generation job.
   const [creating, setCreating] = useState<number | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState("");
@@ -321,6 +333,15 @@ export function AdminDashboard() {
     setJob(next);
     setJobId(next.id);
     rememberJob(next.id);
+  }
+
+  async function requestGeneration(amount: number, request: () => Promise<JobView>) {
+    setCreating(amount);
+    try {
+      trackJob(await request());
+    } finally {
+      setCreating(null);
+    }
   }
 
   /**
@@ -606,7 +627,7 @@ export function AdminDashboard() {
         </form>
       </section>
 
-      {(job !== null || creating !== null) && (
+      {(creating !== null || (job !== null && job.status !== "completed")) && (
         <section
           aria-label="Progreso de generación"
           aria-live="polite"
@@ -614,13 +635,25 @@ export function AdminDashboard() {
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="font-semibold">
-              {job === null
+              {creating !== null || job === null
                 ? `Preparando la generación · 0/${creating ?? 0} cartas`
                 : `${jobLabels[job.status]} · ${job.processed ?? 0}/${job.requested ?? 0} cartas`}
             </p>
-            {job === null ? (
-              <Spinner label="Encolando la generación…" />
-            ) : (
+            {(creating !== null || running) && (
+              <Spinner
+                label={
+                  creating !== null
+                    ? "Preparando solicitud a DeepSeek…"
+                    : job?.status === "queued"
+                      ? "Solicitud en cola para DeepSeek…"
+                      : (job?.processed ?? 0) === 0
+                        ? "Esperando las primeras cartas de DeepSeek…"
+                        : "Generando nuevas cartas con DeepSeek…"
+                }
+              />
+            )}
+            {creating === null &&
+              job !== null &&
               // La leyenda sólo aparece cuando el canal de progreso se degrada:
               // mostrar "Conectada" todo el tiempo era ruido.
               (connection === "reconnecting" ||
@@ -629,29 +662,36 @@ export function AdminDashboard() {
                 <p className="text-body-sm text-warning" role="status">
                   Progreso en vivo: {connectionLabels[connection]}
                 </p>
-              )
-            )}
+              )}
           </div>
-          {job === null ? (
+          {creating !== null ? (
             <progress className="mt-3 h-3 w-full" aria-label="Preparando la generación" />
-          ) : (
+          ) : running ? (
             <progress
               className="mt-3 h-3 w-full"
-              max={Math.max(job.requested ?? 1, 1)}
-              value={job.processed ?? 0}
+              aria-label="Generación de cartas"
+              max={Math.max(job?.requested ?? 1, 1)}
+              value={job?.processed ?? 0}
             />
-          )}
-          {job !== null && (
+          ) : null}
+          {creating === null && job !== null && (
             <p className="mt-2 text-body-sm text-fg-muted">
               Tokens de entrada: {job.inputTokens ?? 0} · salida: {job.outputTokens ?? 0}
             </p>
           )}
-          {job?.error && (
+          {creating === null && job?.error && (
             <p role="alert" className="mt-2 text-warning">
               {job.error}
             </p>
           )}
         </section>
+      )}
+
+      {creating === null && job?.status === "completed" && (
+        <p role="status" className="flex items-center gap-2 text-body-sm text-success">
+          <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />
+          Generación completada · {job.processed ?? 0}/{job.requested ?? 0} cartas
+        </p>
       )}
 
       {!job && connection === "reconnecting" && (
@@ -669,13 +709,32 @@ export function AdminDashboard() {
         aria-labelledby="admin-decks-tab"
         hidden={activeTab !== "decks"}
         tabIndex={0}
+        className="rounded-lg border border-line bg-surface p-4 md:p-6"
       >
-        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="space-y-3" aria-label="Mazos administrados">
-            <h2 className="font-display text-h3">Mazos</h2>
-            <label className="flex items-center gap-2">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
+          <aside
+            className="min-w-0 space-y-3 rounded-lg border border-line bg-surface-2 p-4"
+            aria-label="Mazos administrados"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 font-display text-h3">
+                <Layers aria-hidden="true" className="size-5 text-accent" />
+                Mazos
+              </h2>
+              <span
+                className="rounded-pill bg-surface px-3 py-1 text-body-sm text-fg-muted"
+                aria-label={`${decks.length} mazos en el catálogo`}
+              >
+                {decks.length}
+              </span>
+            </div>
+            <p className="text-body-sm text-fg-muted">
+              Selecciona un mazo para revisar sus cartas y administrarlo.
+            </p>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body-sm">
               <input
                 type="checkbox"
+                className="size-5 shrink-0 accent-accent"
                 checked={showArchived}
                 onChange={(event) => toggleArchived(event.target.checked)}
               />
@@ -683,16 +742,33 @@ export function AdminDashboard() {
             </label>
             {catalogLoading && decks.length === 0 && <Spinner label="Cargando mazos…" />}
             {!catalogLoading && decks.length === 0 && (
-              <p className="text-fg-muted">
-                Todavía no hay mazos creados desde este panel. Los mazos originales del juego no se
-                modifican.
-              </p>
+              <div className="space-y-3 rounded-md border border-dashed border-line p-4">
+                <h3 className="font-semibold">
+                  {showArchived ? "No hay mazos en el catálogo" : "Tu catálogo empieza aquí"}
+                </h3>
+                <p className="text-body-sm text-fg-muted">
+                  {showArchived
+                    ? "Crea un mazo para empezar a generar cartas."
+                    : "Crea un mazo o activa Mostrar archivados para recuperar uno. Los mazos originales del juego no se modifican."}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setActiveTab("create");
+                    tabRefs.current.create?.focus();
+                  }}
+                >
+                  <Plus aria-hidden="true" className="size-4" />
+                  Crear mi primer mazo
+                </Button>
+              </div>
             )}
             {decks.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                aria-pressed={selectedId === item.id}
+                aria-current={selectedId === item.id ? "true" : undefined}
                 onClick={() => {
                   selectionClearedRef.current = false;
 
@@ -707,145 +783,182 @@ export function AdminDashboard() {
                   setSelectedId(item.id);
                   setDeck(null);
                 }}
-                className={`w-full rounded-md border p-4 text-left ${selectedId === item.id ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+                className={`w-full rounded-md border-2 p-4 text-left break-words transition-colors ${selectedId === item.id ? "border-accent bg-surface" : "border-transparent bg-surface hover:border-line-control"}`}
               >
                 <span className="block font-semibold">{item.name}</span>
+                <span className="mt-1 line-clamp-2 block text-body-sm text-fg-muted">
+                  {item.theme}
+                </span>
                 <span className="mt-1 block text-body-sm text-fg-muted">
                   {item.cards?.length ?? 0} cartas
                 </span>
+                {selectedId === item.id && (
+                  <span className="mt-2 flex items-center gap-1 text-body-sm text-accent">
+                    <Check aria-hidden="true" className="size-4" />
+                    Seleccionado
+                  </span>
+                )}
                 {item.archivedAt !== undefined && (
-                  <span className="mt-1 block text-body-sm text-warning">Archivado</span>
+                  <span className="mt-2 flex items-center gap-1 text-body-sm text-warning">
+                    <Archive aria-hidden="true" className="size-4" />
+                    Archivado
+                  </span>
                 )}
               </button>
             ))}
             <Button variant="quiet" size="sm" onClick={() => setRefresh((value) => value + 1)}>
+              <RefreshCw aria-hidden="true" className="size-4" />
               Actualizar
             </Button>
           </aside>
 
           <section className="min-w-0 space-y-4" aria-label="Cartas del mazo">
             {deck === null && catalogLoading && <Spinner label="Cargando cartas…" />}
+            {deck === null && !catalogLoading && (
+              <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-line p-6 text-center">
+                <Layers aria-hidden="true" className="size-8 text-fg-muted" />
+                <h2 className="font-display text-h3">Selecciona un mazo</h2>
+                <p className="max-w-sm text-body-sm text-fg-muted">
+                  Aquí aparecerán sus cartas, ajustes y opciones de generación.
+                </p>
+              </div>
+            )}
             {deck && (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
+                <div className="rounded-lg border border-line bg-surface-2 p-5">
+                  <div className="min-w-0 break-words">
                     <h2 className="font-display text-h3">{deck.name}</h2>
                     <p className="text-fg-muted">{deck.theme}</p>
-                    <p className="mt-1 text-body-sm">
+                    <p className="mt-3 text-body-sm text-fg-muted">
                       {cards.filter((card) => !card.excluded).length} disponibles ·{" "}
                       {cards.filter((card) => card.excluded).length} excluidas
                     </p>
                   </div>
-                  <label className="flex items-center gap-2">
+                </div>
+                <div className="rounded-lg border border-line p-5">
+                  <h3 className="mb-4 font-display font-semibold">Ajustes del mazo</h3>
+                  <DeckManagement
+                    deck={deck}
+                    busy={busy}
+                    running={running}
+                    api={api}
+                    act={act}
+                    onArchived={handleArchived}
+                    onDeleted={handleDeleted}
+                  />
+                </div>
+                <section
+                  aria-label="Generar más cartas"
+                  className="rounded-lg border border-line p-5"
+                >
+                  <h3 className="flex items-center gap-2 font-display font-semibold">
+                    <Sparkles aria-hidden="true" className="size-4 text-accent" />
+                    Generar más cartas
+                  </h3>
+                  <p className="mt-1 text-body-sm text-fg-muted">
+                    Las nuevas cartas se agregan al mazo sin modificar las actuales.
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-end gap-3">
+                    <label className="space-y-2">
+                      <span className="block text-body-sm text-fg-muted">
+                        Cantidad para generar
+                      </span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={MAX_GENERATION_COUNT}
+                        step={1}
+                        value={count}
+                        onChange={(event) => setCount(event.target.value)}
+                        disabled={busy || running || archived}
+                        className="w-24"
+                      />
+                    </label>
+                    <Button
+                      variant="ghost"
+                      disabled={busy || running || archived}
+                      onClick={() =>
+                        void act(async () => {
+                          const amount = Number(count);
+                          if (
+                            !Number.isInteger(amount) ||
+                            amount < 1 ||
+                            amount > MAX_GENERATION_COUNT
+                          )
+                            throw new RequestFailure(
+                              400,
+                              `La cantidad debe ser un entero entre 1 y ${MAX_GENERATION_COUNT}.`,
+                            );
+                          await requestGeneration(amount, () =>
+                            api<JobView>(
+                              `/api/admin/decks/${encodeURIComponent(deck.id)}/generate`,
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ count: amount }),
+                              },
+                            ),
+                          );
+                        })
+                      }
+                    >
+                      Generar {count} cartas más
+                    </Button>
+                  </div>
+                </section>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+                  <h3 className="font-display text-h3">Revisar cartas</h3>
+                  <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-line px-3 text-body-sm">
+                    <ListFilter aria-hidden="true" className="size-4 text-fg-muted" />
                     <input
                       type="checkbox"
+                      className="size-5 accent-accent"
                       checked={onlyExcluded}
                       onChange={(event) => setOnlyExcluded(event.target.checked)}
                     />
                     Solo excluidas
                   </label>
                 </div>
-                <DeckManagement
-                  deck={deck}
-                  busy={busy}
-                  running={running}
-                  api={api}
-                  act={act}
-                  onArchived={handleArchived}
-                  onDeleted={handleDeleted}
-                />
-                <div className="flex flex-wrap items-end gap-3">
-                  <label className="space-y-2">
-                    <span className="block text-body-sm text-fg-muted">Cantidad para generar</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={MAX_GENERATION_COUNT}
-                      step={1}
-                      value={count}
-                      onChange={(event) => setCount(event.target.value)}
-                      disabled={busy || running || archived}
-                      className="w-24"
-                    />
-                  </label>
-                  <Button
-                    variant="ghost"
-                    disabled={busy || running || archived}
-                    onClick={() =>
-                      void act(async () => {
-                        const amount = Number(count);
-                        if (
-                          !Number.isInteger(amount) ||
-                          amount < 1 ||
-                          amount > MAX_GENERATION_COUNT
-                        )
-                          throw new RequestFailure(
-                            400,
-                            `La cantidad debe ser un entero entre 1 y ${MAX_GENERATION_COUNT}.`,
-                          );
-                        trackJob(
-                          await api<JobView>(
-                            `/api/admin/decks/${encodeURIComponent(deck.id)}/generate`,
-                            {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ count: amount }),
-                            },
-                          ),
-                        );
-                      })
-                    }
-                  >
-                    Generar {count} cartas más
-                  </Button>
-                </div>
               </>
             )}
             {deck && visibleCards.length === 0 && (
-              <p className="rounded-md border border-line p-5 text-fg-muted">
-                No hay cartas para mostrar. El progreso se actualiza automáticamente durante la
-                generación.
-              </p>
-            )}
-            {deck && filteredCards.length > 0 && (
-              <nav
-                aria-label="Paginación de cartas"
-                className="flex flex-wrap items-center justify-between gap-3"
+              <div
+                role="status"
+                className="space-y-3 rounded-lg border border-dashed border-line p-6 text-center"
               >
-                <p className="text-body-sm text-fg-muted" aria-live="polite">
-                  Mostrando {pageStart + 1}–
-                  {Math.min(pageStart + cardsPerPage, filteredCards.length)} de{" "}
-                  {filteredCards.length} cartas
+                <h3 className="font-display font-semibold">
+                  {onlyExcluded ? "No hay cartas excluidas" : "Este mazo todavía no tiene cartas"}
+                </h3>
+                <p className="text-body-sm text-fg-muted">
+                  {onlyExcluded
+                    ? "Ninguna carta coincide con este filtro."
+                    : archived
+                      ? "Restaura el mazo para generar nuevas cartas."
+                      : "Genera cartas con las opciones de arriba. El progreso se actualiza automáticamente."}
                 </p>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    disabled={currentPage === 1}
-                    onClick={() => setCardsPage(currentPage - 1)}
-                  >
-                    Anterior
+                {onlyExcluded && (
+                  <Button variant="ghost" size="sm" onClick={() => setOnlyExcluded(false)}>
+                    Ver todas las cartas
                   </Button>
-                  <span className="text-body-sm">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCardsPage(currentPage + 1)}
-                  >
-                    Siguiente
-                  </Button>
-                </div>
-              </nav>
+                )}
+              </div>
             )}
             <div className="grid gap-4 xl:grid-cols-2">
               {visibleCards.map((card) => (
-                <article key={card.id} className="rounded-lg border border-line bg-surface p-5">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-display text-h3">{card.word}</h3>
-                    <span className={card.excluded ? "text-warning" : "text-success"}>
+                <article
+                  key={card.id}
+                  className="min-w-0 rounded-lg border border-line bg-surface-2 p-5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h3 className="min-w-0 font-display text-h3 break-words">{card.word}</h3>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-pill px-3 py-1 text-caption ${card.excluded ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
+                    >
+                      {card.excluded ? (
+                        <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+                      ) : (
+                        <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />
+                      )}
                       {card.excluded
                         ? "Excluida"
                         : card.manualOverride
@@ -853,19 +966,25 @@ export function AdminDashboard() {
                           : "Disponible"}
                     </span>
                   </div>
-                  <ol className="mt-4 grid grid-cols-2 gap-2">
+                  <p className="mt-4 text-caption text-fg-muted">Palabras prohibidas</p>
+                  <ol className="mt-2 grid grid-cols-2 gap-2">
                     {card.taboo.map((word, index) => (
-                      <li key={`${index}-${word}`} className="rounded-md bg-surface-2 px-3 py-2">
+                      <li
+                        key={`${index}-${word}`}
+                        className="rounded-md border border-line bg-surface px-3 py-2 text-body-sm break-words"
+                      >
                         {word}
                       </li>
                     ))}
                   </ol>
                   {card.taboo.length < 6 && (
-                    <p className="mt-3 text-warning">Faltan prohibidas para completar las seis.</p>
+                    <p id={`card-${card.id}-incomplete`} className="mt-3 text-body-sm text-warning">
+                      Faltan prohibidas para completar las seis.
+                    </p>
                   )}
                   {card.issues.length > 0 && (
                     <details className="mt-4 text-body-sm">
-                      <summary className="cursor-pointer text-warning">
+                      <summary className="min-h-11 cursor-pointer py-3 text-warning">
                         Ver advertencias ({card.issues.length})
                       </summary>
                       <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -881,7 +1000,9 @@ export function AdminDashboard() {
                   )}
                   {card.candidates && card.candidates.length > 0 && (
                     <details className="mt-3 text-body-sm">
-                      <summary className="cursor-pointer">Ver candidatas y validación</summary>
+                      <summary className="min-h-11 cursor-pointer py-3">
+                        Ver candidatas y validación
+                      </summary>
                       <ul className="mt-2 space-y-1">
                         {card.candidates.map((candidate, index) => (
                           <li key={`${index}-${candidate.word}`}>
@@ -892,10 +1013,15 @@ export function AdminDashboard() {
                       </ul>
                     </details>
                   )}
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
                     <Button
                       size="sm"
                       variant={card.excluded ? "caution" : "ghost"}
+                      aria-describedby={
+                        card.excluded && card.taboo.length < 6
+                          ? `card-${card.id}-incomplete`
+                          : undefined
+                      }
                       disabled={
                         busy || running || archived || (card.excluded && card.taboo.length !== 6)
                       }
@@ -920,8 +1046,8 @@ export function AdminDashboard() {
                       disabled={busy || running || archived}
                       onClick={() =>
                         void act(async () =>
-                          trackJob(
-                            await api<JobView>(
+                          requestGeneration(1, () =>
+                            api<JobView>(
                               `/api/admin/decks/${encodeURIComponent(deck!.id)}/cards/${encodeURIComponent(card.id)}/replace`,
                               { method: "POST" },
                             ),
@@ -935,6 +1061,41 @@ export function AdminDashboard() {
                 </article>
               ))}
             </div>
+            {deck && filteredCards.length > 0 && (
+              <nav
+                aria-label="Paginación de cartas"
+                className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
+              >
+                <p className="text-body-sm text-fg-muted" aria-live="polite">
+                  Mostrando {pageStart + 1}–
+                  {Math.min(pageStart + cardsPerPage, filteredCards.length)} de{" "}
+                  {filteredCards.length} cartas
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    onClick={() => setCardsPage(currentPage - 1)}
+                  >
+                    <ChevronLeft aria-hidden="true" className="size-4" />
+                    Anterior
+                  </Button>
+                  <span aria-current="page" className="text-body-sm">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCardsPage(currentPage + 1)}
+                  >
+                    Siguiente
+                    <ChevronRight aria-hidden="true" className="size-4" />
+                  </Button>
+                </div>
+              </nav>
+            )}
           </section>
         </div>
       </section>
