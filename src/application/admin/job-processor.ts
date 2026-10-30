@@ -1,6 +1,7 @@
 import { normalizeWord } from "../../domain/value-objects/TabooWords";
 import { evaluateCard, SELECTED_TABOO_WORDS } from "./candidates";
 import { AdminError } from "./errors";
+import { DEFAULT_DEEPSEEK_MODEL } from "./settings";
 import type {
   AdminClock,
   AdminDeckStore,
@@ -480,6 +481,7 @@ async function requestBatch(
   await reserveCall(deps, job, fence, state, true);
 
   const result = await deps.provider.proposeCards({
+    model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
     ...(input.allowProperNames ? { allowProperNames: true } : {}),
     theme: input.theme,
     count: input.count,
@@ -509,6 +511,7 @@ async function requestCompletion(
   await reserveCall(deps, job, fence, state, false);
 
   const result = await deps.provider.proposeCandidates({
+    model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
     ...(input.allowProperNames ? { allowProperNames: true } : {}),
     objective: input.objective,
     theme: input.theme,

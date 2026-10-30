@@ -82,6 +82,7 @@ export interface ManagedDeck {
 
 /** Trabajo persistido: el progreso nunca se pierde aunque el proceso caiga. */
 export interface AdminJob {
+  readonly model?: import("./settings").DeepSeekModel;
   readonly id: string;
   readonly deckId: string;
   readonly kind: AdminJobKind;

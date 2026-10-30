@@ -99,6 +99,18 @@ function build() {
 }
 
 describe("processClaimedJob (batch flow)", () => {
+  it.each([undefined, "deepseek-v4-pro" as const])(
+    "dispatches the persisted model to batch and completion (%s)",
+    async (model) => {
+      const { decks, provider, deps, claim } = build();
+      decks.seed({ id: "deck-1", name: "General", theme: "General" });
+      provider.batchQueue.push([{ objective: "fuego", candidates: SIX_WORDS.slice(0, 5) }]);
+      provider.completionQueue.push([SIX_WORDS[5]!]);
+      await processClaimedJob(deps, claim(buildJob({ requested: 1, ...(model ? { model } : {}) })));
+      expect(provider.batchCalls[0]).toHaveProperty("model", model ?? "deepseek-flash");
+      expect(provider.completionCalls[0]).toHaveProperty("model", model ?? "deepseek-flash");
+    },
+  );
   it("does not request completion when six proper-name forbiddens are already valid", async () => {
     const { decks, provider, deps, claim } = build();
     const names = ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"];

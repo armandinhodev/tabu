@@ -11,6 +11,7 @@ import type {
 import type { AdminJob, AdminJobKind, AdminLanguage, ManagedCard, ManagedDeck } from "./types";
 import { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
 import { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "./deck-limits";
+import { DEFAULT_DEEPSEEK_MODEL, type AdminSettingsStore } from "./settings";
 
 export { DEFAULT_BATCH_SIZE, MAX_GENERATION_COUNT } from "./generation-limits";
 export { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "./deck-limits";
@@ -60,6 +61,7 @@ export function jobLimitsFor(requested: number, base?: Partial<AdminJobLimits>):
 }
 
 export interface AdminServiceDeps {
+  readonly settings?: Pick<AdminSettingsStore, "get">;
   readonly decks: AdminDeckStore;
   readonly jobs: AdminJobStore;
   readonly provider: GenerationProvider;
@@ -437,8 +439,10 @@ export class AdminService {
     },
   ): Promise<AdminJob> {
     const now = this.now();
+    const model = (await this.deps.settings?.get())?.model ?? DEFAULT_DEEPSEEK_MODEL;
 
     const job = await this.deps.jobs.insert({
+      model,
       id: this.deps.ids.next(),
       deckId,
       kind: input.kind,

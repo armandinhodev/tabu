@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   exclude: vi.fn(),
   replace: vi.fn(),
   job: vi.fn(),
+  settings: vi.fn(),
+  saveSettings: vi.fn(),
 }));
 
 vi.mock("@/infrastructure/auth/admin-auth", () => ({ requireAdmin: mocks.guard }));
@@ -29,6 +31,8 @@ vi.mock("@/infrastructure/admin/runtime", () => ({
   setCardExcluded: mocks.exclude,
   queueReplacement: mocks.replace,
   getAdminJob: mocks.job,
+  getAdminSettings: mocks.settings,
+  updateAdminSettings: mocks.saveSettings,
 }));
 
 import { GET as list, POST as create } from "./decks/route";
@@ -39,6 +43,7 @@ import { POST as generate } from "./decks/[deckId]/generate/route";
 import { PATCH as exclude } from "./decks/[deckId]/cards/[cardId]/route";
 import { POST as replace } from "./decks/[deckId]/cards/[cardId]/replace/route";
 import { GET as job } from "./jobs/[jobId]/route";
+import { GET as settings, PATCH as saveSettings } from "./settings/route";
 
 const deckId = "0123456789abcdef01234567";
 const cardId = "card-1";
@@ -72,6 +77,29 @@ beforeEach(() => {
 });
 
 describe("administrative HTTP boundary", () => {
+  it("reads and saves the global model through the authenticated boundary", async () => {
+    mocks.settings.mockResolvedValue({ model: "deepseek-flash" });
+    mocks.saveSettings.mockResolvedValue({ model: "deepseek-v4-pro" });
+    expect(await (await settings(request())).json()).toEqual({ data: { model: "deepseek-flash" } });
+    const response = await saveSettings(request("PATCH", { model: "deepseek-v4-pro" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: { model: "deepseek-v4-pro" } });
+    expect(mocks.saveSettings).toHaveBeenCalledWith({ model: "deepseek-v4-pro" });
+  });
+  it.each(["deepseek-pro", "unknown", null, 1])(
+    "rejects unsupported model %s before writing",
+    async (model) => {
+      expect((await saveSettings(request("PATCH", { model }))).status).toBe(400);
+      expect(mocks.saveSettings).not.toHaveBeenCalled();
+    },
+  );
+  it.each([401, 403])("guards settings reads and writes (%s)", async (status) => {
+    mocks.guard.mockReturnValue(Response.json({ error: "Denied" }, { status }));
+    expect((await settings(request())).status).toBe(status);
+    expect((await saveSettings(request("PATCH", { model: "deepseek-flash" }))).status).toBe(status);
+    expect(mocks.settings).not.toHaveBeenCalled();
+    expect(mocks.saveSettings).not.toHaveBeenCalled();
+  });
   it("permanently deletes through a separate guarded endpoint", async () => {
     mocks.remove.mockResolvedValue({ id: deckId });
     const response = await remove(deckRequest("DELETE"), context);

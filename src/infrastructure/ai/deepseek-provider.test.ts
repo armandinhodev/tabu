@@ -52,6 +52,40 @@ function promptOf(calls: { init: RequestInit }[]): string {
 }
 
 describe("createDeepSeekProvider", () => {
+  it("rejects an unsupported model before making a provider request", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+    await expect(
+      provider.proposeCards({
+        theme: "Series",
+        count: 1,
+        excludedObjectives: [],
+        model: "unknown" as never,
+      }),
+    ).rejects.toMatchObject({ status: 400, code: "invalid_model" });
+    expect(calls).toHaveLength(0);
+  });
+  it("uses the selected Pro model for batches and completion without changing the default", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+    await provider.proposeCards({
+      theme: "Series",
+      count: 1,
+      excludedObjectives: [],
+      ...{ model: "deepseek-v4-pro" as const },
+    });
+    expect(bodyOf(calls).model).toBe("deepseek-v4-pro");
+    calls.length = 0;
+    await provider.proposeCandidates({
+      theme: "Series",
+      objective: "fuego",
+      previousWords: [],
+      selected: [],
+      rejected: [],
+      ...{ model: "deepseek-v4-pro" as const },
+    });
+    expect(bodyOf(calls).model).toBe("deepseek-v4-pro");
+  });
   it("changes objective instructions only for an enabled deck and excludes title components", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });

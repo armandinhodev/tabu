@@ -6,6 +6,11 @@ import {
 } from "../schemas/admin-deck-projection.schema";
 import { adminDeckSchema, type AdminDeckDocument } from "../schemas/admin-deck.schema";
 import { adminJobSchema, type AdminJobDocument } from "../schemas/admin-job.schema";
+import { adminSettingsSchema, type AdminSettingsDocument } from "../schemas/admin-settings.schema";
+
+export const AdminSettingsModel: Model<AdminSettingsDocument> =
+  (models.AdminSettings as Model<AdminSettingsDocument> | undefined) ??
+  model<AdminSettingsDocument>("AdminSettings", adminSettingsSchema);
 
 /** Mazos administrables (`adminDecks`). */
 export const AdminDeckModel: Model<AdminDeckDocument> =

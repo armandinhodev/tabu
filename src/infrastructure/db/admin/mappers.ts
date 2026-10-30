@@ -88,6 +88,7 @@ export function toManagedDeck(document: AdminDeckDocument): ManagedDeck {
 /** Convierte un trabajo del documento al DTO. */
 export function toManagedJob(document: AdminJobDocument): AdminJob {
   return {
+    ...(document.model === undefined ? {} : { model: document.model }),
     id: String(document._id),
     deckId: document.deckId,
     kind: document.kind,

@@ -94,6 +94,13 @@ La pestaña **Crear mazo** contiene el formulario de generación; **Mazos** perm
 cartas y pedir nuevas generaciones o reemplazos. El progreso en vivo se mantiene visible al
 cambiar de pestaña, y el formulario conserva los datos todavía no enviados.
 
+En **Configuración**, el logo de DeepSeek acompaña la selección global **Flash / Pro**.
+**Guardar configuración** persiste el modelo en MongoDB para todos los administradores y mazos,
+incluso después de reiniciar el servidor. Flash (`deepseek-flash`) es el valor predeterminado;
+Pro usa `deepseek-v4-pro`. La selección se copia al encolar cada generación o reemplazo: cambiarla
+no modifica los trabajos ya encolados o en curso. Los trabajos antiguos sin modelo usan Flash.
+No hay cambio automático entre modelos; la clave de API sigue configurada sólo en el servidor.
+
 En **Mazos** también se edita el nombre y la temática del mazo (hasta 80 y 200 caracteres),
 se archiva y se restaura. Archivar y eliminar abren un diálogo con el nombre del mazo y
 las consecuencias; cancelar o pulsar Escape lo cierra sin realizar cambios.
@@ -133,7 +140,7 @@ no con la dirección de escucha `HOST` (que puede ser `0.0.0.0`). El proxy debe 
 `Host` público y el protocolo original. No se confía en `X-Forwarded-Host`; no configurar un
 proxy que reescriba esos valores sin una política explícita de confianza y verificación.
 
-Desde el panel se indica nombre, temática y cantidad de cartas (1–1200 por trabajo). DeepSeek Flash
+Desde el panel se indica nombre, temática y cantidad de cartas (1–1200 por trabajo). El modelo DeepSeek configurado
 propone hasta 12 candidatas ordenadas por objetivo, en solicitudes de hasta 50 cartas. Por ejemplo,
 800 cartas requieren 16 lotes completos; el último lote pide solo la cantidad que falta. El servidor
 descarta frases y duplicados, verifica la ortografía sobre el texto original con `nspell` y conserva

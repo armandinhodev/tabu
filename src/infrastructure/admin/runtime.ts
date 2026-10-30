@@ -16,6 +16,16 @@ import { MongoAdminDeckStore } from "../db/admin/repositories/MongoAdminDeckStor
 import { MongoAdminJobStore } from "../db/admin/repositories/MongoAdminJobStore";
 import { loadSpanishSpellChecker } from "../spelling/spanish-spell-checker";
 import { AdminWorker } from "./worker";
+import { MongoAdminSettingsStore } from "../db/admin/repositories/MongoAdminSettingsStore";
+import type { AdminSettings } from "../../application/admin/settings";
+
+export async function getAdminSettings(): Promise<AdminSettings> {
+  return new MongoAdminSettingsStore().get();
+}
+
+export async function updateAdminSettings(input: AdminSettings): Promise<AdminSettings> {
+  return new MongoAdminSettingsStore().set(input);
+}
 
 /**
  * Fachada del panel de administración.
@@ -136,7 +146,15 @@ function runtime(): AdminRuntime {
   const clock = { now: (): Date => new Date() };
   const ids = { next: (): string => new Types.ObjectId().toString() };
 
-  const service = new AdminService({ decks, jobs, provider, clock, ids, limits });
+  const service = new AdminService({
+    decks,
+    jobs,
+    provider,
+    clock,
+    ids,
+    limits,
+    settings: new MongoAdminSettingsStore(),
+  });
 
   const worker = new AdminWorker({
     jobs,

@@ -5,6 +5,7 @@ import { DEFAULT_ADMIN_LIMITS } from "../../infrastructure/admin/runtime";
 import { AdminError } from "./errors";
 import type { AdminJobLimits } from "./ports";
 import type { ManagedCard } from "./types";
+import type { DeepSeekModel } from "./settings";
 import {
   FakeClock,
   FakeDeckStore,
@@ -94,6 +95,45 @@ describe("AdminService.getDeck", () => {
 });
 
 describe("AdminService.queueGeneration", () => {
+  it("uses the global model for replacement admission too", async () => {
+    const { decks, jobs, provider } = build();
+    const service = new AdminService({
+      decks,
+      jobs,
+      provider,
+      clock: new FakeClock(),
+      ids: new FakeIds(),
+      limits: LIMITS,
+      settings: { get: async () => ({ model: "deepseek-v4-pro" }) },
+    });
+    decks.seed({ id: "deck-1", name: "One", theme: "General", cards: [card()] });
+    expect(await service.queueReplacement("deck-1", "card-1")).toHaveProperty(
+      "model",
+      "deepseek-v4-pro",
+    );
+  });
+  it("snapshots global settings on admission and leaves queued jobs unchanged", async () => {
+    const { decks, jobs, provider } = build();
+    let model: DeepSeekModel = "deepseek-v4-pro";
+    const settings = { get: async () => ({ model }) };
+    const service = new AdminService({
+      decks,
+      jobs,
+      provider,
+      clock: new FakeClock(),
+      ids: new FakeIds(),
+      limits: LIMITS,
+      ...{ settings },
+    });
+    decks.seed({ id: "deck-1", name: "One", theme: "General" });
+    decks.seed({ id: "deck-2", name: "Two", theme: "General" });
+    const first = await service.queueGeneration("deck-1", 1);
+    expect(first).toHaveProperty("model", "deepseek-v4-pro");
+    model = "deepseek-flash";
+    const second = await service.queueGeneration("deck-2", 1);
+    expect(second).toHaveProperty("model", "deepseek-flash");
+    expect(await jobs.findById(first.id)).toHaveProperty("model", "deepseek-v4-pro");
+  });
   it("rejects a count outside the allowed range", async () => {
     const { service, decks } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "General" });

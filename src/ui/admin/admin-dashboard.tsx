@@ -14,6 +14,14 @@ import {
 
 import { AdminLogin } from "./login/admin-login";
 import { DeckManagement, type AdminDeckView } from "./deck-management";
+import { ModelSettings } from "./model-settings";
+
+const ADMIN_TABS = [
+  ["create", "Crear mazo"],
+  ["decks", "Mazos"],
+  ["settings", "Configuración"],
+] as const;
+type AdminTab = (typeof ADMIN_TABS)[number][0];
 
 type DeckView = AdminDeckView;
 type JobView = {
@@ -97,9 +105,9 @@ export function AdminDashboard() {
   const [onlyExcluded, setOnlyExcluded] = useState(false);
   const [cardsPage, setCardsPage] = useState(1);
   useEffect(() => setCardsPage(1), [selectedId, onlyExcluded]);
-  const [activeTab, setActiveTab] = useState<"create" | "decks">("decks");
+  const [activeTab, setActiveTab] = useState<AdminTab>("decks");
   const [showArchived, setShowArchived] = useState(false);
-  const tabRefs = useRef<Partial<Record<"create" | "decks", HTMLButtonElement | null>>>({});
+  const tabRefs = useRef<Partial<Record<AdminTab, HTMLButtonElement | null>>>({});
   const [connection, setConnection] = useState<AdminConnectionState>("idle");
   const socketRef = useRef<AdminSocketClient | null>(null);
   const progressRef = useRef("");
@@ -421,9 +429,6 @@ export function AdminDashboard() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-h2">Administración de mazos</h1>
-          <p className="mt-1 text-fg-muted">
-            Generación con DeepSeek Flash y revisión ortográfica local.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/" className="text-fg-muted underline">
@@ -468,14 +473,9 @@ export function AdminDashboard() {
       <div
         role="tablist"
         aria-label="Secciones del panel"
-        className="flex gap-2 border-b border-line pb-2"
+        className="flex flex-wrap gap-2 border-b border-line pb-2"
       >
-        {(
-          [
-            ["create", "Crear mazo"],
-            ["decks", "Mazos"],
-          ] as const
-        ).map(([value, label]) => (
+        {ADMIN_TABS.map(([value, label]) => (
           <button
             key={value}
             ref={(element) => {
@@ -490,12 +490,16 @@ export function AdminDashboard() {
             className={`min-h-11 rounded-md px-4 font-display font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${activeTab === value ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"}`}
             onClick={() => setActiveTab(value)}
             onKeyDown={(event) => {
-              let next: "create" | "decks";
-              if (event.key === "Home") next = "create";
-              else if (event.key === "End") next = "decks";
+              const index = ADMIN_TABS.findIndex(([tab]) => tab === value);
+              let nextIndex: number;
+              if (event.key === "Home") nextIndex = 0;
+              else if (event.key === "End") nextIndex = ADMIN_TABS.length - 1;
               else if (event.key === "ArrowLeft" || event.key === "ArrowRight")
-                next = value === "create" ? "decks" : "create";
+                nextIndex =
+                  (index + (event.key === "ArrowRight" ? 1 : -1) + ADMIN_TABS.length) %
+                  ADMIN_TABS.length;
               else return;
+              const next = ADMIN_TABS[nextIndex]![0];
               event.preventDefault();
               setActiveTab(next);
               tabRefs.current[next]?.focus();
@@ -505,6 +509,17 @@ export function AdminDashboard() {
           </button>
         ))}
       </div>
+
+      <section
+        role="tabpanel"
+        id="admin-settings-panel"
+        hidden={activeTab !== "settings"}
+        tabIndex={0}
+        className="rounded-lg border border-line bg-surface p-5"
+        aria-labelledby="admin-settings-tab"
+      >
+        {activeTab === "settings" && <ModelSettings api={api} onError={reportError} />}
+      </section>
 
       <section
         role="tabpanel"

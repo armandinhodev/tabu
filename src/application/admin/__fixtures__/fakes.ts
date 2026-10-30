@@ -77,12 +77,14 @@ export class FakeSpellChecker implements SpellChecker {
 export class FakeProvider implements GenerationProvider {
   available = true;
   readonly batchCalls: {
+    model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     theme: string;
     count: number;
     excludedObjectives: readonly string[];
   }[] = [];
   readonly completionCalls: {
+    model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     objective: string;
     previousWords: readonly string[];
@@ -96,6 +98,7 @@ export class FakeProvider implements GenerationProvider {
   completionError: unknown = null;
 
   async proposeCards(input: {
+    model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     theme: string;
     count: number;
@@ -103,6 +106,7 @@ export class FakeProvider implements GenerationProvider {
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
     this.batchCalls.push({
+      ...(input.model === undefined ? {} : { model: input.model }),
       ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       theme: input.theme,
       count: input.count,
@@ -119,6 +123,7 @@ export class FakeProvider implements GenerationProvider {
   }
 
   async proposeCandidates(input: {
+    model?: import("../settings").DeepSeekModel;
     allowProperNames?: boolean;
     objective: string;
     previousWords: readonly string[];
@@ -127,6 +132,7 @@ export class FakeProvider implements GenerationProvider {
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ candidates: readonly string[] }>> {
     this.completionCalls.push({
+      ...(input.model === undefined ? {} : { model: input.model }),
       ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
       objective: input.objective,
       previousWords: [...input.previousWords],
@@ -603,6 +609,7 @@ export class FakeJobStore implements AdminJobStore {
     }
 
     const job: AdminJob = {
+      ...(input.model === undefined ? {} : { model: input.model }),
       id: input.id,
       deckId: input.deckId,
       kind: input.kind,

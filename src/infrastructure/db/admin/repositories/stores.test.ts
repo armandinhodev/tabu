@@ -461,6 +461,27 @@ describe("Mongo admin stores", () => {
   });
 
   describe("MongoAdminJobStore", () => {
+    it("persists the selected model and restores it through a new store instance", async () => {
+      const document = jobDocument({ model: "deepseek-v4-pro" });
+      const create = vi.spyOn(AdminJobModel, "create").mockResolvedValue(document as never);
+      const store = new MongoAdminJobStore();
+      const job = await store.insert({
+        id: "job-1",
+        deckId: "deck-1",
+        kind: "generate",
+        requested: 1,
+        model: "deepseek-v4-pro",
+        limits: { maxCalls: 4, maxAttempts: 3, batchSize: 5, leaseMs: 60000 },
+        now: NOW,
+      });
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({ model: "deepseek-v4-pro" }));
+      expect(job.model).toBe("deepseek-v4-pro");
+      stub(AdminJobModel, "findById", document);
+      expect(await new MongoAdminJobStore().findById("job-1")).toHaveProperty(
+        "model",
+        "deepseek-v4-pro",
+      );
+    });
     it("claims the oldest queued job and bumps the fencing token", async () => {
       const spy = stub(AdminJobModel, "findOneAndUpdate", jobDocument());
       const store = new MongoAdminJobStore();

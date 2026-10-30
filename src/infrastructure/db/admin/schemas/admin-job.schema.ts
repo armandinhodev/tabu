@@ -1,4 +1,5 @@
 import { Schema } from "mongoose";
+import { DEEPSEEK_MODELS } from "../../../../application/admin/settings";
 
 /**
  * Trabajo administrativo persistido (`adminJobs`).
@@ -7,6 +8,7 @@ import { Schema } from "mongoose";
  * reiniciar el proceso no reinicia el trabajo ni lo deja looping.
  */
 export interface AdminJobDocument {
+  model?: import("../../../../application/admin/settings").DeepSeekModel;
   /** Id estable del trabajo (lo genera la aplicación). */
   _id: string;
   deckId: string;
@@ -51,6 +53,7 @@ export const adminJobSchema = new Schema<AdminJobDocument>(
   {
     // El id lo genera la aplicación: se declara para que no sea un ObjectId.
     _id: { type: String, required: true },
+    model: { type: String, enum: DEEPSEEK_MODELS, required: false },
     deckId: { type: String, required: true },
     kind: { type: String, required: true, enum: ["generate", "replace"] },
     status: {

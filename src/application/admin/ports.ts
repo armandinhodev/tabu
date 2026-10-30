@@ -1,4 +1,5 @@
 import type { AdminJob, AdminJobKind, AdminLanguage, ManagedCard, ManagedDeck } from "./types";
+import type { DeepSeekModel } from "./settings";
 
 /**
  * Puertos del panel de administración.
@@ -67,6 +68,7 @@ export interface DeckProjection {
 
 /** Trabajo nuevo, todavía en cola. */
 export interface NewJobInput {
+  readonly model?: DeepSeekModel;
   readonly id: string;
   readonly deckId: string;
   readonly kind: AdminJobKind;
@@ -147,6 +149,7 @@ export interface GenerationProvider {
    * prohibidas de cada carta.
    */
   proposeCards(input: {
+    readonly model?: DeepSeekModel;
     readonly allowProperNames?: boolean;
     readonly theme: string;
     readonly count: number;
@@ -159,6 +162,7 @@ export interface GenerationProvider {
    * usa cuando la carta todavía no tiene seis palabras válidas.
    */
   proposeCandidates(input: {
+    readonly model?: DeepSeekModel;
     readonly allowProperNames?: boolean;
     readonly objective: string;
     readonly theme: string;

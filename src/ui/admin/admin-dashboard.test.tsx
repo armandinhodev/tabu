@@ -65,6 +65,7 @@ let jobPayload: Record<string, unknown>;
 let deferJobResponse: boolean;
 let resolveJobResponse: ((response: Response) => void) | null;
 let catalog: CatalogDeck[];
+let globalModel: string;
 
 function jobRequests(): number {
   return requests.filter((request) => request.url.includes("/api/admin/jobs/")).length;
@@ -78,6 +79,7 @@ beforeEach(() => {
   deferJobResponse = false;
   resolveJobResponse = null;
   catalog = [deck];
+  globalModel = "deepseek-flash";
   sessionStorage.clear();
   socketMock.handlers = null;
   socketMock.subscribe.mockClear();
@@ -88,6 +90,10 @@ beforeEach(() => {
       const method = init?.method ?? "GET";
       requests.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : null });
       if (url === "/api/admin/auth") return Response.json({ authenticated, configured });
+      if (url === "/api/admin/settings") {
+        if (method === "PATCH") globalModel = JSON.parse(String(init?.body)).model;
+        return Response.json({ data: { model: globalModel } });
+      }
       if (url.endsWith("/generate") || url.endsWith("/replace"))
         return Response.json({
           data: { id: "job-1", deckId: deck.id, status: "completed", processed: 5, requested: 5 },
@@ -126,6 +132,25 @@ afterEach(() => {
 });
 
 describe("AdminDashboard", () => {
+  it("shows the DeepSeek logo and saves the global model across tab visits", async () => {
+    render(<AdminDashboard />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Configuración" }));
+    expect(screen.getByRole("img", { name: "DeepSeek" })).toBeVisible();
+    const flash = await screen.findByRole("radio", { name: "Flash" });
+    await waitFor(() => expect(flash).toBeEnabled());
+    expect(flash).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Pro" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar configuración" }));
+    expect(await screen.findByText("Configuración guardada.")).toBeVisible();
+    expect(requests).toContainEqual({
+      url: "/api/admin/settings",
+      method: "PATCH",
+      body: { model: "deepseek-v4-pro" },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Mazos" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Configuración" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Pro" })).toBeChecked());
+  });
   it("paginates cards in twenty-card pages without reconnecting progress", async () => {
     catalog = [
       {
@@ -332,14 +357,15 @@ describe("AdminDashboard", () => {
     const decksTab = screen.getByRole("tab", { name: "Mazos" });
     decksTab.focus();
     fireEvent.keyDown(decksTab, { key: "ArrowRight" });
-    expect(createTab).toHaveFocus();
-    expect(createTab).toHaveAttribute("aria-selected", "true");
+    const settingsTab = screen.getByRole("tab", { name: "Configuración" });
+    expect(settingsTab).toHaveFocus();
+    expect(settingsTab).toHaveAttribute("aria-selected", "true");
     fireEvent.keyDown(createTab, { key: "End" });
-    expect(decksTab).toHaveFocus();
+    expect(settingsTab).toHaveFocus();
     fireEvent.keyDown(decksTab, { key: "Home" });
     expect(createTab).toHaveFocus();
     fireEvent.keyDown(createTab, { key: "ArrowLeft" });
-    expect(decksTab).toHaveFocus();
+    expect(settingsTab).toHaveFocus();
   });
 
   it("keeps pushed progress visible in either tab without resubscribing", async () => {

@@ -2,6 +2,11 @@ import { z } from "zod";
 
 import { AdminError } from "../../application/admin/errors";
 import {
+  DEFAULT_DEEPSEEK_MODEL,
+  DEEPSEEK_MODELS,
+  type DeepSeekModel,
+} from "../../application/admin/settings";
+import {
   DEFAULT_BATCH_SIZE,
   MAX_GENERATION_COUNT,
 } from "../../application/admin/generation-limits";
@@ -16,8 +21,8 @@ import type {
 /** Endpoint fijo: nunca se construye desde datos del usuario (sin SSRF). */
 export const DEEPSEEK_ENDPOINT = "https://api.deepseek.com/chat/completions";
 
-/** Único modelo permitido (S5): ni Pro ni fallback automático. */
-export const DEEPSEEK_MODEL = "deepseek-flash";
+/** Default for existing jobs and callers without a selected model. */
+export const DEEPSEEK_MODEL = DEFAULT_DEEPSEEK_MODEL;
 
 /** Límite de la respuesta del proveedor. */
 export const DEEPSEEK_MAX_OUTPUT_TOKENS = 2_000;
@@ -76,10 +81,10 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 /**
- * Proveedor de generación sobre DeepSeek Flash.
+ * Generation provider for the explicitly selected DeepSeek model.
  *
  * Reglas (S5, S8):
- * - un solo modelo (`deepseek-flash`), sin fallback;
+ * - allowlisted Flash/Pro selection, without automatic fallback;
  * - endpoint fijo, clave sólo desde el entorno del servidor;
  * - sin herramientas, sin streaming y con salida acotada;
  * - la respuesta se valida con Zod y los errores nunca filtran el cuerpo
@@ -93,7 +98,11 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
     userPrompt: string,
     signal: AbortSignal | undefined,
     requestedCards = 1,
+    model: DeepSeekModel = DEFAULT_DEEPSEEK_MODEL,
   ): Promise<{ payload: unknown; usage: ProviderUsage }> {
+    if (!DEEPSEEK_MODELS.includes(model)) {
+      throw new AdminError(400, "invalid_model", "Unsupported DeepSeek model");
+    }
     const controller = new AbortController();
     const timer = setTimeout(
       () => {
@@ -115,7 +124,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: DEEPSEEK_MODEL,
+          model,
           thinking: { type: "disabled" },
           response_format: { type: "json_object" },
           max_tokens:
@@ -214,6 +223,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         ].join(" "),
         input.signal,
         input.count,
+        input.model,
       );
 
       const parsed = cardsSchema.safeParse(payload);
@@ -265,6 +275,8 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           'Responde con {"candidates":["..."]}.',
         ].join(" "),
         input.signal,
+        1,
+        input.model,
       );
 
       const parsed = candidatesSchema.safeParse(payload);

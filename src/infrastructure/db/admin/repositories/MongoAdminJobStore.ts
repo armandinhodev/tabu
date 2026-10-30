@@ -30,6 +30,7 @@ export class MongoAdminJobStore implements AdminJobStore {
         _id: input.id,
         deckId: input.deckId,
         kind: input.kind,
+        ...(input.model === undefined ? {} : { model: input.model }),
         status: "queued",
         // El índice único y disperso impide dos trabajos activos por mazo.
         activeKey: input.deckId,
