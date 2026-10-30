@@ -309,7 +309,22 @@ describe("AdminDashboard", () => {
 
     await waitFor(() => expect(progress).toHaveTextContent("0/120 cartas"));
     expect(within(progress).queryByRole("status", { name: "Encolando la generación…" })).toBeNull();
-    expect(within(progress).getByRole("status")).toHaveTextContent("Progreso en vivo");
+    expect(within(progress).queryByText(/Progreso en vivo/)).toBeNull();
+  });
+
+  it("shows the connection legend only when the progress channel degrades", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    render(<AdminDashboard />);
+
+    const progress = await screen.findByRole("region", { name: "Progreso de generación" });
+
+    socketMock.handlers?.onState?.("connected");
+    await waitFor(() => expect(within(progress).queryByText(/Progreso en vivo/)).toBeNull());
+
+    socketMock.handlers?.onState?.("reconnecting");
+    await waitFor(() =>
+      expect(within(progress).getByText(/Progreso en vivo/)).toHaveTextContent("Reconectando"),
+    );
   });
 
   it("shows a spinner while the deck catalog loads", async () => {

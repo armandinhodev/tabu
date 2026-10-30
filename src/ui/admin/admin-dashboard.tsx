@@ -621,9 +621,15 @@ export function AdminDashboard() {
             {job === null ? (
               <Spinner label="Encolando la generación…" />
             ) : (
-              <p className="text-body-sm text-fg-muted" role="status">
-                Progreso en vivo: {connectionLabels[connection]}
-              </p>
+              // La leyenda sólo aparece cuando el canal de progreso se degrada:
+              // mostrar "Conectada" todo el tiempo era ruido.
+              (connection === "reconnecting" ||
+                connection === "closed" ||
+                connection === "unauthorized") && (
+                <p className="text-body-sm text-warning" role="status">
+                  Progreso en vivo: {connectionLabels[connection]}
+                </p>
+              )
             )}
           </div>
           {job === null ? (
