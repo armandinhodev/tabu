@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { MAX_DECK_NAME_LENGTH, MAX_DECK_THEME_LENGTH } from "@/application/admin/deck-limits";
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
+import { ConfirmDialog } from "@/ui/components/ui/dialog";
 
 /** Carta administrada tal como la ve el panel. */
 export type AdminCardView = {
@@ -181,52 +182,13 @@ export function DeckManagement({
               <Button variant="ghost" size="sm" disabled={locked} onClick={() => void restore()}>
                 Restaurar mazo
               </Button>
-              {confirmingDeletion ? (
-                <>
-                  <p role="alert" className="w-full text-body-sm text-warning">
-                    Se eliminarán el mazo, sus cartas y su historial. Esta acción no se puede
-                    deshacer.
-                  </p>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled={locked}
-                    onClick={() => void remove()}
-                  >
-                    Confirmar eliminación definitiva
-                  </Button>
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    disabled={locked}
-                    onClick={() => setConfirmingDeletion(false)}
-                  >
-                    Cancelar eliminación
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  disabled={locked}
-                  onClick={() => setConfirmingDeletion(true)}
-                >
-                  Eliminar definitivamente
-                </Button>
-              )}
-            </>
-          ) : confirming ? (
-            <>
-              <Button variant="caution" size="sm" disabled={locked} onClick={() => void archive()}>
-                Confirmar archivado
-              </Button>
               <Button
-                variant="quiet"
+                variant="danger"
                 size="sm"
                 disabled={locked}
-                onClick={() => setConfirming(false)}
+                onClick={() => setConfirmingDeletion(true)}
               >
-                Cancelar
+                Eliminar definitivamente
               </Button>
             </>
           ) : (
@@ -236,6 +198,25 @@ export function DeckManagement({
           )}
         </div>
       </form>
+      <ConfirmDialog
+        open={confirming && !archived}
+        onOpenChange={setConfirming}
+        title="Archivar mazo"
+        description={`Se archivará el mazo «${current.name}». Sus cartas e historial se conservarán y podrás restaurarlo después.`}
+        confirmLabel="Confirmar archivado"
+        disabled={locked}
+        onConfirm={() => void archive()}
+      />
+      <ConfirmDialog
+        open={confirmingDeletion && archived}
+        onOpenChange={setConfirmingDeletion}
+        title="Eliminar mazo definitivamente"
+        description={`Se eliminarán el mazo, sus cartas y su historial: «${current.name}». Esta acción no se puede deshacer.`}
+        confirmLabel="Confirmar eliminación definitiva"
+        cancelLabel="Cancelar eliminación"
+        disabled={locked}
+        onConfirm={() => void remove()}
+      />
     </section>
   );
 }

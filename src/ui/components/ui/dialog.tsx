@@ -14,6 +14,7 @@ interface ConfirmDialogProps {
   readonly confirmLabel: string;
   readonly cancelLabel?: string;
   readonly onConfirm: () => void;
+  readonly disabled?: boolean;
   readonly tone?: "caution" | "primary";
 }
 
@@ -29,6 +30,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel = "Cancelar",
   onConfirm,
+  disabled = false,
   tone = "caution",
 }: ConfirmDialogProps) {
   return (
@@ -37,7 +39,7 @@ export function ConfirmDialog({
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-canvas/80" />
         <BaseDialog.Popup
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2",
+            "fixed top-1/2 left-1/2 z-50 w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2",
             "rounded-xl border border-line bg-surface-2 p-6 shadow-float",
           )}
         >
@@ -51,6 +53,7 @@ export function ConfirmDialog({
             <Button
               variant={tone === "caution" ? "caution" : "primary"}
               block
+              disabled={disabled}
               onClick={() => {
                 onConfirm();
                 onOpenChange(false);
@@ -84,7 +87,7 @@ export function InfoDialog({
     <BaseDialog.Root open={open} onOpenChange={onOpenChange}>
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-canvas/80" />
-        <BaseDialog.Popup className="fixed left-1/2 top-1/2 z-50 max-h-[80dvh] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line bg-surface-2 p-6 shadow-float">
+        <BaseDialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[80dvh] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line bg-surface-2 p-6 shadow-float">
           <BaseDialog.Title className="font-display text-h2 font-bold text-fg">
             {title}
           </BaseDialog.Title>

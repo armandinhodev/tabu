@@ -200,11 +200,13 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
             ? '- "objective": se permiten nombres propios y títulos de varias palabras, como "Juego de tronos", con su ortografía correcta;'
             : '- "objective": una sola palabra en español, de cuatro a doce letras,',
           "que cualquiera pueda describir sin decirla.",
-          '- "candidates": hasta 12 palabras prohibidas, cada una de una sola palabra',
+          input.allowProperNames
+            ? '- "candidates": hasta 12 términos prohibidos'
+            : '- "candidates": hasta 12 palabras prohibidas, cada una de una sola palabra',
           "en español, ordenadas de la mejor a la peor para que no las adivine quien ve el objetivo.",
           ...(input.allowProperNames
             ? [
-                "Las prohibidas también pueden ser nombres propios, siempre de una sola palabra. No uses partes del objetivo como palabras prohibidas.",
+                'Las prohibidas también pueden ser nombres propios y títulos de varias palabras, como "Ned Stark" para "Juego de tronos". No uses partes del objetivo como palabras prohibidas.',
               ]
             : []),
           `No repitas ninguno de estos objetivos ya usados en el mazo: ${avoid}.`,
@@ -249,12 +251,14 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           `Palabras ya propuestas para esta carta: ${list(previous)}.`,
           `Palabras ya seleccionadas: ${list(selected)}.`,
           `Palabras descartadas: ${list(rejected)}.`,
-          "Da hasta 12 palabras prohibidas nuevas, cada una de una sola palabra en español,",
+          input.allowProperNames
+            ? "Da hasta 12 términos prohibidos nuevos en español,"
+            : "Da hasta 12 palabras prohibidas nuevas, cada una de una sola palabra en español,",
           "ordenadas de la mejor a la peor para que no las adivine quien ve el objetivo.",
           "No repitas ninguna de las palabras ya propuestas.",
           ...(input.allowProperNames
             ? [
-                "El objetivo puede ser un nombre propio o título. Las prohibidas también pueden ser nombres propios, siempre de una sola palabra; no uses partes del objetivo como palabras prohibidas.",
+                'El objetivo puede ser un nombre propio o título. Las prohibidas también pueden ser nombres propios y títulos de varias palabras, como "Ned Stark"; no uses partes del objetivo como palabras prohibidas.',
               ]
             : []),
           "Puedes devolver menos de 12 o ninguna.",

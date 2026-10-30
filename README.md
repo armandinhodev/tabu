@@ -95,7 +95,9 @@ cartas y pedir nuevas generaciones o reemplazos. El progreso en vivo se mantiene
 cambiar de pestaña, y el formulario conserva los datos todavía no enviados.
 
 En **Mazos** también se edita el nombre y la temática del mazo (hasta 80 y 200 caracteres),
-se archiva y se restaura. El archivado es recuperable: no borra nada, conserva las cartas,
+se archiva y se restaura. Archivar y eliminar abren un diálogo con el nombre del mazo y
+las consecuencias; cancelar o pulsar Escape lo cierra sin realizar cambios.
+El archivado es recuperable: no borra nada, conserva las cartas,
 los hallazgos de validación, el historial y el mismo identificador público, y el mazo deja de
 aceptar generaciones, reemplazos o cambios de cartas hasta restaurarlo. El catálogo muestra
 por defecto sólo los mazos activos; el filtro **Mostrar archivados** trae los archivados
@@ -140,7 +142,8 @@ las primeras seis prohibidas válidas. No usa Jev, puntuaciones mínimas ni cort
 La opción **Permitir nombres propios y títulos** se configura al crear o editar cada mazo y está
 desactivada por defecto. Al activarla, los próximos objetivos pueden ser nombres o títulos de
 varias palabras, como `Juego de tronos`, con números y puntuación habitual de títulos. Las seis
-prohibidas siguen siendo palabras individuales y no pueden repetir componentes del objetivo.
+prohibidas también pueden ser nombres propios o títulos de varias palabras, como `Ned Stark`,
+y no pueden repetir el objetivo ni sus componentes individuales.
 Con esta opción activada, las prohibidas no se consultan en el diccionario: pueden ser nombres
 propios y se conservan las primeras seis válidas por estructura, orden y ausencia de duplicados.
 Con la opción desactivada se mantiene la validación del diccionario. Un nombre propio no se excluye solo por no figurar en el diccionario;

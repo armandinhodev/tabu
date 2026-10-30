@@ -563,8 +563,10 @@ export function AdminDashboard() {
           </label>
           <p className="text-body-sm text-fg-muted md:col-span-2">
             La generación consume la API configurada en el servidor. Se procesa en lotes de hasta{" "}
-            {DEFAULT_BATCH_SIZE} cartas; cada carta conserva hasta seis prohibidas de una sola
-            palabra.
+            {DEFAULT_BATCH_SIZE} cartas; cada carta conserva hasta seis prohibidas
+            {allowProperNames
+              ? ", que pueden incluir nombres propios y títulos de varias palabras."
+              : " de una sola palabra."}
           </p>
           <Button type="submit" disabled={busy || running || !name.trim() || !theme.trim()}>
             {busy ? "Enviando…" : "Crear y generar"}
@@ -866,7 +868,7 @@ export function AdminDashboard() {
                         )
                       }
                     >
-                      Reemplazar con Flash
+                      Reemplazar con IA
                     </Button>
                   </div>
                 </article>

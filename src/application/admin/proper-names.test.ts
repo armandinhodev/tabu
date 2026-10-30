@@ -15,6 +15,36 @@ const words = ["dragón", "serie", "reino", "espada", "familia", "invierno"];
 const spell = new FakeSpellChecker(new Set([...words, "Juego", "de", "tronos"]));
 
 describe("proper-name objectives", () => {
+  it("accepts multiword proper names while preserving normalized duplicate checks", () => {
+    const names = [
+      "Ned Stark",
+      "Arya Stark",
+      "Sansa Stark",
+      "Tyrion Lannister",
+      "Cersei Lannister",
+      "Jaime Lannister",
+    ];
+    const result = evaluateCard(
+      {
+        objective: "Juego de tronos",
+        candidates: [...names, "Néd  Stark"],
+        allowProperNames: true,
+      },
+      spell,
+    );
+    expect(result).toMatchObject({ taboo: names, issues: [], doubtful: false });
+    expect(result.candidates.slice(0, 6).every((candidate) => candidate.valid)).toBe(true);
+    expect(result.candidates[6]).toMatchObject({ valid: false, reason: "duplicate" });
+    for (const option of [{}, { allowProperNames: false }]) {
+      const disabled = evaluateCard(
+        { objective: "dragón", candidates: ["Ned Stark", ...words.slice(1)], ...option },
+        spell,
+      );
+      expect(disabled.candidates[0]).toMatchObject({ valid: false, reason: "not_single_word" });
+      expect(disabled.issues).toContain("insufficient_recognized_words");
+    }
+  });
+
   it("accepts proper-name forbiddens without consulting their dictionary entries", () => {
     const names = ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"];
     const isRecognized = vi.fn((value: string) => {
@@ -42,7 +72,7 @@ describe("proper-name objectives", () => {
         previouslyProposed: ["Bran", "anterior"],
         candidates: [
           "tronos",
-          "dos palabras",
+          "dos\npalabras",
           "",
           "Arya",
           "Árya",
@@ -128,11 +158,11 @@ describe("proper-name objectives", () => {
     }
   });
 
-  it("excludes normalized title components and still requires six single words", () => {
+  it("excludes normalized title components and still requires six valid terms", () => {
     const result = evaluateCard(
       {
         objective: "Juego de tronos",
-        candidates: ["Juégo", "de", "TRONOS", "dos palabras", "Daenerys", ...words],
+        candidates: ["Juégo", "de", "TRONOS", "dos\npalabras", "Daenerys", ...words],
         ...{ allowProperNames: true },
       },
       spell,
@@ -149,13 +179,30 @@ describe("proper-name objectives", () => {
     const incomplete = evaluateCard(
       {
         objective: "Daenerys",
-        candidates: ["dos palabras", ...words.slice(0, 5)],
+        candidates: ["dos\npalabras", ...words.slice(0, 5)],
         ...{ allowProperNames: true },
       },
       spell,
     );
     expect(incomplete.issues).toEqual(["insufficient_recognized_words"]);
     expect(incomplete.doubtful).toBe(true);
+  });
+
+  it("rejects multiword terms that reuse a single objective component", () => {
+    const result = evaluateCard(
+      {
+        objective: "Juego de tronos",
+        candidates: ["de Tronos", "Tronos de", "Juego de tronos", "Ned Stark"],
+        ...{ allowProperNames: true },
+      },
+      spell,
+    );
+    expect(result.candidates.slice(0, 3).map((item) => item.reason)).toEqual([
+      "equals_objective",
+      "equals_objective",
+      "equals_objective",
+    ]);
+    expect(result.candidates[3]).toMatchObject({ word: "Ned Stark", valid: true });
   });
 
   it("does not admit an empty or non-text objective in enabled mode", () => {

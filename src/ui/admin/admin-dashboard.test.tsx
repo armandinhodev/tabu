@@ -428,7 +428,7 @@ describe("AdminDashboard", () => {
   it("requests an automatic replacement without editing the old card locally", async () => {
     render(<AdminDashboard />);
     await screen.findByRole("heading", { name: "jaula" });
-    fireEvent.click(screen.getByRole("button", { name: "Reemplazar con Flash" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reemplazar con IA" }));
     await waitFor(() =>
       expect(requests).toContainEqual({
         url: "/api/admin/decks/deck-1/cards/card-1/replace",
@@ -663,7 +663,7 @@ describe("AdminDashboard", () => {
 
     await screen.findByRole("heading", { name: "jaula" });
     fireEvent.click(screen.getByRole("button", { name: "Archivar mazo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar archivado" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirmar archivado" }));
 
     await waitFor(
       () =>
@@ -705,7 +705,7 @@ describe("AdminDashboard", () => {
     fireEvent.click(await screen.findByLabelText("Mostrar archivados"));
     await screen.findByRole("heading", { name: "jaula" });
     expect(screen.getByRole("button", { name: "Habilitar de todos modos" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reemplazar con Flash" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reemplazar con IA" })).toBeDisabled();
   });
 
   it("does not reconnect the socket while filtering or editing the deck", async () => {

@@ -64,7 +64,7 @@ export interface EvaluateCardInput {
  * Reglas (S6, S7):
  * - el texto original se normaliza a NFC y se valida contra el diccionario
  *   **antes** de cualquier limpieza de acentos;
- * - una palabra prohibida es una sola palabra (letras y marcas);
+ * - forbidden terms are single words unless proper names are enabled;
  * - se descartan la objetivo, los duplicados y toda propuesta anterior;
  * - se conserva el orden del proveedor y se toman las seis primeras válidas.
  */
@@ -90,12 +90,17 @@ export function evaluateCard(input: EvaluateCardInput, spell: SpellChecker): Eva
       continue;
     }
 
-    if (!isSingleWord(word)) {
+    const validStructure = input.allowProperNames
+      ? word.split(/ +/u).every(isSingleWord)
+      : isSingleWord(word);
+    if (!validStructure) {
       evaluated.push({ word, recognized: false, valid: false, reason: "not_single_word" });
       continue;
     }
 
-    if (key === objectiveKey || components.has(key)) {
+    // A multiword term may not reuse any single component of the objective.
+    const parts = input.allowProperNames ? (key.match(/[\p{L}\p{M}\p{N}]+/gu) ?? []) : [];
+    if (key === objectiveKey || components.has(key) || parts.some((part) => components.has(part))) {
       evaluated.push({
         word,
         recognized: recognizeCandidate(word),

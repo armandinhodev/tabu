@@ -63,6 +63,8 @@ describe("createDeepSeekProvider", () => {
     });
     expect(promptOf(calls)).toContain("nombres propios y títulos");
     expect(promptOf(calls)).not.toContain("de cuatro a doce letras");
+    expect(promptOf(calls)).toContain("Ned Stark");
+    expect(promptOf(calls)).not.toContain("una sola palabra");
     expect(promptOf(calls)).toContain("partes del objetivo");
     expect(promptOf(calls)).toContain("Las prohibidas también pueden ser nombres propios");
     calls.length = 0;
@@ -74,9 +76,38 @@ describe("createDeepSeekProvider", () => {
       rejected: [],
       ...{ allowProperNames: true },
     });
+    expect(promptOf(calls)).toContain("Ned Stark");
+    expect(promptOf(calls)).not.toContain("una sola palabra");
     expect(promptOf(calls)).toContain("partes del objetivo");
     expect(promptOf(calls)).toContain("Las prohibidas también pueden ser nombres propios");
   });
+  it.each([undefined, false])(
+    "keeps single-word instructions when proper names are %s",
+    async (allowProperNames) => {
+      const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
+      const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+      const option = allowProperNames === undefined ? {} : { allowProperNames };
+      await provider.proposeCards({
+        theme: "Objetos",
+        count: 1,
+        excludedObjectives: [],
+        ...option,
+      });
+      expect(promptOf(calls)).toContain("cada una de una sola palabra");
+      expect(promptOf(calls)).not.toContain("Ned Stark");
+      calls.length = 0;
+      await provider.proposeCandidates({
+        theme: "Objetos",
+        objective: "fuego",
+        previousWords: [],
+        selected: [],
+        rejected: [],
+        ...option,
+      });
+      expect(promptOf(calls)).toContain("cada una de una sola palabra");
+      expect(promptOf(calls)).not.toContain("Ned Stark");
+    },
+  );
   it("preserves an explicit output-token override for initial and completion requests", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
     const provider = createDeepSeekProvider({

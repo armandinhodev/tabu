@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async () => {
@@ -31,7 +31,7 @@ function renderManagement(overrides: Partial<DeckManagementProps> = {}) {
   const onArchived = vi.fn();
   const onDeleted = vi.fn();
 
-  render(
+  const view = render(
     <DeckManagement
       deck={deck}
       busy={false}
@@ -44,13 +44,14 @@ function renderManagement(overrides: Partial<DeckManagementProps> = {}) {
     />,
   );
 
-  return { api, act, onArchived, onDeleted };
+  return { api, act, onArchived, onDeleted, rerender: view.rerender };
 }
 
 describe("DeckManagement", () => {
   it("offers permanent deletion only when archived and requires confirmation", async () => {
     const { api, onDeleted } = renderManagement({ deck: archivedDeck });
     fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+    expect(screen.getByRole("dialog", { name: "Eliminar mazo definitivamente" })).toBeVisible();
     expect(screen.getByText(/Se eliminarán el mazo, sus cartas y su historial/)).toBeVisible();
     expect(api).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancelar eliminación" }));
@@ -135,6 +136,8 @@ describe("DeckManagement", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Archivar mazo" }));
 
+    const dialog = screen.getByRole("dialog", { name: "Archivar mazo" });
+    expect(within(dialog).getByText(/General/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Confirmar archivado" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeVisible();
     expect(api).not.toHaveBeenCalled();
@@ -145,6 +148,22 @@ describe("DeckManagement", () => {
     expect(screen.getByRole("button", { name: "Archivar mazo" })).toBeVisible();
     expect(api).not.toHaveBeenCalled();
   });
+
+  it.each([false, true])(
+    "dismisses the confirmation with Escape without a request (archived=%s)",
+    async (archived) => {
+      const { api } = renderManagement({ deck: archived ? archivedDeck : deck });
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: archived ? "Eliminar definitivamente" : "Archivar mazo",
+        }),
+      );
+      const dialog = screen.getByRole("dialog");
+      fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(api).not.toHaveBeenCalled();
+    },
+  );
 
   it("archives the deck only after the confirmation", async () => {
     const { api, onArchived } = renderManagement();
@@ -157,6 +176,36 @@ describe("DeckManagement", () => {
     );
     expect(onArchived).toHaveBeenCalledWith("deck-1");
   });
+
+  it.each([false, true])(
+    "locks an already open confirmation when the panel becomes busy (archived=%s)",
+    (archived) => {
+      const selected = archived ? archivedDeck : deck;
+      const { api, act, onArchived, onDeleted, rerender } = renderManagement({ deck: selected });
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: archived ? "Eliminar definitivamente" : "Archivar mazo",
+        }),
+      );
+      rerender(
+        <DeckManagement
+          deck={selected}
+          busy
+          running={false}
+          api={api as unknown as DeckManagementProps["api"]}
+          act={act}
+          onArchived={onArchived}
+          onDeleted={onDeleted}
+        />,
+      );
+      const confirm = screen.getByRole("button", {
+        name: archived ? "Confirmar eliminación definitiva" : "Confirmar archivado",
+      });
+      expect(confirm).toBeDisabled();
+      fireEvent.click(confirm);
+      expect(api).not.toHaveBeenCalled();
+    },
+  );
 
   it("restores an archived deck without offering to archive it again", async () => {
     const { api } = renderManagement({ deck: archivedDeck });
