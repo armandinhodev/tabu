@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { processClaimedJob } from "./job-processor";
-import { jobLimitsFor } from "./admin-service";
+import { DEFAULT_LEASE_MS, jobLimitsFor } from "./admin-service";
+import {
+  DEEPSEEK_BATCH_TIMEOUT_MS,
+  DEEPSEEK_OBJECTIVES_TIMEOUT_MS,
+  DEEPSEEK_TIMEOUT_MS,
+} from "../../infrastructure/ai/deepseek-provider";
 import type { AdminJob, ManagedDeck } from "./types";
 import type { ClaimedJob } from "./ports";
 import {
@@ -720,6 +725,18 @@ describe("processClaimedJob (guards)", () => {
     expect(stored?.processed).toBe(1);
     expect(provider.candidateBatchCalls).toHaveLength(1);
     expect(jobs.failed).toEqual([]);
+  });
+});
+
+describe("processClaimedJob (provider deadlines)", () => {
+  it.each([
+    ["batch", DEEPSEEK_BATCH_TIMEOUT_MS],
+    ["objectives", DEEPSEEK_OBJECTIVES_TIMEOUT_MS],
+    ["single request", DEEPSEEK_TIMEOUT_MS],
+  ])("keeps the %s deadline shorter than the job lease", (_label, providerTimeoutMs: number) => {
+    // Un lease vencido durante una llamada deja el trabajo colgado sin error:
+    // el proveedor tiene que abortar siempre antes.
+    expect(providerTimeoutMs).toBeLessThan(DEFAULT_LEASE_MS);
   });
 });
 

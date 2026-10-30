@@ -33,8 +33,12 @@ export const DEEPSEEK_TIMEOUT_MS = 20_000;
 /** Large initial batches get a bounded deadline below the default 60-second lease. */
 export const DEEPSEEK_BATCH_TIMEOUT_MS = 45_000;
 
-/** The single objectives call is long but happens once per job: more room than a batch. */
-export const DEEPSEEK_OBJECTIVES_TIMEOUT_MS = 90_000;
+/**
+ * The single objectives call is long but happens once per job. It stays below
+ * `DEFAULT_LEASE_MS` (60 s) on purpose: a provider call that outlives the lease
+ * leaves the job stranded in `running` with no error.
+ */
+export const DEEPSEEK_OBJECTIVES_TIMEOUT_MS = 50_000;
 
 /** Candidatos máximos por carta (S5). */
 export const MAX_CANDIDATES_PER_CARD = 12;
