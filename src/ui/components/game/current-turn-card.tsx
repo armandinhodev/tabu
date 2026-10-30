@@ -8,10 +8,13 @@ export function CurrentTurnCard({
   team,
   descriptorId,
   pending,
+  compact = false,
 }: {
   readonly team: TeamView | null;
   readonly descriptorId: string;
   readonly pending: boolean;
+  /** Dense summary for the active game's mobile status row. */
+  readonly compact?: boolean;
 }) {
   const palette = team ? teamPalette(team.color) : NEUTRAL_PALETTE;
   const descriptor = team?.players.find((player) => player.playerId === descriptorId);
@@ -23,13 +26,16 @@ export function CurrentTurnCard({
       aria-live="polite"
       aria-atomic="true"
       className={cn(
-        "relative overflow-hidden rounded-xl border bg-surface-2 p-5 shadow-card",
+        "relative min-w-0 overflow-hidden border bg-surface-2",
+        compact ? "rounded-lg p-3 sm:p-4" : "rounded-xl p-5 shadow-card",
         palette.border,
       )}
     >
       <div aria-hidden="true" className={cn("absolute inset-x-0 top-0 h-1", palette.bar)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-caption text-fg-muted uppercase">Turno actual</p>
+        <p className={`text-caption text-fg-muted uppercase ${compact ? "hidden xl:block" : ""}`}>
+          Turno actual
+        </p>
         <span
           className={`inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-micro font-semibold ${palette.soft} ${palette.text}`}
         >
@@ -37,23 +43,29 @@ export function CurrentTurnCard({
           {pending ? "Esperando inicio" : "En juego"}
         </span>
       </div>
-      <h1 className={`mt-3 font-display text-h3 font-semibold break-words ${palette.text}`}>
+      <h1
+        className={`font-display text-h3 font-semibold break-words ${compact ? "mt-2" : "mt-3"} ${palette.text}`}
+      >
         {team?.name ?? "Equipo"}
       </h1>
-      <div className="mt-4 flex items-center gap-3">
-        <span
-          aria-hidden="true"
-          className={cn(
-            "grid size-12 shrink-0 place-items-center rounded-lg",
-            palette.soft,
-            palette.text,
-          )}
-        >
-          <Mic className="size-6" />
-        </span>
+      <div className={cn("flex items-center", compact ? "mt-2 gap-2" : "mt-4 gap-3")}>
+        {!compact && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "grid size-12 shrink-0 place-items-center rounded-lg",
+              palette.soft,
+              palette.text,
+            )}
+          >
+            <Mic className="size-6" />
+          </span>
+        )}
         <div className="min-w-0">
           <p className="text-caption text-fg-muted uppercase">Describe</p>
-          <p className="font-display text-h2 font-bold break-words text-fg">
+          <p
+            className={`break-words text-fg ${compact ? "text-body-sm font-medium" : "font-display text-h2 font-bold"}`}
+          >
             {descriptor?.name ?? "Jugador"}
           </p>
         </div>

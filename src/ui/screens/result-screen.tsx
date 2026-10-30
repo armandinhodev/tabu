@@ -28,6 +28,7 @@ export function ResultScreen() {
 
   const winner = finish?.winnerTeamId ?? null;
   const mvp = finish?.mvp ?? null;
+  const ranking = finish?.ranking ?? [];
   const isDraw = winner === null;
 
   return (
@@ -57,7 +58,8 @@ export function ResultScreen() {
         </p>
       </header>
 
-      <ol className="flex flex-col gap-2" aria-label="Tabla final">
+      <h2 className="text-caption text-fg-subtle uppercase">Equipos</h2>
+      <ol className="-mt-2 flex flex-col gap-2" aria-label="Tabla final">
         {standings.map((standing, index) => {
           const mine = standing.teamId === state.me.teamId;
 
@@ -73,12 +75,12 @@ export function ResultScreen() {
                 <span className="font-mono text-body text-fg-subtle tabular-nums">{index + 1}</span>
                 <span className="text-body text-fg">{standing.name}</span>
                 {mine ? (
-                  <span className="rounded-sm bg-surface-3 px-2 py-0.5 text-micro uppercase text-fg-muted">
+                  <span className="rounded-sm bg-surface-3 px-2 py-0.5 text-micro text-fg-muted uppercase">
                     vos
                   </span>
                 ) : null}
               </span>
-              <span className="font-mono text-h2 font-bold tabular-nums text-gold">
+              <span className="font-mono text-h2 font-bold text-gold tabular-nums">
                 {standing.score}
               </span>
             </li>
@@ -88,14 +90,50 @@ export function ResultScreen() {
 
       {mvp !== null ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-4">
-          <span className="flex items-center gap-2 text-caption uppercase text-fg-subtle">
+          <span className="flex items-center gap-2 text-caption text-fg-subtle uppercase">
             <Crown aria-hidden="true" className="size-4 text-gold" />
             MVP
           </span>
           <span className="text-body text-fg">
-            {mvp.name} · <span className="font-mono tabular-nums text-gold">{mvp.points}</span>
+            {mvp.name} · <span className="font-mono text-gold tabular-nums">{mvp.points}</span>
           </span>
         </div>
+      ) : null}
+
+      {ranking.length > 0 ? (
+        <section className="flex flex-col gap-2" aria-labelledby="ranking-heading">
+          <h2 id="ranking-heading" className="text-caption text-fg-subtle uppercase">
+            Palabras adivinadas
+          </h2>
+          <ol className="flex flex-col gap-2" aria-label="Palabras adivinadas">
+            {ranking.map((row, index) => {
+              const mine = row.playerId === state.me.playerId;
+
+              return (
+                <li
+                  key={row.playerId}
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-lg border px-4 py-3",
+                    mine ? "border-line-strong bg-surface-2" : "border-line bg-surface",
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="font-mono text-body-sm text-fg-subtle tabular-nums">
+                      {index + 1}
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-body text-fg">{row.name}</span>
+                      <span className="truncate text-body-sm text-fg-muted">{row.teamName}</span>
+                    </span>
+                  </span>
+                  <span className="font-mono text-h3 font-bold text-gold tabular-nums">
+                    {row.guessed}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
       ) : null}
 
       <div className="mt-auto flex flex-col gap-2 pt-6">

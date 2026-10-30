@@ -34,6 +34,12 @@ export interface GameDeps {
   readonly ids: IdGenerator;
   readonly rng: Rng;
   readonly config: RoomConfig;
+  /**
+   * Spanish dictionary lookup used to accept a single typo in a long answer.
+   * A real word must be typed exactly, so lookalikes such as `santo` for
+   * `canto` never count. Without it, answers must match exactly.
+   */
+  readonly isKnownWord?: (word: string) => boolean;
 }
 
 export interface UseCaseResult<T> {

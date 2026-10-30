@@ -18,6 +18,7 @@ import {
 import type { PlayerId, TeamId } from "../../domain/value-objects/PlayerId";
 import { normalizeWord } from "../../domain/value-objects/TabooWords";
 import { requirePlayer, requirePlaying, type GameDeps } from "./common";
+import { acceptsTypo, isExactGuess } from "./guess-match";
 
 export interface TurnActionData {
   readonly game: Game;
@@ -28,6 +29,8 @@ export interface TurnActionData {
 
 export interface GuessActionData extends TurnActionData {
   readonly correct: boolean;
+  /** The answer was accepted despite a single typing mistake. */
+  readonly acceptedWithTypo?: boolean;
 }
 
 function requireGame(deps: GameDeps, gameId: string): Game {
@@ -105,7 +108,18 @@ export function guessWord(
     throw new NotAllowedError("Only a guessing teammate can submit an answer");
   }
 
-  if (normalizeWord(input.guess) !== normalizeWord(turn.card.word)) {
+  const expected = normalizeWord(turn.card.word);
+  const exact = isExactGuess(expected, input.guess);
+  const typo =
+    !exact &&
+    acceptsTypo({
+      expected,
+      guess: input.guess,
+      taboo: turn.card.taboo.words,
+      ...(deps.isKnownWord === undefined ? {} : { isKnownWord: deps.isKnownWord }),
+    });
+
+  if (!exact && !typo) {
     const team = game.teams.find((candidate) => candidate.id === turn.teamId);
 
     return { game, correct: false, pointsDelta: 0, teamScore: team?.score.value ?? 0, events: [] };
@@ -114,6 +128,7 @@ export function guessWord(
   return {
     ...apply(deps, game, { kind: "CORRECT", actorId: playerId }, turn.teamId),
     correct: true,
+    ...(typo ? { acceptedWithTypo: true } : {}),
   };
 }
 

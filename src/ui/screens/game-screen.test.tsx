@@ -45,6 +45,10 @@ it.each(["p1", "p2", "p3"])(
       </SoundProvider>,
     );
     const sidebar = screen.getByRole("complementary", { name: "Información del turno" });
+    expect(sidebar).toHaveClass("grid", "grid-cols-[minmax(0,1fr)_6rem]", "xl:flex");
+    expect(within(sidebar).getByRole("region", { name: "Turno actual" })).toHaveClass("p-3");
+    expect(within(sidebar).getByRole("timer")).toHaveClass("size-24");
+    expect(screen.getByRole("heading", { name: "Marcador" })).toBeVisible();
     expect(within(sidebar).getByRole("timer")).toBeInTheDocument();
     expect(screen.getAllByRole("timer")).toHaveLength(1);
     expect(screen.getByRole("log")).toBeInTheDocument();

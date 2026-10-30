@@ -68,6 +68,7 @@ function makeHarness(overrides: Partial<Game> = {}): Harness {
       clock: { now: () => now },
       ids,
       rng: () => 0,
+      isKnownWord: (word) => REAL_SPANISH_WORDS.has(word),
       config: {
         maxTeams: 4,
         minPlayersPerTeam: 2,
@@ -82,6 +83,9 @@ function makeHarness(overrides: Partial<Game> = {}): Harness {
 function activeWord(game: Game): string {
   return game.currentTurn?.card.word ?? "";
 }
+
+/** Real Spanish words that must never be accepted as a typo of another word. */
+const REAL_SPANISH_WORDS = new Set(["fuego", "agua", "casa", "cosa", "santo", "canto"]);
 
 describe("startTurn", () => {
   it("only allows the selected descriptor to start once with a full clock", () => {
@@ -163,6 +167,61 @@ describe("guessWord", () => {
     expect(result.pointsDelta).toBe(0);
     expect(result.events).toEqual([]);
     expect(JSON.stringify(harness.deps.registry.findById(harness.game.id))).toBe(before);
+  });
+
+  it("accepts a single typo as a correct answer and says so", () => {
+    const result = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {
+      guess: " FEUGO ",
+    });
+
+    expect(result.correct).toBe(true);
+    expect(result.acceptedWithTypo).toBe(true);
+    expect(result.pointsDelta).toBe(1);
+    expect(result.events.map((event) => event.type)).toContain("CardResolved");
+    expect(result.game.teams[0]?.players.find((player) => player.id === "p2")?.points).toBe(1);
+  });
+
+  it("does not mark an exact answer as a corrected typo", () => {
+    const result = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {
+      guess: activeWord(harness.game).toUpperCase(),
+    });
+
+    expect(result.correct).toBe(true);
+    expect(result.acceptedWithTypo).toBeUndefined();
+  });
+
+  it("rejects a different real word that is one edit away", () => {
+    const turn = harness.game.currentTurn!;
+    harness.deps.registry.save({
+      ...harness.game,
+      currentTurn: { ...turn, card: makeCard("c1", "canto", ["llama", "calor"]) },
+    });
+    const before = JSON.stringify(harness.deps.registry.findById(harness.game.id));
+
+    const lookalike = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {
+      guess: "santo",
+    });
+    expect(lookalike.correct).toBe(false);
+    expect(JSON.stringify(harness.deps.registry.findById(harness.game.id))).toBe(before);
+
+    const typo = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), { guess: "cnto" });
+    expect(typo.correct).toBe(true);
+    expect(typo.acceptedWithTypo).toBe(true);
+  });
+
+  it("requires exact answers when no dictionary is configured", () => {
+    const withoutDictionary = { ...harness.deps };
+    delete (withoutDictionary as { isKnownWord?: unknown }).isKnownWord;
+
+    const typo = guessWord(withoutDictionary, harness.game.id, PlayerId.from("p2"), {
+      guess: "feugo",
+    });
+    expect(typo.correct).toBe(false);
+
+    const exact = guessWord(withoutDictionary, harness.game.id, PlayerId.from("p2"), {
+      guess: activeWord(harness.game),
+    });
+    expect(exact.correct).toBe(true);
   });
 
   it("rejects the descriptor even when they know the word", () => {

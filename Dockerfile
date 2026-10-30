@@ -23,6 +23,7 @@ ENV NODE_ENV=production \
 # Keep the installed dependency tree; pruning devDependencies would remove tsx.
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
+COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/server.ts /app/package.json /app/tsconfig.json /app/next.config.ts ./
 

@@ -73,9 +73,9 @@ export function GameScreen() {
   const activeTeam = state.teams.find((team) => team.id === turn.teamId) ?? null;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col px-5 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:px-8 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_300px] xl:items-start xl:gap-8 xl:pt-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col gap-4 px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 xl:grid xl:grid-cols-[240px_minmax(0,1fr)_256px] xl:items-start xl:gap-6 xl:pt-8">
       <div className="mb-2 flex items-center justify-between xl:hidden">
-        <span className="text-caption text-fg-subtle uppercase">
+        <span className="text-caption text-fg-muted uppercase">
           {state.code} · ronda {state.round}
         </span>
         <div role="group" aria-label="Controles de la partida" className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export function GameScreen() {
         ))}
       </aside>
 
-      <div className="order-2 flex flex-col gap-4 xl:order-none">
+      <div className="order-2 flex min-w-0 flex-col gap-4 xl:order-none">
         {turn.status === "pending" ? (
           <WaitingTurnView state={state} turn={turn} busy={busy} onStart={startTurn} />
         ) : isRival ? (
@@ -128,21 +128,28 @@ export function GameScreen() {
         className={
           turn.status === "pending"
             ? "hidden xl:flex xl:flex-col xl:gap-3"
-            : "order-1 flex flex-col gap-3 xl:order-none"
+            : "order-1 grid grid-cols-[minmax(0,1fr)_6rem] items-stretch gap-3 md:grid-cols-[minmax(0,1fr)_7rem] xl:order-none xl:flex xl:flex-col"
         }
       >
         {turn.status !== "pending" ? (
           <>
-            <CurrentTurnCard team={activeTeam} descriptorId={turn.descriptorId} pending={false} />
+            <CurrentTurnCard
+              team={activeTeam}
+              descriptorId={turn.descriptorId}
+              pending={false}
+              compact
+            />
             <section
               aria-label="Tiempo del turno"
-              className="flex flex-col items-center gap-3 rounded-lg border border-line bg-surface p-4"
+              className="flex min-w-0 flex-col items-center justify-center gap-3 rounded-lg border border-line bg-surface py-2 xl:p-4"
             >
-              <h2 className="text-caption text-fg-muted uppercase">Tiempo restante</h2>
+              <h2 className="sr-only text-caption text-fg-muted uppercase xl:not-sr-only">
+                Tiempo restante
+              </h2>
               <TimerRing
                 deadlineAt={turn.deadlineAt}
                 turnSeconds={turn.turnSeconds}
-                className="size-[144px] md:size-[160px]"
+                className="size-24 md:size-28 xl:size-40 [&>div>span.font-mono]:text-h1 [&>div>span:last-child]:hidden xl:[&>div>span:last-child]:block [&>div>svg]:size-4"
               />
             </section>
           </>

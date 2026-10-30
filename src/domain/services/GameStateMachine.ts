@@ -13,7 +13,7 @@ import {
   TooFewPlayersError,
   TurnNotActiveError,
 } from "../errors/DomainError";
-import type { DomainEvent, Mvp, Standing } from "../events/events";
+import type { DomainEvent, Mvp, PlayerRanking, Standing } from "../events/events";
 import { pointsForOutcome, scoreAfterOutcome } from "../policies/ScoringPolicy";
 import { nextDescriptor, nextTeam } from "../policies/TurnOrderPolicy";
 import type { Rng } from "../rng";
@@ -459,6 +459,7 @@ export function finishGame(game: Game, ctx: { readonly now: Date }): TransitionR
         winnerTeamId,
         standings,
         mvp: mvpOf(game.teams),
+        ranking: rankingOf(game.teams),
       },
     ],
   };
@@ -578,4 +579,23 @@ function mvpOf(teams: readonly Team[]): Mvp | null {
   }
 
   return { playerId: best.id, name: best.name, points: best.points };
+}
+
+/**
+ * End-of-game ranking by words guessed. `points` only grows on a correct
+ * answer, so it is the per-player count of guessed words. Ties fall back to
+ * the player name so every client sees the same order.
+ */
+function rankingOf(teams: readonly Team[]): readonly PlayerRanking[] {
+  return teams
+    .flatMap((team) =>
+      team.players.map((player) => ({
+        playerId: player.id,
+        name: player.name,
+        teamId: team.id,
+        teamName: team.name,
+        guessed: player.points,
+      })),
+    )
+    .sort((left, right) => right.guessed - left.guessed || left.name.localeCompare(right.name));
 }

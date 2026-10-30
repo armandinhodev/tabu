@@ -159,6 +159,57 @@ describe("socket server", () => {
     expect(states.get(guesser.playerId)?.turn?.turnId).toBe(turnBefore);
   });
 
+  it("accepts a single typo over the wire and reports the correction", async () => {
+    const host = await harness.connect();
+    const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
+      playerName: "Host",
+      deckId: harness.deckId,
+    });
+    const players = [{ client: host, playerId: created.playerId }];
+
+    for (const name of ["Ana", "Beto", "Caro"]) {
+      const client = await harness.connect();
+      const joined = await emitAck<{ playerId: string }>(client, "game:join", {
+        code: created.code,
+        playerName: name,
+      });
+      players.push({ client, playerId: joined.playerId });
+    }
+
+    const states = new Map<string, GameStateView>();
+
+    for (const { client, playerId } of players) {
+      client.on("game:state", (state) => states.set(playerId, state));
+    }
+
+    await emitAck(host, "game:autoTeams");
+    await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
+
+    const guesser = await waitFor(
+      () => players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE"),
+      "adivinador",
+    );
+    const word = await waitFor(
+      () =>
+        players
+          .map(({ playerId }) => states.get(playerId)?.turn?.word)
+          .find((candidate) => candidate !== undefined),
+      "palabra del descriptor",
+    );
+    const typo = `${word.slice(0, 2)}${word[3]}${word[2]}${word.slice(4)}`;
+
+    const guessed = await emitAck<{
+      correct: boolean;
+      pointsAwarded: number;
+      acceptedWithTypo?: boolean;
+    }>(guesser.client, "turn:guess", { guess: typo });
+
+    expect(guessed.correct).toBe(true);
+    expect(guessed.pointsAwarded).toBe(1);
+    expect(guessed.acceptedWithTypo).toBe(true);
+  });
+
   it("crea la sala contra un mazo guardado con tres palabras prohibidas", async () => {
     const legacy = await makeSocketHarness({
       cards: [makeCard("legacy-001", "fuego", ["llama", "calor", "brasa"])],

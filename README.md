@@ -30,17 +30,27 @@ saltar ni reportar cartas. El reloj vuelve a esperar esa confirmación al cambia
 Stack: Next.js 15 (App Router) + TypeScript estricto, Socket.IO 4.8 sobre un servidor HTTP propio,
 MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI y Vitest.
 
-Durante el turno, el cronómetro aparece en el sidebar derecho, apilado arriba en móvil. El panel de
+Durante el turno, el cronómetro aparece en el sidebar derecho. En móvil, el resumen y el reloj
+comparten una fila compacta sobre la carta; en escritorio, los paneles laterales dejan más espacio
+al contenido central. El panel de
 puntajes enfrenta los nombres y resultados de dos equipos; con tres o cuatro, muestra una fila de
 bloques con el nombre arriba y el puntaje debajo. El equipo activo se destaca con su color.
 El panel de
 actividad combina respuestas privadas y avisos públicos: quienes adivinan pueden escribir; el
+campo de respuesta aparece antes del historial para no quedar desplazado por los avisos. El
 descriptor y los rivales solo ven notificaciones. Los avisos muestran la palabra saltada, quién
 marcó una prohibida, la carta anulada y el equipo penalizado, con colores, etiquetas e íconos.
 El panel no repite los avisos de inicio o fin del turno: esa información se consulta en el sidebar.
 La lista de jugadores muestra nombres y distintivos de rol, sin avatares con iniciales.
 Las respuestas y su confirmación nunca se comparten. Los avisos se conservan al cambiar de carta
 dentro del mismo turno y se reinician al seleccionar el turno siguiente, salir o cambiar de sala.
+
+Una respuesta con **un solo error de tipeo** cuenta como acierto, siempre que el objetivo tenga
+al menos cinco letras. Se toleran una letra cambiada, faltante, sobrante o dos letras contiguas
+intercambiadas. Una respuesta que es una palabra real del diccionario español se exige exacta,
+para que `santo` no valga por `canto`; la comprobación corre en el servidor y la palabra objetivo
+nunca se envía a quien adivina. Por eso un error que forma otra palabra válida, como `fugo`, se
+rechaza: la corrección automática nunca inventa el acierto.
 
 ## Levantarlo
 
@@ -89,7 +99,9 @@ docker stop tabu-app
 ```
 
 La imagen incluye `tsx` y el árbol instalado del lockfile porque el servidor personalizado ejecuta
-TypeScript en producción. No usa `next start` ni el servidor standalone, que omitirían Socket.IO.
+TypeScript en producción. También copia `public/` para servir los assets estáticos del panel
+(por ejemplo, el logo de DeepSeek). No usa `next start` ni el servidor standalone, que omitirían
+Socket.IO.
 
 ### Panel de administración
 
@@ -373,6 +385,11 @@ el `game:state` de quien tiene rol `DESCRIBER` o `RIVAL`.
 Todo error de acción viaja en el ack (`{ error: { code, message } }`) **y** como `game:error` al
 mismo socket. Los códigos son estables (`INVALID_TABOO_WORD`, `NOT_ALLOWED`, `INVALID_STATE`,
 `GAME_NOT_FOUND`, `TEAM_FULL`, …).
+
+Al terminar la partida, `game:finished` incluye la tabla de equipos, el MVP y un `ranking` con
+**todos los jugadores** ordenados por palabras adivinadas durante la partida, con su equipo. Los
+empates se ordenan por nombre para que todos vean la misma lista. La pantalla final muestra ese
+ranking global por encima del botón de salida.
 
 ## Calidad
 

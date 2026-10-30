@@ -71,6 +71,8 @@ export interface GuessAck {
   readonly correct: boolean;
   readonly pointsAwarded: number;
   readonly teamScore: number;
+  /** The answer was accepted despite a single typing mistake. */
+  readonly acceptedWithTypo?: boolean;
 }
 
 export interface ReportViolationAck {
@@ -138,6 +140,16 @@ export interface GameFinishedView {
     readonly name: string;
     readonly points: number;
   } | null;
+  /** Every player in the match, ordered by words guessed. */
+  readonly ranking: readonly PlayerRankingView[];
+}
+
+export interface PlayerRankingView {
+  readonly playerId: string;
+  readonly name: string;
+  readonly teamId: string;
+  readonly teamName: string;
+  readonly guessed: number;
 }
 
 export interface RoundEndedView {

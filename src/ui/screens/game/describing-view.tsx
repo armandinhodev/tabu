@@ -3,9 +3,7 @@
 import { AlertTriangle, SkipForward } from "lucide-react";
 
 import { Button } from "@/ui/components/ui/button";
-import { StickyFooter } from "@/ui/components/ui/screen";
 import { ScoreBoard, TabooWords } from "@/ui/components/game/taboo-words";
-import { teamNameOf } from "@/ui/components/game/team-colors";
 import type { RoleViewProps } from "./role-view-props";
 
 /**
@@ -20,23 +18,17 @@ import type { RoleViewProps } from "./role-view-props";
  */
 export function DescribingView({ state, turn, busy, onSkipCard }: RoleViewProps) {
   const isDescriptor = state.me.role === "DESCRIBER";
-  const activeTeamName = teamNameOf(state.teams, turn.teamId);
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-4">
       <section className="flex flex-col gap-3" aria-label="Puntajes" aria-live="polite">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-caption text-fg-subtle uppercase">Turno de {activeTeamName}</span>
-          <span className="rounded-pill border border-line bg-surface-2 px-3 py-1 text-caption text-fg-muted uppercase">
-            Ronda {state.round}
-          </span>
-        </div>
+        <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
 
         <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
       </section>
 
       {isDescriptor ? (
-        <section className="flex flex-col gap-5 rounded-lg border border-line bg-surface-2 p-5">
+        <section className="flex min-w-0 flex-col gap-4 rounded-xl border border-line-strong bg-surface-2 p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <p className="min-w-0 flex-1 font-display text-h2 font-extrabold break-words text-fg uppercase md:text-h1">
               {turn.word}
@@ -61,37 +53,20 @@ export function DescribingView({ state, turn, busy, onSkipCard }: RoleViewProps)
               : `Te quedan ${state.skipsLeft} ${state.skipsLeft === 1 ? "salto" : "saltos"} en este turno.`}
           </p>
 
-          <p className="flex items-center gap-2 rounded-md border border-warning bg-warning-soft px-3 py-2 text-body-sm text-warning">
-            <AlertTriangle aria-hidden="true" className="size-4 shrink-0" />
+          <p className="flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-body-sm text-warning">
+            <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             Si decís una de estas, tu equipo pierde 1 punto
           </p>
 
           <TabooWords words={turn.taboo} variant="informative" />
         </section>
       ) : (
-        <section className="flex flex-col gap-2 rounded-lg border border-line bg-surface-2 p-5">
+        <section className="rounded-lg border border-line bg-surface p-4">
           <p className="text-body-sm text-fg-muted">
-            Escuchá a quien describe y escribí la respuesta en el chat de abajo.
-          </p>
-          <p className="text-body-sm text-fg-subtle">
-            La palabra y las prohibidas solo las ven quien describe y los otros equipos.
+            Escuchá las pistas de tu equipo y escribí tu respuesta abajo.
           </p>
         </section>
       )}
-
-      <section className="flex flex-col items-center gap-3">
-        <p className="text-body-sm text-fg-muted">
-          {isDescriptor ? "Tu equipo está adivinando." : "Escuchá a tu equipo y adiviná."}
-        </p>
-      </section>
-
-      {!isDescriptor ? (
-        <StickyFooter>
-          <p className="text-center text-micro text-fg-subtle uppercase">
-            Tu equipo no ve la palabra
-          </p>
-        </StickyFooter>
-      ) : null}
     </div>
   );
 }

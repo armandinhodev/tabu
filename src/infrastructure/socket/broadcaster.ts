@@ -138,6 +138,13 @@ export class Broadcaster {
             score: standing.score,
           })),
           mvp: event.mvp,
+          ranking: event.ranking.map((row) => ({
+            playerId: row.playerId,
+            name: row.name,
+            teamId: row.teamId,
+            teamName: row.teamName,
+            guessed: row.guessed,
+          })),
         });
         return;
       default: {

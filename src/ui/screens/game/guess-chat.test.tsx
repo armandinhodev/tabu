@@ -63,6 +63,10 @@ it("distinguishes correct and incorrect private feedback with labels, colors and
 it("lets only an active guesser send an answer and shows private feedback", () => {
   const onGuess = vi.fn();
   const { rerender } = render(<GuessChat active messages={[]} onGuess={onGuess} />);
+  expect(
+    screen.getByLabelText("Tu respuesta").compareDocumentPosition(screen.getByRole("log")) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
 
   fireEvent.change(screen.getByLabelText("Tu respuesta"), { target: { value: "  Fuego  " } });
   fireEvent.click(screen.getByRole("button", { name: "Enviar" }));

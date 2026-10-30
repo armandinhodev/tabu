@@ -222,6 +222,7 @@ export function attachSocketServer(
           correct: result.correct,
           pointsAwarded: result.pointsDelta,
           teamScore: result.teamScore,
+          ...(result.acceptedWithTypo === true ? { acceptedWithTypo: true } : {}),
         };
       });
     });

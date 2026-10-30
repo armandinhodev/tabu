@@ -15,6 +15,16 @@ export interface Mvp {
   readonly points: number;
 }
 
+/** One row of the end-of-game ranking based on words guessed. */
+export interface PlayerRanking {
+  readonly playerId: PlayerId;
+  readonly name: string;
+  readonly teamId: TeamId;
+  readonly teamName: string;
+  /** Words guessed by this player during the whole match. */
+  readonly guessed: number;
+}
+
 /**
  * Eventos de dominio: hechos ya ocurridos, sin I/O. La capa de socket los
  * traduce a eventos públicos (game:*, turn:*).
@@ -97,4 +107,6 @@ export type DomainEvent =
       readonly winnerTeamId: TeamId | null;
       readonly standings: readonly Standing[];
       readonly mvp: Mvp | null;
+      /** Every player in the match, ordered by words guessed. */
+      readonly ranking: readonly PlayerRanking[];
     };

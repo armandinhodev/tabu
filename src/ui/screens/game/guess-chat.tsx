@@ -122,11 +122,11 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
 
   return (
     <section
-      className="flex flex-col gap-4 rounded-lg border border-line bg-surface-2 p-5"
+      className="flex min-w-0 flex-col gap-4 rounded-lg border border-line bg-surface p-4 sm:p-5"
       aria-label={active ? "Tus respuestas" : "Notificaciones de la partida"}
     >
       <header className="flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-md bg-surface-3 text-fg-muted">
+        <span className="mt-0.5 shrink-0 text-fg-muted">
           <PanelIcon aria-hidden="true" className="size-5" />
         </span>
         <div>
@@ -135,11 +135,40 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
           </h2>
           <p className="mt-1 text-body-sm text-fg-muted">
             {active
-              ? "Tus respuestas son privadas. Los avisos de la partida son visibles para todos."
+              ? "Tus respuestas son privadas."
               : "Aciertos, cartas saltadas y penalizaciones."}
           </p>
         </div>
       </header>
+
+      {active ? (
+        <div className="flex gap-2 rounded-md border border-line bg-surface p-3">
+          <label htmlFor="guess-answer" className="sr-only">
+            Tu respuesta
+          </label>
+          <Input
+            id="guess-answer"
+            value={answer}
+            disabled={disabled}
+            placeholder="Escribí tu respuesta"
+            onChange={(event) => setAnswer(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                submit();
+              }
+            }}
+          />
+          <Button
+            aria-label="Enviar"
+            title="Enviar"
+            disabled={disabled || answer.trim() === ""}
+            onClick={submit}
+          >
+            <Send aria-hidden="true" className="size-4" />
+            <span className="hidden sm:inline">Enviar</span>
+          </Button>
+        </div>
+      ) : null}
 
       <ul
         ref={logRef}
@@ -180,30 +209,6 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
           );
         })}
       </ul>
-
-      {active ? (
-        <div className="flex gap-2 rounded-md border border-line bg-surface p-3">
-          <label htmlFor="guess-answer" className="sr-only">
-            Tu respuesta
-          </label>
-          <Input
-            id="guess-answer"
-            value={answer}
-            disabled={disabled}
-            placeholder="Escribí tu respuesta"
-            onChange={(event) => setAnswer(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                submit();
-              }
-            }}
-          />
-          <Button disabled={disabled || answer.trim() === ""} onClick={submit}>
-            <Send aria-hidden="true" className="size-4" />
-            Enviar
-          </Button>
-        </div>
-      ) : null}
     </section>
   );
 }

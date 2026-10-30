@@ -489,7 +489,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
           appendGuessMessage(trimmed, "guess");
           appendGuessMessage(
-            ack.correct ? "¡Acertaste!" : "No es esa. Probá de nuevo.",
+            ack.correct
+              ? ack.acceptedWithTypo === true
+                ? "¡Acertaste! Corregimos la ortografía."
+                : "¡Acertaste!"
+              : "No es esa. Probá de nuevo.",
             "feedback",
             ack.correct ? "correct" : "incorrect",
           );

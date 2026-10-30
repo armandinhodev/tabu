@@ -10,6 +10,8 @@ import { FireAndForgetGameRepository } from "../db/repositories/FireAndForgetGam
 import { MongoDeckRepository } from "../db/repositories/MongoDeckRepository";
 import { MongoGameRepository } from "../db/repositories/MongoGameRepository";
 import { ResilientGameRepository } from "../db/repositories/ResilientGameRepository";
+import type { SpellChecker } from "../../application/admin/ports";
+import { loadSpanishSpellChecker } from "../spelling/spanish-spell-checker";
 
 /** Composición del servidor de juego: puertos reales, una sola vez (T3.1). */
 export interface GameRuntime {
@@ -29,6 +31,7 @@ export async function createGameRuntime(env: Env): Promise<GameRuntime> {
 
   const resilient = new ResilientGameRepository(new MongoGameRepository());
   const snapshots = new FireAndForgetGameRepository(resilient);
+  const dictionary = await loadDictionarySafely();
 
   return {
     deps: {
@@ -38,6 +41,8 @@ export async function createGameRuntime(env: Env): Promise<GameRuntime> {
       clock: new SystemClock(),
       ids: cryptoIds,
       rng: Math.random,
+      // Fail closed: without the dictionary a real word could pass as a typo.
+      isKnownWord: (word) => dictionary?.isRecognized(word) ?? true,
       config: {
         maxTeams: env.MAX_TEAMS,
         minPlayersPerTeam: env.MIN_PLAYERS_PER_TEAM,
@@ -54,4 +59,16 @@ export async function createGameRuntime(env: Env): Promise<GameRuntime> {
       await disconnectMongo();
     },
   };
+}
+
+/** The dictionary is optional: a missing one only disables typo tolerance. */
+async function loadDictionarySafely(): Promise<SpellChecker | null> {
+  try {
+    return await loadSpanishSpellChecker();
+  } catch (error) {
+    logger.warn("spanish dictionary unavailable, answers require exact matches", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }

@@ -25,6 +25,7 @@ import { Score } from "../value-objects/Score";
 import type { DomainEvent } from "../events/events";
 import {
   beginTurn,
+  finishGame,
   isTurnExpired,
   reassignDescriptor,
   resolveTurn as resolveActiveTurn,
@@ -499,6 +500,51 @@ describe("rondas y fin de partida", () => {
 
     expect(finished && "mvp" in finished ? finished.mvp?.playerId : null).toBe("p2");
     expect(finished && "mvp" in finished ? finished.mvp?.points : null).toBe(1);
+  });
+
+  it("ranks every player in the match by words guessed, across both teams", () => {
+    const game = makeGame({
+      teams: [
+        makeTeam(0, [
+          makePlayer("p1", "t1", { points: 2, name: "Ana" }),
+          makePlayer("p2", "t1", { points: 0, name: "Beto" }),
+        ]),
+        makeTeam(1, [
+          makePlayer("p3", "t2", { points: 3, name: "Caro" }),
+          makePlayer("p4", "t2", { points: 1, name: "Dani" }),
+        ]),
+      ],
+    });
+
+    const finished = finishGame(game, { now: NOW }).events.find(
+      (event) => event.type === "GameFinished",
+    );
+
+    expect(finished && "ranking" in finished ? finished.ranking : null).toEqual([
+      { playerId: "p3", name: "Caro", teamId: "t2", teamName: "Equipo 2", guessed: 3 },
+      { playerId: "p1", name: "Ana", teamId: "t1", teamName: "Equipo 1", guessed: 2 },
+      { playerId: "p4", name: "Dani", teamId: "t2", teamName: "Equipo 2", guessed: 1 },
+      { playerId: "p2", name: "Beto", teamId: "t1", teamName: "Equipo 1", guessed: 0 },
+    ]);
+  });
+
+  it("breaks ranking ties by player name so the order is stable", () => {
+    const game = makeGame({
+      teams: [
+        makeTeam(0, [
+          makePlayer("p1", "t1", { points: 1, name: "Zoe" }),
+          makePlayer("p2", "t1", { points: 1, name: "Ana" }),
+        ]),
+      ],
+    });
+
+    const finished = finishGame(game, { now: NOW }).events.find(
+      (event) => event.type === "GameFinished",
+    );
+
+    expect(
+      finished && "ranking" in finished ? finished.ranking.map((row) => row.name) : null,
+    ).toEqual(["Ana", "Zoe"]);
   });
 });
 

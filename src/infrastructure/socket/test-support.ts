@@ -39,6 +39,8 @@ export interface SocketHarnessOptions {
   readonly clock?: () => Date;
   /** Mazo del test; por defecto 8 cartas, con 2 se llega al final de partida. */
   readonly cards?: readonly Card[];
+  /** Palabras que el diccionario del test reconoce como español real. */
+  readonly knownWords?: readonly string[];
 }
 
 export async function makeSocketHarness(
@@ -49,43 +51,40 @@ export async function makeSocketHarness(
   const games = new InMemoryGameRepository();
   const clock = options.clock ?? (() => NOW);
   let sequence = 0;
+  const cards = options.cards ?? [
+    makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
+    makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
+    makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
+    makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
+    makeCard("general-005", "silla", ["mueble", "asiento", "patas", "respaldo", "sentar", "mesa"]),
+    makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
+    makeCard("general-007", "luna", [
+      "noche",
+      "cielo",
+      "satelite",
+      "brillar",
+      "fase",
+      "astronauta",
+    ]),
+    makeCard("general-008", "sol", ["dia", "estrella", "calor", "luz", "brillar", "amanecer"]),
+  ];
 
   const deck = await decks.upsertByName({
     name: "General",
     category: "General",
     language: "es",
     active: true,
-    cards: options.cards ?? [
-      makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
-      makeCard("general-002", "playa", ["arena", "mar", "sol", "costa", "verano", "vacaciones"]),
-      makeCard("general-003", "nube", ["cielo", "lluvia", "vapor", "blanca", "tormenta", "flotar"]),
-      makeCard("general-004", "reloj", ["hora", "minuto", "segundo", "aguja", "tiempo", "esfera"]),
-      makeCard("general-005", "silla", [
-        "mueble",
-        "asiento",
-        "patas",
-        "respaldo",
-        "sentar",
-        "mesa",
-      ]),
-      makeCard("general-006", "ventana", ["vidrio", "marco", "abrir", "cortina", "luz", "pared"]),
-      makeCard("general-007", "luna", [
-        "noche",
-        "cielo",
-        "satelite",
-        "brillar",
-        "fase",
-        "astronauta",
-      ]),
-      makeCard("general-008", "sol", ["dia", "estrella", "calor", "luz", "brillar", "amanecer"]),
-    ],
+    cards,
   });
+
+  const knownWords = new Set([...cards.map((card) => card.word), ...(options.knownWords ?? [])]);
 
   const deps: GameDeps = {
     registry,
     decks,
     games,
     clock: { now: clock },
+    isKnownWord: (word) => knownWords.has(word),
     ids: {
       gameId: () => GameId.from(`game-${(sequence += 1)}`),
       playerId: () => PlayerId.from(`player-${(sequence += 1)}`),

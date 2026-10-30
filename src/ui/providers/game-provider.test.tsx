@@ -111,6 +111,7 @@ describe("GameProvider adivinación escrita", () => {
     correct: boolean;
     pointsAwarded: number;
     teamScore: number;
+    acceptedWithTypo?: boolean;
   }): void {
     socket.emit.mockImplementation(
       (event: string, _payload: unknown, ack?: (value: unknown) => void) => {
@@ -138,6 +139,22 @@ describe("GameProvider adivinación escrita", () => {
     expect(result.current.guessMessages.map((message) => message.text)).toEqual([
       "Fuego",
       "¡Acertaste!",
+    ]);
+    expect(result.current.guessMessages[1]?.outcome).toBe("correct");
+  });
+
+  it("confirms an accepted answer that had a single typo", async () => {
+    ackGuess({ correct: true, pointsAwarded: 1, teamScore: 1, acceptedWithTypo: true });
+
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+
+    await act(async () => {
+      result.current.guess("Fuegp");
+    });
+
+    expect(result.current.guessMessages.map((message) => message.text)).toEqual([
+      "Fuegp",
+      "¡Acertaste! Corregimos la ortografía.",
     ]);
     expect(result.current.guessMessages[1]?.outcome).toBe("correct");
   });
