@@ -772,6 +772,29 @@ describe("AdminDashboard", () => {
     });
   });
 
+  it("keeps the deck visible when its catalogue button is pressed again", async () => {
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+
+    fireEvent.click(screen.getByRole("button", { name: /^General/ }));
+
+    expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
+  });
+
+  it("loads the cards of the deck clicked in the catalogue", async () => {
+    catalog = [
+      deck,
+      { id: "deck-3", name: "Otro", theme: "Otro", cards: [card] } as unknown as CatalogDeck,
+    ];
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Otro/ }));
+
+    expect(await screen.findByRole("heading", { name: "Otro" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
+  });
+
   it("restores an archived deck and keeps the same selection", async () => {
     catalog = [archivedDeck];
     render(<AdminDashboard />);

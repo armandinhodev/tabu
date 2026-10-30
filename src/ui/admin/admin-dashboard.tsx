@@ -689,6 +689,15 @@ export function AdminDashboard() {
                 aria-pressed={selectedId === item.id}
                 onClick={() => {
                   selectionClearedRef.current = false;
+
+                  if (item.id === selectedId) {
+                    // Mismo mazo: la selección no cambia, así que el efecto no
+                    // vuelve a pedir el detalle. Se relee para no dejar el
+                    // panel en blanco hasta que alguien toque Actualizar.
+                    setRefresh((value) => value + 1);
+                    return;
+                  }
+
                   setSelectedId(item.id);
                   setDeck(null);
                 }}
