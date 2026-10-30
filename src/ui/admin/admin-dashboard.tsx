@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
+import { Spinner } from "@/ui/components/ui/spinner";
 import {
   createAdminSocket,
   type AdminConnectionState,
@@ -97,6 +98,10 @@ export function AdminDashboard() {
   const [job, setJob] = useState<JobView | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
+  // Cantidad pedida mientras el mazo se está creando: el panel de progreso
+  // aparece desde el primer clic, antes de que exista el trabajo.
+  const [creating, setCreating] = useState<number | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
@@ -185,6 +190,7 @@ export function AdminDashboard() {
   useEffect(() => {
     if (auth !== "authorized") return;
     const controller = new AbortController();
+    setCatalogLoading(true);
     async function load() {
       try {
         // Los mazos archivados se piden sólo cuando el filtro está activo:
@@ -208,6 +214,8 @@ export function AdminDashboard() {
         setDeck(detail);
       } catch (failure) {
         if (!controller.signal.aborted) reportError(failure);
+      } finally {
+        if (!controller.signal.aborted) setCatalogLoading(false);
       }
     }
     void load();
@@ -364,28 +372,37 @@ export function AdminDashboard() {
           400,
           `La cantidad debe ser un entero entre 1 y ${MAX_GENERATION_COUNT}.`,
         );
-      const created = await api<DeckView>("/api/admin/decks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          theme: theme.trim(),
-          ...(allowProperNames ? { allowProperNames: true } : {}),
-        }),
-      });
-      setSelectedId(created.id);
-      setDeck(created);
-      setActiveTab("decks");
-      setName("");
-      setTheme("");
-      setAllowProperNames(false);
-      trackJob(
-        await api<JobView>(`/api/admin/decks/${encodeURIComponent(created.id)}/generate`, {
+
+      // El panel de progreso aparece con el primer clic: el usuario ve que el
+      // mazo se está creando y que la generación se está encolando.
+      setCreating(amount);
+
+      try {
+        const created = await api<DeckView>("/api/admin/decks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ count: amount }),
-        }),
-      );
+          body: JSON.stringify({
+            name: name.trim(),
+            theme: theme.trim(),
+            ...(allowProperNames ? { allowProperNames: true } : {}),
+          }),
+        });
+        setSelectedId(created.id);
+        setDeck(created);
+        setActiveTab("decks");
+        setName("");
+        setTheme("");
+        setAllowProperNames(false);
+        trackJob(
+          await api<JobView>(`/api/admin/decks/${encodeURIComponent(created.id)}/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ count: amount }),
+          }),
+        );
+      } finally {
+        setCreating(null);
+      }
     });
   }
 
@@ -402,7 +419,7 @@ export function AdminDashboard() {
   if (auth === "loading")
     return (
       <main className="mx-auto max-w-5xl p-6" aria-live="polite">
-        Verificando sesión…
+        <Spinner label="Verificando sesión…" />
       </main>
     );
   if (auth === "login")
@@ -589,7 +606,7 @@ export function AdminDashboard() {
         </form>
       </section>
 
-      {job && (
+      {(job !== null || creating !== null) && (
         <section
           aria-label="Progreso de generación"
           aria-live="polite"
@@ -597,21 +614,33 @@ export function AdminDashboard() {
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="font-semibold">
-              {jobLabels[job.status]} · {job.processed ?? 0}/{job.requested ?? 0} cartas
+              {job === null
+                ? `Preparando la generación · 0/${creating ?? 0} cartas`
+                : `${jobLabels[job.status]} · ${job.processed ?? 0}/${job.requested ?? 0} cartas`}
             </p>
-            <p className="text-body-sm text-fg-muted" role="status">
-              Progreso en vivo: {connectionLabels[connection]}
-            </p>
+            {job === null ? (
+              <Spinner label="Encolando la generación…" />
+            ) : (
+              <p className="text-body-sm text-fg-muted" role="status">
+                Progreso en vivo: {connectionLabels[connection]}
+              </p>
+            )}
           </div>
-          <progress
-            className="mt-3 h-3 w-full"
-            max={Math.max(job.requested ?? 1, 1)}
-            value={job.processed ?? 0}
-          />
-          <p className="mt-2 text-body-sm text-fg-muted">
-            Tokens de entrada: {job.inputTokens ?? 0} · salida: {job.outputTokens ?? 0}
-          </p>
-          {job.error && (
+          {job === null ? (
+            <progress className="mt-3 h-3 w-full" aria-label="Preparando la generación" />
+          ) : (
+            <progress
+              className="mt-3 h-3 w-full"
+              max={Math.max(job.requested ?? 1, 1)}
+              value={job.processed ?? 0}
+            />
+          )}
+          {job !== null && (
+            <p className="mt-2 text-body-sm text-fg-muted">
+              Tokens de entrada: {job.inputTokens ?? 0} · salida: {job.outputTokens ?? 0}
+            </p>
+          )}
+          {job?.error && (
             <p role="alert" className="mt-2 text-warning">
               {job.error}
             </p>
@@ -646,7 +675,8 @@ export function AdminDashboard() {
               />
               Mostrar archivados
             </label>
-            {decks.length === 0 && (
+            {catalogLoading && decks.length === 0 && <Spinner label="Cargando mazos…" />}
+            {!catalogLoading && decks.length === 0 && (
               <p className="text-fg-muted">
                 Todavía no hay mazos creados desde este panel. Los mazos originales del juego no se
                 modifican.
@@ -679,6 +709,7 @@ export function AdminDashboard() {
           </aside>
 
           <section className="min-w-0 space-y-4" aria-label="Cartas del mazo">
+            {deck === null && catalogLoading && <Spinner label="Cargando cartas…" />}
             {deck && (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-4">

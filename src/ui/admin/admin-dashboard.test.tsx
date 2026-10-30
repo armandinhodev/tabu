@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async () => {
@@ -66,6 +66,10 @@ let deferJobResponse: boolean;
 let resolveJobResponse: ((response: Response) => void) | null;
 let catalog: CatalogDeck[];
 let globalModel: string;
+let deferGenerateResponse: boolean;
+let resolveGenerateResponse: ((response: Response) => void) | null;
+let deferCatalogResponse: boolean;
+let resolveCatalogResponse: ((response: Response) => void) | null;
 
 function jobRequests(): number {
   return requests.filter((request) => request.url.includes("/api/admin/jobs/")).length;
@@ -80,6 +84,10 @@ beforeEach(() => {
   resolveJobResponse = null;
   catalog = [deck];
   globalModel = "deepseek-flash";
+  deferGenerateResponse = false;
+  resolveGenerateResponse = null;
+  deferCatalogResponse = false;
+  resolveCatalogResponse = null;
   sessionStorage.clear();
   socketMock.handlers = null;
   socketMock.subscribe.mockClear();
@@ -94,13 +102,24 @@ beforeEach(() => {
         if (method === "PATCH") globalModel = JSON.parse(String(init?.body)).model;
         return Response.json({ data: { model: globalModel } });
       }
-      if (url.endsWith("/generate") || url.endsWith("/replace"))
+      if (url.endsWith("/generate") || url.endsWith("/replace")) {
+        if (deferGenerateResponse) {
+          return new Promise<Response>((resolve) => {
+            resolveGenerateResponse = resolve;
+          });
+        }
         return Response.json({
           data: { id: "job-1", deckId: deck.id, status: "completed", processed: 5, requested: 5 },
         });
+      }
       if (url === "/api/admin/decks" && method === "POST")
         return Response.json({ data: { ...deck, id: "deck-2", name: "Sports" } });
       if (url === "/api/admin/decks" || url === "/api/admin/decks?includeArchived=true") {
+        if (deferCatalogResponse) {
+          return new Promise<Response>((resolve) => {
+            resolveCatalogResponse = resolve;
+          });
+        }
         const visible = url.includes("includeArchived=true")
           ? catalog
           : catalog.filter((item) => item.archivedAt === undefined);
@@ -260,6 +279,54 @@ describe("AdminDashboard", () => {
     );
     expect(socketMock.disconnect).not.toHaveBeenCalled();
   });
+  it("shows the generation progress while the deck is being created", async () => {
+    deferGenerateResponse = true;
+    deferJobResponse = true;
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("tab", { name: "Crear mazo" }));
+    fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Sports" } });
+    fireEvent.change(screen.getByLabelText("Temática e indicaciones"), {
+      target: { value: "Sports for adults" },
+    });
+    fireEvent.change(screen.getByLabelText("Cantidad de cartas"), { target: { value: "120" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear y generar" }));
+
+    const progress = await screen.findByRole("region", { name: "Progreso de generación" });
+    expect(progress).toHaveTextContent("Preparando la generación");
+    expect(progress).toHaveTextContent("0/120 cartas");
+    expect(
+      within(progress).getByRole("status", { name: "Encolando la generación…" }),
+    ).toBeVisible();
+
+    await act(async () => {
+      resolveGenerateResponse?.(
+        Response.json({
+          data: { id: "job-1", deckId: "deck-2", status: "queued", processed: 0, requested: 120 },
+        }),
+      );
+    });
+
+    await waitFor(() => expect(progress).toHaveTextContent("0/120 cartas"));
+    expect(within(progress).queryByRole("status", { name: "Encolando la generación…" })).toBeNull();
+    expect(within(progress).getByRole("status")).toHaveTextContent("Progreso en vivo");
+  });
+
+  it("shows a spinner while the deck catalog loads", async () => {
+    deferCatalogResponse = true;
+    render(<AdminDashboard />);
+
+    expect(await screen.findByRole("status", { name: "Cargando mazos…" })).toBeVisible();
+
+    deferCatalogResponse = false;
+    await act(async () => {
+      resolveCatalogResponse?.(Response.json({ data: [deck] }));
+    });
+
+    await screen.findByRole("heading", { name: "jaula" });
+    expect(screen.queryByRole("status", { name: "Cargando mazos…" })).toBeNull();
+  });
+
   it.each([50, 400])(
     "submits %i cards from creation without splitting the browser request",
     async (count) => {

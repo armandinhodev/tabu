@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState, type FormEvent } from "react";
 import { type AdminSettings, type DeepSeekModel } from "@/application/admin/settings";
 import { Button } from "@/ui/components/ui/button";
+import { Spinner } from "@/ui/components/ui/spinner";
 import type { AdminApi } from "./deck-management";
 
 export function ModelSettings({
@@ -98,9 +99,13 @@ export function ModelSettings({
       >
         {saving ? "Guardando…" : "Guardar configuración"}
       </Button>
-      <p role="status" className="text-body-sm text-fg-muted">
-        {loading ? "Cargando configuración…" : saved ? "Configuración guardada." : ""}
-      </p>
+      {loading ? (
+        <Spinner label="Cargando configuración…" />
+      ) : (
+        <p role="status" className="text-body-sm text-fg-muted">
+          {saved ? "Configuración guardada." : ""}
+        </p>
+      )}
     </form>
   );
 }
