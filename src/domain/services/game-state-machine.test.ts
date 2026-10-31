@@ -253,10 +253,9 @@ describe("resolveTurn", () => {
     expect(result.game.currentTurn?.skipsUsed).toBe(1);
     expect(result.game.deck.cards.size).toBe(deckSizeBefore - 1);
 
-    // La carta skipeada pasa al rival.
-    expect(result.game.passedCards).toHaveLength(1);
-    expect(result.game.passedCards[0]?.card.id).toBe(turn.card.id);
-    expect(result.game.passedCards[0]?.toTeamId).toBe("t2");
+    // La carta skipeada se consume: no vuelve a salir en la partida.
+    expect(result.game.discardedCardIds).toContain(turn.card.id);
+    expect(result.game.deck.cards.remaining.some((card) => card.id === turn.card.id)).toBe(false);
     expect(eventTypes(result.events)).toContain("TurnSkipped");
   });
 
@@ -270,7 +269,7 @@ describe("resolveTurn", () => {
     expect(result.game.turnHistory).toHaveLength(0);
   });
 
-  it("devuelve la carta al final del mazo cuando se agota el tiempo", () => {
+  it("consume la carta cuando se agota el tiempo: no vuelve al mazo", () => {
     const { ctx, game } = started();
     const turn = game.currentTurn;
 
@@ -279,10 +278,9 @@ describe("resolveTurn", () => {
     }
 
     const result = resolveTurn(game, { kind: "TIME" }, ctx);
-    const lastCard = result.game.deck.cards.remaining.at(-1);
 
-    expect(lastCard?.id).toBe(turn.card.id);
-    expect(result.game.discardedCardIds).toHaveLength(0);
+    expect(result.game.deck.cards.remaining.some((card) => card.id === turn.card.id)).toBe(false);
+    expect(result.game.discardedCardIds).toContain(turn.card.id);
     expect(result.game.turnHistory[0]?.pointsDelta).toBe(0);
   });
 
@@ -321,15 +319,58 @@ describe("resolveTurn", () => {
   });
 });
 
+describe("cartas sin repetir", () => {
+  it("ninguna carta se repite durante toda la partida, ni por skip ni por tiempo agotado", () => {
+    const ctx = makeContext();
+    const cards = Array.from({ length: 8 }, (_, index) => makeCard(`c${index + 1}`));
+    const game = prepareGame(makeGame({ deck: makeDeck(cards) }), ctx).game;
+
+    const dealt: string[] = [];
+    let current = game;
+    let step = 0;
+
+    while (current.status === "playing") {
+      const turn = current.currentTurn;
+
+      if (turn === null) {
+        break;
+      }
+
+      if (turn.status === "pending") {
+        current = activateTurn(current, ctx).game;
+        continue;
+      }
+
+      dealt.push(turn.card.id);
+      step += 1;
+
+      if (step % 3 === 1) {
+        // Saltar consume la carta y el descriptor recibe otra del mazo.
+        current = skipCard(current, ctx).game;
+        continue;
+      }
+
+      if (step % 3 === 2) {
+        current = resolveTurn(current, { kind: "TIME" }, ctx).game;
+        continue;
+      }
+
+      current = resolveTurn(current, { kind: "CORRECT", actorId: PlayerId.from("p2") }, ctx).game;
+    }
+
+    expect(dealt.length).toBeGreaterThan(cards.length - 1);
+    expect(new Set(dealt).size).toBe(dealt.length);
+  });
+});
+
 describe("rondas y fin de partida", () => {
-  it("honors the configured round limit when only rival passed cards remain", () => {
+  it("honors the configured round limit when the deck is empty", () => {
     const ctx = makeContext();
     const game = makeGame({
       status: "playing",
       round: 2,
       settings: makeSettings({ rounds: 2 }),
       deck: makeDeck([]),
-      passedCards: [{ card: makeCard("reserved"), toTeamId: TeamId.from("t1") }],
       currentTurn: makeTurn({ teamId: "t2", descriptorId: "p3" }),
     });
 
@@ -467,7 +508,7 @@ describe("rondas y fin de partida", () => {
     const ctx = makeContext();
     const game = startGame(
       makeGame({
-        deck: makeDeck([makeCard("c1"), makeCard("c2")]),
+        deck: makeDeck([makeCard("c1"), makeCard("c2"), makeCard("c3")]),
         teams: [
           makeTeam(0, [makePlayer("p1", "t1"), makePlayer("p2", "t1")], { score: Score.from(2) }),
           makeTeam(1, [makePlayer("p3", "t2"), makePlayer("p4", "t2")], { score: Score.from(2) }),

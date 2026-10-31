@@ -119,7 +119,6 @@ describe("game mapper", () => {
         card: makeCard("c9", "playa", ["arena"]),
       }),
       discardedCardIds: [CardId.from("c1")],
-      passedCards: [{ card: makeCard("c10", "sol", ["luna"]), toTeamId: TeamId.from("t1") }],
       turnHistory: [
         {
           turnId: TurnId.from("turn-0"),

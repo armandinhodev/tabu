@@ -421,8 +421,7 @@ describe("skipTurn", () => {
     expect(result.pointsDelta).toBe(0);
     expect(result.game.currentTurn?.teamId).toBe("t1");
     expect(result.game.currentTurn?.card.id).not.toBe(skipped?.id);
-    expect(result.game.passedCards).toHaveLength(1);
-    expect(result.game.passedCards[0]?.card.id).toBe(skipped?.id);
+    expect(result.game.discardedCardIds).toContain(skipped?.id);
     expect(result.game.teams[0]?.score.value).toBe(0);
   });
 
@@ -474,15 +473,14 @@ describe("límite de skips por turno (S4)", () => {
     expect(turnAfter?.card.id).not.toBe(cardBefore);
   });
 
-  it("la carta skipeada pasa al rival", () => {
+  it("la carta skipeada se consume y no vuelve a salir", () => {
     const harness = makeHarness();
     const cardBefore = harness.game.currentTurn?.card.id;
 
     const result = skipTurn(harness.deps, harness.game.id, PlayerId.from("p1"));
 
-    expect(result.game.passedCards).toHaveLength(1);
-    expect(result.game.passedCards[0]?.card.id).toBe(cardBefore);
-    expect(result.game.passedCards[0]?.toTeamId).toBe("t2");
+    expect(result.game.discardedCardIds).toContain(cardBefore);
+    expect(result.game.deck.cards.remaining.some((card) => card.id === cardBefore)).toBe(false);
   });
 
   it("permite los 3 skips del turno y rechaza el cuarto", () => {
@@ -605,7 +603,7 @@ describe("timed round continuity", () => {
 });
 
 describe("expireTurn", () => {
-  it("cierra el turno por reloj, sin puntos y devuelve la carta al final del mazo", () => {
+  it("cierra el turno por reloj, sin puntos y consumiendo la carta", () => {
     const harness = makeHarness();
     const before = harness.deps.registry.findById(harness.game.id);
     const expiredCardId = before?.currentTurn?.card.id;
@@ -618,9 +616,9 @@ describe("expireTurn", () => {
 
     expect(result?.pointsDelta).toBe(0);
     expect(result?.game.teams[0]?.score.value).toBe(0);
-    expect(result?.game.passedCards).toEqual([]);
-    expect(deck.length).toBe(remainingBefore);
-    expect(deck.at(-1)?.id).toBe(expiredCardId);
+    expect(result?.game.discardedCardIds).toContain(expiredCardId);
+    expect(deck.length).toBe(remainingBefore - 1);
+    expect(deck.some((card) => card.id === expiredCardId)).toBe(false);
   });
 
   it("ignora una partida que no está jugando", () => {

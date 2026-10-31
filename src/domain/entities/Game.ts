@@ -1,4 +1,3 @@
-import type { Card } from "./Card";
 import type { CardDeck } from "../services/CardDeck";
 import type { PlayerId, TeamId } from "../value-objects/PlayerId";
 import type { RoomCode } from "../value-objects/RoomCode";
@@ -14,11 +13,6 @@ export type GameStatus = "waiting" | "playing" | "finished";
 export interface DeckSnapshot {
   readonly name: string;
   readonly cards: CardDeck;
-}
-
-export interface PassedCard {
-  readonly card: Card;
-  readonly toTeamId: TeamId;
 }
 
 export interface TurnHistoryEntry {
@@ -43,7 +37,6 @@ export interface Game {
   readonly turnOrder: readonly PlayerId[];
   readonly currentTurn: Turn | null;
   readonly discardedCardIds: readonly CardId[];
-  readonly passedCards: readonly PassedCard[];
   readonly turnHistory: readonly TurnHistoryEntry[];
   readonly round: number;
   readonly createdAt: Date;

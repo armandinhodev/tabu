@@ -121,7 +121,6 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     turnOrder: teams.flatMap((team) => team.players.map((player) => player.id)),
     currentTurn: null,
     discardedCardIds: [],
-    passedCards: [],
     turnHistory: [],
     round: 1,
     createdAt: NOW,

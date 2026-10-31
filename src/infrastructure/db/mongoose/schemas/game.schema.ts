@@ -65,13 +65,6 @@ export interface GameTurnDocument {
   skipsUsed?: number;
 }
 
-export interface GamePassedCardDocument {
-  cardId: string;
-  word: string;
-  taboo: string[];
-  toTeamId: string;
-}
-
 export interface GameTurnHistoryDocument {
   turnId: string;
   teamId: string;
@@ -96,7 +89,6 @@ export interface GameDocument {
   turnOrder: string[];
   currentTurn: GameTurnDocument | null;
   discardedCardIds: string[];
-  passedCards: GamePassedCardDocument[];
   turnHistory: GameTurnHistoryDocument[];
   round: number;
   winnerTeamId: string | null;
@@ -194,16 +186,6 @@ const turnSchema = new Schema<GameTurnDocument>(
   { _id: false, versionKey: false },
 );
 
-const passedCardSchema = new Schema<GamePassedCardDocument>(
-  {
-    cardId: { type: String, required: true, trim: true },
-    word: { type: String, required: true, trim: true },
-    taboo: { type: [String], required: true },
-    toTeamId: { type: String, required: true, trim: true },
-  },
-  { _id: false, versionKey: false },
-);
-
 const turnHistorySchema = new Schema<GameTurnHistoryDocument>(
   {
     turnId: { type: String, required: true, trim: true },
@@ -230,7 +212,6 @@ export const gameSchema = new Schema<GameDocument>(
     turnOrder: { type: [String], required: true },
     currentTurn: { type: turnSchema, default: null },
     discardedCardIds: { type: [String], required: true, default: [] },
-    passedCards: { type: [passedCardSchema], required: true, default: [] },
     turnHistory: { type: [turnHistorySchema], required: true, default: [] },
     round: { type: Number, required: true, min: 1, default: 1 },
     winnerTeamId: { type: String, default: null },

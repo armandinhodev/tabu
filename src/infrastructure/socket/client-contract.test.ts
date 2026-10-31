@@ -240,7 +240,6 @@ describe("contrato cliente-servidor", () => {
       expect(after.deck.cards.remaining.some((candidate) => candidate.id === bannedCard.id)).toBe(
         false,
       );
-      expect(after.passedCards.some(({ card }) => card.id === bannedCard.id)).toBe(false);
       expect(after.currentTurn?.card.id).not.toBe(bannedCard.id);
       expect(after.currentTurn?.descriptorId).toBe(initial.descriptorId);
       expect(after.currentTurn?.deadlineAt.getTime()).toBe(initial.deadlineAt);

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { NOW, makeGame, makePlayer, makeTeam, makeSettings } from "../__fixtures__/game";
+import {
+  NOW,
+  makeCard,
+  makeDeck,
+  makeGame,
+  makePlayer,
+  makeTeam,
+  makeSettings,
+} from "../__fixtures__/game";
 import { TurnId } from "../value-objects/PlayerId";
 import { activateTurn, isTurnExpired, resolveTurn, startGame } from "./GameStateMachine";
 
@@ -20,7 +28,14 @@ describe("randomized turns with explicit start", () => {
           makePlayer(`p${index}-b`, `t${index + 1}`),
         ]),
       );
-      let game = startGame(makeGame({ teams, settings: makeSettings({ teamCount }) }), ctx).game;
+      // Cada turno agota el reloj y consume su carta: el mazo tiene que alcanzar.
+      const cards = Array.from({ length: teamCount * 4 + 2 }, (_, index) =>
+        makeCard(`c${index + 1}`),
+      );
+      let game = startGame(
+        makeGame({ teams, settings: makeSettings({ teamCount }), deck: makeDeck(cards) }),
+        ctx,
+      ).game;
       const selected = new Map<string, string[]>();
       for (let index = 0; index < teamCount * 4; index += 1) {
         const turn = game.currentTurn!;

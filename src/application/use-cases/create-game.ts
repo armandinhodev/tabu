@@ -18,12 +18,7 @@ import { type GameId, type PlayerId } from "../../domain/value-objects/PlayerId"
 import { RoomCode } from "../../domain/value-objects/RoomCode";
 import { Score } from "../../domain/value-objects/Score";
 import type { CreateGameInput } from "../../infrastructure/socket/payloads";
-import {
-  TEAM_NAMES,
-  teamColorAt,
-  type GameDeps,
-  type UseCaseResult,
-} from "./common";
+import { TEAM_NAMES, teamColorAt, type GameDeps, type UseCaseResult } from "./common";
 
 export interface CreateGameData {
   readonly gameId: GameId;
@@ -69,9 +64,7 @@ export async function createGame(
 
   const settings: GameSettings = {
     teamCount,
-    turnSeconds: Duration.fromSeconds(
-      input.options?.turnSeconds ?? deps.config.turnSecondsDefault,
-    ),
+    turnSeconds: Duration.fromSeconds(input.options?.turnSeconds ?? deps.config.turnSecondsDefault),
     tabooWordCount,
     skipLimit: input.options?.skipLimit ?? DEFAULT_SKIP_LIMIT,
     rounds: deps.config.rounds,
@@ -117,7 +110,6 @@ export async function createGame(
     turnOrder: [],
     currentTurn: null,
     discardedCardIds: [],
-    passedCards: [],
     turnHistory: [],
     round: 1,
     createdAt: now,

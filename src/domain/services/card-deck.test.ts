@@ -53,13 +53,6 @@ describe("CardDeck", () => {
     expect(deck.remove(CardId.from("nope")).size).toBe(3);
   });
 
-  it("devuelve una carta al final", () => {
-    const deck = CardDeck.from(deckCards).returnToBottom(card("c9", "nueve"));
-
-    expect(deck.size).toBe(4);
-    expect(deck.remaining.map((item) => item.word)).toEqual(["uno", "dos", "tres", "nueve"]);
-  });
-
   it("expone peek sin consumir", () => {
     const deck = CardDeck.from(deckCards);
     expect(deck.peek()?.word).toBe("uno");

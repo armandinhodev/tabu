@@ -245,7 +245,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // El turno sigue: el descriptor recibe otra carta con el mismo reloj.
       playSound("turn.skip");
       appendGuessMessage(
-        `Carta saltada: "${payload.skippedWord}". Pasa al siguiente equipo.`,
+        `Carta saltada: "${payload.skippedWord}". Se descarta y el descriptor recibe otra.`,
         "skip",
       );
     };

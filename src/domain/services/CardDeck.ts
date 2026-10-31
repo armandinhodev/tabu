@@ -45,8 +45,4 @@ export class CardDeck {
   remove(cardId: CardId): CardDeck {
     return new CardDeck(this.cards.filter((card) => card.id !== cardId));
   }
-
-  returnToBottom(card: Card): CardDeck {
-    return new CardDeck([...this.cards, card]);
-  }
 }

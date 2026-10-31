@@ -17,7 +17,7 @@ import type { DomainEvent, Mvp, PlayerRanking, Standing } from "../events/events
 import { pointsForOutcome, scoreAfterOutcome } from "../policies/ScoringPolicy";
 import { nextDescriptor, nextTeam } from "../policies/TurnOrderPolicy";
 import type { Rng } from "../rng";
-import type { CardId, PlayerId, TeamId, TurnId } from "../value-objects/PlayerId";
+import type { CardId, PlayerId, TurnId } from "../value-objects/PlayerId";
 import { TabooWords } from "../value-objects/TabooWords";
 import { shuffleDeck } from "./DeckShuffler";
 
@@ -99,7 +99,6 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     currentTurn: null,
     turnHistory: [],
     discardedCardIds: [],
-    passedCards: [],
     round: 1,
     winnerTeamId: null,
     finishedAt: null,
@@ -138,7 +137,7 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     candidate.id === team.id ? selection.team : candidate,
   );
 
-  const { deck, passedCards, card } = drawForTeam(game, team.id);
+  const { deck, card } = game.deck.cards.draw();
 
   if (card === null) {
     return finishGame(
@@ -146,7 +145,6 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
         ...game,
         teams: teamsWithDescriptor,
         deck: { ...game.deck, cards: deck },
-        passedCards,
       },
       ctx,
     );
@@ -172,7 +170,6 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     ...game,
     teams: teamsWithDescriptor,
     deck: { ...game.deck, cards: deck },
-    passedCards,
     currentTurn: turn,
   };
 
@@ -213,9 +210,12 @@ export function activateTurn(game: Game, ctx: TransitionContext): TransitionResu
 /**
  * Salta la carta que el descriptor está describiendo (S4).
  *
- * El turno **no** termina: la carta actual pasa al equipo rival y el
- * descriptor recibe otra del mazo, con el mismo reloj. El límite de skips
- * vive en el turno (`turn.skipsUsed`), así que se reinicia con cada turno.
+ * El turno **no** termina: la carta se consume y el descriptor recibe otra
+ * del mazo, con el mismo reloj. El límite de skips vive en el turno
+ * (`turn.skipsUsed`), así que se reinicia con cada turno.
+ *
+ * La carta saltada **no vuelve a salir**: no pasa al equipo rival, se
+ * descarta como las penalizadas (ninguna carta se repite en la partida).
  */
 export function skipCard(game: Game, ctx: TransitionContext): TransitionResult {
   if (game.status !== "playing") {
@@ -228,14 +228,15 @@ export function skipCard(game: Game, ctx: TransitionContext): TransitionResult {
     throw new TurnNotActiveError();
   }
 
-  const rival = nextTeam(game.teams, turn.teamId);
-
   const drawn = game.deck.cards.draw();
+  const discardedCardIds = [...game.discardedCardIds, turn.card.id];
 
   if (drawn.card === null) {
-    // No queda mazo: la carta skipeada pasa al rival y la partida termina.
-    const passedCards = [...game.passedCards, { card: turn.card, toTeamId: rival.id }];
-    const finished = finishGame({ ...game, passedCards }, ctx);
+    // No queda mazo: la carta skipeada se consume y la partida termina.
+    const finished = finishGame(
+      { ...game, deck: { ...game.deck, cards: drawn.deck }, discardedCardIds },
+      ctx,
+    );
 
     return { game: finished.game, events: finished.events };
   }
@@ -254,7 +255,7 @@ export function skipCard(game: Game, ctx: TransitionContext): TransitionResult {
   const next: Game = {
     ...game,
     deck: { ...game.deck, cards: drawn.deck },
-    passedCards: [...game.passedCards, { card: turn.card, toTeamId: rival.id }],
+    discardedCardIds,
     currentTurn: nextTurn,
   };
 
@@ -313,11 +314,10 @@ export function resolveTurn(
   let deck = game.deck.cards;
   let discardedCardIds: readonly CardId[] = game.discardedCardIds;
 
-  if (kind === "VIOLATION") {
+  if (kind === "VIOLATION" || kind === "TIME") {
+    // Penalizada o tiempo agotado: la carta se consume y no vuelve al mazo.
     deck = deck.remove(turn.card.id);
     discardedCardIds = [...discardedCardIds, turn.card.id];
-  } else if (kind === "TIME") {
-    deck = deck.returnToBottom(turn.card);
   }
 
   const historyEntry: TurnHistoryEntry = {
@@ -373,14 +373,13 @@ export function resolveTurn(
 
   // Resolving a card does not end the team's timed round.
   if (kind !== "TIME") {
-    const drawn = drawForTeam(nextGame, turn.teamId);
+    const drawn = nextGame.deck.cards.draw();
 
     if (drawn.card !== null) {
       return {
         game: {
           ...nextGame,
           deck: { ...nextGame.deck, cards: drawn.deck },
-          passedCards: drawn.passedCards,
           currentTurn: {
             ...turn,
             card: {
@@ -409,7 +408,7 @@ export function resolveTurn(
     });
   }
 
-  const deckExhausted = nextGame.deck.cards.isEmpty && nextGame.passedCards.length === 0;
+  const deckExhausted = nextGame.deck.cards.isEmpty;
 
   if (deckExhausted) {
     const finished = finishGame(nextGame, ctx);
@@ -538,21 +537,6 @@ function firstTeamOf(game: Game): Team {
     game.teams.find((team) => team.players.some((player) => player.id === game.turnOrder[0])) ??
     nextTeam(game.teams, null)
   );
-}
-
-function drawForTeam(game: Game, teamId: TeamId) {
-  const passedIndex = game.passedCards.findIndex((entry) => entry.toTeamId === teamId);
-  const passedEntry = game.passedCards[passedIndex];
-
-  if (passedEntry !== undefined) {
-    return {
-      card: passedEntry.card,
-      deck: game.deck.cards,
-      passedCards: game.passedCards.filter((_, index) => index !== passedIndex),
-    };
-  }
-
-  return { ...game.deck.cards.draw(), passedCards: game.passedCards };
 }
 
 function standingsOf(teams: readonly Team[]): readonly Standing[] {

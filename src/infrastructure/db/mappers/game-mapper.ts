@@ -46,12 +46,6 @@ export function toGameDocument(game: Game): GameDocumentInput {
     turnOrder: [...game.turnOrder],
     currentTurn: game.currentTurn === null ? null : toTurnDocument(game.currentTurn),
     discardedCardIds: [...game.discardedCardIds],
-    passedCards: game.passedCards.map((entry) => ({
-      cardId: entry.card.id,
-      word: entry.card.word,
-      taboo: [...entry.card.taboo.words],
-      toTeamId: entry.toTeamId,
-    })),
     turnHistory: game.turnHistory.map((entry) => ({
       turnId: entry.turnId,
       teamId: entry.teamId,
@@ -91,10 +85,6 @@ export function toGameDomain(document: GameDocument): Game {
     turnOrder: document.turnOrder.map(PlayerId.from),
     currentTurn: document.currentTurn === null ? null : toTurnDomain(document.currentTurn),
     discardedCardIds: document.discardedCardIds.map(CardId.from),
-    passedCards: document.passedCards.map((entry) => ({
-      card: toCardDomain({ id: entry.cardId, word: entry.word, taboo: entry.taboo }),
-      toTeamId: TeamId.from(entry.toTeamId),
-    })),
     turnHistory: document.turnHistory.map((entry) => ({
       turnId: TurnId.from(entry.turnId),
       teamId: TeamId.from(entry.teamId),

@@ -21,6 +21,10 @@ todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo ad
   contra la carta activa, le confirma el acierto y **el texto que escribió lo ve toda la sala**.
 - **Equipos rivales**: ven la palabra y los chips **reportables** al toque durante el turno activo.
 
+**Ninguna carta se repite en una partida.** Toda carta que sale del mazo se consume o se descarta:
+la adivinada, la penalizada, la que se salta y la que se agota el tiempo. La partida termina
+cuando el mazo se agota.
+
 Al comenzar la partida se sortean el equipo inicial y su descriptor. Los equipos se alternan a
 partir de ese equipo; dentro de cada equipo se sortea entre quienes todavía no describieron, sin
 repetir hasta que pasen todos. Cada turno espera a que el descriptor pulse _Comenzar turno_: recién

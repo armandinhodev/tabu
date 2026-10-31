@@ -286,8 +286,11 @@ Violation {
 | Se sortea | Sale del mazo (`draw()`). |
 | Adivinada | Se consume; queda en el historial de la partida. |
 | **Penalizada** (palabra prohibida, gesto o sonido) | **Se anula**: se descarta del mazo y **no vuelve a salir**. |
-| Tiempo agotado | Vuelve al final del mazo (`returnToBottom()`). |
-| Aceptada por el descriptor | Pasa al equipo contrario (`passToOtherTeam()`), sin puntos ni penalización. |
+| Tiempo agotado | **Se consume**: no vuelve al mazo. |
+| Saltada por el descriptor | **Se consume**: no pasa al equipo contrario y no vuelve a salir. |
+
+> **Regla de la partida:** ninguna carta se repite. Cada carta que salió del mazo se consume o se
+> descarta, y no vuelve a aparecer en la misma partida.
 
 ---
 
@@ -302,8 +305,8 @@ Violation {
 5. **Acierto:** un compañero distinto del descriptor envía la respuesta correcta → **+1** al equipo y al jugador, y se entrega otra carta al mismo descriptor, con el mismo equipo, reloj y saltos usados. El equipo cambia cuando termina el reloj o se agotan las cartas disponibles. Cada nuevo turno queda pendiente hasta que su descriptor pulsa *Comenzar turno*; antes de ese momento no corre el reloj ni se revela la carta.
 6. **Penalización por palabra prohibida:** un miembro del **equipo rival** toca el chip de la palabra que se dijo (el chip muestra la palabra exacta, p. ej. *fuego*) → **−1** al equipo que describe y **la carta se anula** (se descarta del mazo: no vuelve a salir). Se entrega otra carta sin cambiar el descriptor ni el reloj. El servidor valida que la palabra marcada sea una de las prohibidas de esa carta; si no coincide, se rechaza con `game:error` (`INVALID_TABOO_WORD`) y no hay penalización ni cambio de carta.
 7. **Gestos y sonidos:** el equipo rival (o el descriptor) puede reportarlos con *Reportar gesto* / *Reportar sonido* → **−1** al equipo que describe y la carta se anula, igual que en el caso anterior, sin reiniciar el reloj ni cambiar al descriptor.
-8. **Aceptado (skip):** el descriptor puede *Aceptar y pasar carta* (la descripción es demasiado ambigua) → la carta pasa al equipo contrario, sin puntos ni penalización.
-9. **Tiempo agotado:** el turno termina, sin puntos ni penalización; la carta **vuelve al final del mazo**.
+8. **Aceptado (skip):** el descriptor puede *Aceptar y pasar carta* (la descripción es demasiado ambigua) → la carta **se descarta** y el descriptor recibe otra del mazo, con el mismo reloj, sin puntos ni penalización. La carta no pasa al equipo contrario: ninguna carta se repite en la partida.
+9. **Tiempo agotado:** el turno termina, sin puntos ni penalización; la carta **se consume** y no vuelve al mazo.
 10. **Fin de partida:** cuando se completa el número de rondas configurado (default 1 = mazo entero) o se agota el mazo. Gana el equipo con más puntos. **Empate → se declara empate**, no se fuerza un ganador.
 11. **Reconexión:** el `playerToken` (UUID) se guarda en `localStorage`. Si el jugador se desconecta, el servidor lo marca `connected: false` y su turno **pasa al siguiente descriptor del mismo equipo**, con un aviso de 5 segundos. Al reconectar recibe el estado completo.
 12. **Sin trampas automáticas:** el servidor es la única autoridad sobre puntaje y tiempo. Los clientes **nunca** envían puntos ni tiempo: solo acciones.
