@@ -40,6 +40,17 @@ it("keeps both teams inside one score block with a divider between them", () => 
   expect(screen.queryByText(":")).not.toBeInTheDocument();
 });
 
+it("marks the outer edge of each team with its own color", () => {
+  render(<ScoreBoard teams={teams(2)} activeTeamId="t1" />);
+  const entries = within(screen.getByRole("list", { name: "Puntajes" })).getAllByRole("listitem");
+
+  const firstBand = entries[0]!.querySelector('[aria-hidden="true"]');
+  const secondBand = entries[1]!.querySelector('[aria-hidden="true"]');
+
+  expect(firstBand).toHaveClass("bg-team-1", "left-0");
+  expect(secondBand).toHaveClass("bg-team-2", "right-0");
+});
+
 it.each([3, 4])("keeps %i teams in one row with names above their scores", (count) => {
   render(<ScoreBoard teams={teams(count)} activeTeamId="t2" />);
   const board = screen.getByRole("list", { name: "Puntajes" });

@@ -94,13 +94,22 @@ export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) 
       {teams.map((team, index) => {
         const palette = teamPalette(team.color);
         const active = team.id === activeTeamId;
+        // Cada equipo marca su color en el borde exterior de su mitad: el
+        // primero a la izquierda y el último a la derecha (D17).
+        const edges = facing
+          ? index === 0
+            ? ["left"]
+            : ["right"]
+          : index === teams.length - 1
+            ? ["left", "right"]
+            : ["left"];
 
         return (
           <li
             key={team.id}
             aria-current={active ? "true" : undefined}
             className={cn(
-              "flex min-w-0 items-center gap-2 px-4 py-3",
+              "relative flex min-w-0 items-center gap-2 px-4 py-3",
               facing
                 ? ["justify-between", index === 1 && "flex-row-reverse"]
                 : "flex-col text-center",
@@ -108,6 +117,17 @@ export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) 
               active && palette.soft,
             )}
           >
+            {edges.map((edge) => (
+              <span
+                key={edge}
+                aria-hidden="true"
+                className={cn(
+                  "absolute inset-y-0 w-[3px]",
+                  edge === "left" ? "left-0" : "right-0",
+                  palette.bar,
+                )}
+              />
+            ))}
             <span
               className={cn(
                 "min-w-0 flex-1 font-semibold break-words",

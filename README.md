@@ -37,9 +37,9 @@ Durante el turno, el cronómetro aparece en el sidebar derecho. En móvil, el re
 comparten una fila compacta sobre la carta; en escritorio, los paneles laterales dejan más espacio
 al contenido central y la carta juega al lado de las notificaciones en dos columnas. El marcador es
 **un solo bloque**: los equipos se enfrentan dentro de la misma caja, separados por una línea, con
-el nombre y el puntaje de cada lado; con tres o cuatro equipos, el nombre va arriba y el puntaje
-abajo. El equipo activo se destaca con su color. Cada equipo conserva el borde de su color, esté
-activo o no.
+el nombre y el puntaje de cada lado; cada equipo marca su borde exterior con su color. Con tres o
+cuatro equipos, el nombre va arriba y el puntaje abajo. El equipo activo se tiñe con su color. Cada
+equipo conserva el borde de su color, esté activo o no.
 El panel de
 actividad combina respuestas escritas y avisos públicos: quienes adivinan escriben en el panel y
 **lo que escriben lo ve toda la sala**, rival incluido; se anuncia como _"Mika escribió:"_ con el
