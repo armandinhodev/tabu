@@ -35,14 +35,16 @@ Las tipografías (Outfit, Inter y JetBrains Mono) viven versionadas en `src/app/
 
 Durante el turno, el cronómetro aparece en el sidebar derecho. En móvil, el resumen y el reloj
 comparten una fila compacta sobre la carta; en escritorio, los paneles laterales dejan más espacio
-al contenido central. El panel de
+al contenido central y la carta juega al lado de las notificaciones en dos columnas. El panel de
 puntajes enfrenta los nombres y resultados de dos equipos; con tres o cuatro, muestra una fila de
 bloques con el nombre arriba y el puntaje debajo. El equipo activo se destaca con su color.
 El panel de
 actividad combina respuestas privadas y avisos públicos: quienes adivinan pueden escribir; el
 campo de respuesta aparece antes del historial para no quedar desplazado por los avisos. El
 descriptor y los rivales solo ven notificaciones. Los avisos muestran la palabra saltada, quién
-marcó una prohibida, la carta anulada y el equipo penalizado, con colores, etiquetas e íconos.
+marcó una prohibida, la carta anulada, el equipo penalizado y cada desacierto con la palabra que se
+escribió; quien falló ya recibe su confirmación privada, así que el aviso público no se le repite.
+El panel muestra los **últimos tres** avisos.
 El panel no repite los avisos de inicio o fin del turno: esa información se consulta en el sidebar.
 La lista de jugadores muestra nombres y distintivos de rol, sin avatares con iniciales.
 Las respuestas y su confirmación nunca se comparten. Los avisos se conservan al cambiar de carta

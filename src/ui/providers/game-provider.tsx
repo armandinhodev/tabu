@@ -17,6 +17,7 @@ import type {
   ErrorAck,
   GameFinishedView,
   GuessAck,
+  GuessMissedView,
   PenaltyAppliedView,
   RoundEndedView,
   TurnStartedView,
@@ -244,6 +245,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       );
     };
 
+    const onGuessMissed = (payload: GuessMissedView): void => {
+      appendGuessMessage(
+        `${playerName(payload.playerId)} no acertó: "${payload.guess}".`,
+        "notice",
+      );
+    };
+
     const onPenalty = (payload: PenaltyAppliedView): void => {
       setPenalty(payload);
       playSound("taboo.hit");
@@ -289,6 +297,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.on("turn:ended", onTurnEnded);
     socket.on("card:resolved", onTurnEnded);
     socket.on("turn:skipped", onTurnSkipped);
+    socket.on("turn:guessMissed", onGuessMissed);
     socket.on("penalty:applied", onPenalty);
     socket.on("score:updated", onScore);
     socket.on("round:ended", onRoundEnded);
@@ -312,6 +321,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off("turn:ended", onTurnEnded);
       socket.off("card:resolved", onTurnEnded);
       socket.off("turn:skipped", onTurnSkipped);
+      socket.off("turn:guessMissed", onGuessMissed);
       socket.off("penalty:applied", onPenalty);
       socket.off("score:updated", onScore);
       socket.off("round:ended", onRoundEnded);

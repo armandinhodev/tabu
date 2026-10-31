@@ -87,6 +87,47 @@ it("lets only an active guesser send an answer and shows private feedback", () =
   expect(screen.queryByLabelText("Tu respuesta")).not.toBeInTheDocument();
 });
 
+it("shows only the last three activity entries", () => {
+  render(
+    <GuessChat
+      active={false}
+      onGuess={vi.fn()}
+      messages={[
+        { id: 1, kind: "notice", text: "Uno" },
+        { id: 2, kind: "skip", text: "Dos" },
+        { id: 3, kind: "penalty", text: "Tres" },
+        { id: 4, kind: "notice", text: "Cuatro" },
+        { id: 5, kind: "score", text: "Cinco" },
+      ]}
+    />,
+  );
+
+  expect(screen.queryByText("Uno")).not.toBeInTheDocument();
+  expect(screen.queryByText("Dos")).not.toBeInTheDocument();
+  for (const text of ["Tres", "Cuatro", "Cinco"]) {
+    expect(screen.getByText(text)).toBeInTheDocument();
+  }
+});
+
+it("keeps the newest private answer visible in the last three entries", () => {
+  render(
+    <GuessChat
+      active
+      onGuess={vi.fn()}
+      messages={[
+        { id: 1, kind: "notice", text: "Viejo" },
+        { id: 2, kind: "notice", text: "Menos viejo" },
+        { id: 3, kind: "guess", text: "agua" },
+        { id: 4, kind: "feedback", text: "No es esa", outcome: "incorrect" },
+      ]}
+    />,
+  );
+
+  expect(screen.queryByText("Viejo")).not.toBeInTheDocument();
+  expect(screen.getByText("agua")).toBeInTheDocument();
+  expect(screen.getByText("No es esa")).toBeInTheDocument();
+});
+
 it.each([true, false])("shows styled game events with input only for guessers (%s)", (active) => {
   render(
     <GuessChat

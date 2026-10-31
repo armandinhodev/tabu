@@ -28,6 +28,7 @@ export const SERVER_EVENTS = {
   gameFinished: "game:finished",
   turnStarted: "turn:started",
   turnSkipped: "turn:skipped",
+  turnGuessMissed: "turn:guessMissed",
   turnTick: "turn:tick",
   turnEnded: "turn:ended",
   cardResolved: "card:resolved",
@@ -123,6 +124,13 @@ export interface TurnSkippedView {
   readonly deadlineAt: number;
 }
 
+/** Un jugador escribió una respuesta equivocada; la sala ve el intento. */
+export interface GuessMissedView {
+  readonly turnId: string;
+  readonly playerId: string;
+  readonly guess: string;
+}
+
 export interface PenaltyAppliedView {
   readonly reason: ViolationReason;
   readonly tabooWord?: string;
@@ -165,6 +173,7 @@ export interface ServerToClientEvents {
   "game:finished": (payload: GameFinishedView) => void;
   "turn:started": (payload: TurnStartedView) => void;
   "turn:skipped": (payload: TurnSkippedView) => void;
+  "turn:guessMissed": (payload: GuessMissedView) => void;
   "turn:tick": (payload: { readonly remaining: number }) => void;
   "turn:ended": (payload: TurnEndedView) => void;
   "penalty:applied": (payload: PenaltyAppliedView) => void;

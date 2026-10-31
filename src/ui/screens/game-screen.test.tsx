@@ -57,6 +57,23 @@ it.each(["p1", "p2", "p3"])(
   },
 );
 
+it("places the card and the notifications in two columns on wide screens", () => {
+  context.state = toGameState(
+    makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen />
+    </SoundProvider>,
+  );
+
+  const columns = screen.getByTestId("game-columns");
+  expect(columns.className).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]");
+  expect(within(columns).getByRole("log")).toBeInTheDocument();
+  expect(within(columns).getByRole("heading", { name: "Marcador" })).toBeInTheDocument();
+});
+
 it("keeps synchronized mute controls in the sidebar and mobile header", () => {
   context.state = toGameState(
     makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),

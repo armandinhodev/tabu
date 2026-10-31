@@ -106,14 +106,19 @@ export function GameScreen() {
         ))}
       </aside>
 
-      <div className="order-2 flex min-w-0 flex-col gap-4 xl:order-none">
-        {turn.status === "pending" ? (
-          <WaitingTurnView state={state} turn={turn} busy={busy} onStart={startTurn} />
-        ) : isRival ? (
-          <RivalView {...props} />
-        ) : (
-          <DescribingView {...props} />
-        )}
+      <div
+        data-testid="game-columns"
+        className="order-2 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start xl:order-none"
+      >
+        <div className="flex min-w-0 flex-col gap-4">
+          {turn.status === "pending" ? (
+            <WaitingTurnView state={state} turn={turn} busy={busy} onStart={startTurn} />
+          ) : isRival ? (
+            <RivalView {...props} />
+          ) : (
+            <DescribingView {...props} />
+          )}
+        </div>
 
         <GuessChat
           active={isGuesser && turn.status !== "pending"}

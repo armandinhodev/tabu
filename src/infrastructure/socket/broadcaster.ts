@@ -50,6 +50,15 @@ export class Broadcaster {
     this.io.to(gameId).emit(SERVER_EVENTS.turnTick, { remaining });
   }
 
+  /** Tells the room about a missed answer, without echoing it to its author. */
+  emitGuessMissed(
+    gameId: string,
+    payload: { readonly turnId: string; readonly playerId: string; readonly guess: string },
+    authorSocketId: string,
+  ): void {
+    this.io.to(gameId).except(authorSocketId).emit(SERVER_EVENTS.turnGuessMissed, payload);
+  }
+
   emitError(socketId: string, code: string, message: string): void {
     this.io.to(socketId).emit(SERVER_EVENTS.gameError, { code, message });
   }

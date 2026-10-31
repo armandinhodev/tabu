@@ -99,9 +99,9 @@ function appearanceFor(message: GuessMessage): MessageAppearance {
 export function GuessChat({ active, messages, onGuess, disabled = false }: GuessChatProps) {
   const [answer, setAnswer] = useState("");
   const logRef = useRef<HTMLUListElement>(null);
-  const visibleMessages = messages.filter(
-    (message) => message.kind !== "turn" && (active || isPublicMessage(message)),
-  );
+  const visibleMessages = messages
+    .filter((message) => message.kind !== "turn" && (active || isPublicMessage(message)))
+    .slice(-3);
   const PanelIcon = active ? MessageCircle : Bell;
 
   useEffect(() => {

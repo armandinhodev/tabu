@@ -159,6 +159,65 @@ describe("socket server", () => {
     expect(states.get(guesser.playerId)?.turn?.turnId).toBe(turnBefore);
   });
 
+  it("tells the other players which wrong word was written", async () => {
+    const host = await harness.connect();
+    const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
+      playerName: "Host",
+      deckId: harness.deckId,
+    });
+    const players = [{ client: host, playerId: created.playerId }];
+
+    for (const name of ["Ana", "Beto", "Caro"]) {
+      const client = await harness.connect();
+      const joined = await emitAck<{ playerId: string }>(client, "game:join", {
+        code: created.code,
+        playerName: name,
+      });
+      players.push({ client, playerId: joined.playerId });
+    }
+
+    const states = new Map<string, GameStateView>();
+
+    for (const { client, playerId } of players) {
+      client.on("game:state", (state) => states.set(playerId, state));
+    }
+
+    await emitAck(host, "game:autoTeams");
+    await emitAck(host, "game:start");
+    await startSelectedTurn(harness);
+
+    const guesser = await waitFor(
+      () => players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE"),
+      "adivinador",
+    );
+    const observer = await waitFor(
+      () =>
+        players.find(
+          ({ playerId }) =>
+            playerId !== guesser.playerId && states.get(playerId)?.me.role === "RIVAL",
+        ),
+      "rival",
+    );
+
+    const missed = nextEvent<{ turnId: string; playerId: string; guess: string }>(
+      observer.client,
+      "turn:guessMissed",
+    );
+    let echoedToAuthor = false;
+    guesser.client.on("turn:guessMissed", () => {
+      echoedToAuthor = true;
+    });
+
+    await emitAck(guesser.client, "turn:guess", { guess: "respuesta incorrecta" });
+
+    await expect(missed).resolves.toMatchObject({
+      playerId: guesser.playerId,
+      guess: "respuesta incorrecta",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(echoedToAuthor).toBe(false);
+  });
+
   it("accepts a single typo over the wire and reports the correction", async () => {
     const host = await harness.connect();
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {

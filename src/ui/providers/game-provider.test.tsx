@@ -175,6 +175,31 @@ describe("GameProvider adivinación escrita", () => {
     expect(result.current.guessMessages[1]?.outcome).toBe("incorrect");
   });
 
+  it("tells the room when a player misses and shows the written word", async () => {
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+    const state = toGameState(
+      makeGame({
+        status: "playing",
+        currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+      }),
+      PlayerId.from("p2"),
+    );
+    act(() => socket.handlers.get("game:state")?.(state));
+
+    act(() => {
+      socket.handlers.get("turn:guessMissed")?.({
+        turnId: state.turn?.turnId,
+        playerId: "p2",
+        guess: "fuegp",
+      });
+    });
+
+    const notice = result.current.guessMessages.find((message) => message.kind === "notice");
+    expect(notice?.text).toContain("Jugador p2");
+    expect(notice?.text).toContain("fuegp");
+    expect(notice?.text).not.toContain(state.turn?.word ?? "___");
+  });
+
   it("avisa al equipo activo cuando el rival penaliza una palabra", async () => {
     const { result } = renderHook(useGame, { wrapper: GameProvider });
 

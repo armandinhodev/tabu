@@ -216,6 +216,17 @@ export function attachSocketServer(
 
         if (result.correct) {
           afterTurn(result.game, result.events);
+        } else if (result.game.currentTurn !== null) {
+          // The room sees the attempt; the author already got private feedback.
+          broadcaster.emitGuessMissed(
+            gameId,
+            {
+              turnId: result.game.currentTurn.id,
+              playerId,
+              guess: input.guess,
+            },
+            socket.id,
+          );
         }
 
         return {
