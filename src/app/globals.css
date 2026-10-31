@@ -139,3 +139,59 @@
     opacity: 0;
   }
 }
+
+/* Entrada de la landing y flotación de la carta de muestra (S7, §7).
+   El movimiento se apaga entero cuando el sistema pide menos animación. */
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@layer utilities {
+  .landing-rise {
+    animation: landing-rise var(--dur-panel) var(--ease-standard) both;
+  }
+
+  .landing-rise--2 {
+    animation-delay: var(--dur-instant);
+  }
+
+  .landing-rise--3 {
+    animation-delay: var(--dur-base);
+  }
+
+  .landing-rise--4 {
+    animation-delay: var(--dur-panel);
+  }
+
+  .landing-rise--5 {
+    animation-delay: calc(var(--dur-panel) + var(--dur-instant));
+  }
+
+  .landing-float {
+    animation: landing-float 6s var(--ease-standard) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .landing-rise,
+    .landing-float {
+      animation: none;
+    }
+  }
+}

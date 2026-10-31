@@ -1,10 +1,11 @@
 "use client";
 
-import { KeyRound, Plus } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, KeyRound, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
-import { InfoDialog } from "@/ui/components/ui/dialog";
+
 import { Field } from "@/ui/components/ui/field";
 import { Input } from "@/ui/components/ui/input";
 import { Screen } from "@/ui/components/ui/screen";
@@ -17,7 +18,6 @@ export function HomeScreen() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState(playerName);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [helpOpen, setHelpOpen] = useState(false);
 
   const continueWithName = (): void => {
     const value = name.trim();
@@ -46,7 +46,18 @@ export function HomeScreen() {
             Tabú
           </span>
         </div>
-        <MuteButton />
+        <div className="flex items-center gap-1">
+          <Link
+            href="/"
+            aria-label="Volver al inicio"
+            title="Volver al inicio"
+            className="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-body-sm font-medium text-fg-muted transition-colors duration-[var(--dur-instant)] hover:bg-surface-2 hover:text-fg"
+          >
+            <ChevronLeft aria-hidden="true" className="size-4" />
+            <span className="hidden sm:inline">Inicio</span>
+          </Link>
+          <MuteButton />
+        </div>
       </div>
 
       {!creating ? (
@@ -115,24 +126,6 @@ export function HomeScreen() {
           </Button>
         </>
       )}
-
-      <div className="mt-auto flex items-center justify-center gap-2 pt-6 text-body-sm text-fg-subtle">
-        <Button variant="quiet" size="sm" onClick={() => setHelpOpen(true)}>
-          ¿Cómo se juega?
-        </Button>
-      </div>
-
-      <InfoDialog open={helpOpen} onOpenChange={setHelpOpen} title="¿Cómo se juega?">
-        <p>
-          Un jugador describe la palabra grande sin decir ninguna de las prohibidas. Su equipo
-          adivina escribiendo la respuesta en el chat privado.
-        </p>
-        <p>
-          El equipo rival vigila: si decís una palabra prohibida, toca el chip y el equipo pierde un
-          punto.
-        </p>
-        <p>Gana el equipo con más puntos cuando se termina el mazo.</p>
-      </InfoDialog>
     </Screen>
   );
 }

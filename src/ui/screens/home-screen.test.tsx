@@ -73,9 +73,17 @@ describe("HomeScreen", () => {
     expect(screen.getByLabelText("Tu nombre")).toHaveValue("Ana");
   });
 
-  it("still opens the how-to-play help from the initial choice", () => {
+  it("returns to the public landing page from the header", () => {
     render(<HomeScreen />);
-    fireEvent.click(screen.getByRole("button", { name: "¿Cómo se juega?" }));
-    expect(screen.getByText(/Un jugador describe la palabra grande/)).toBeInTheDocument();
+
+    const home = screen.getByRole("link", { name: /volver al inicio/i });
+    expect(home).toHaveAttribute("href", "/");
+  });
+
+  it("does not offer the in-app help that the landing already explains", () => {
+    render(<HomeScreen />);
+
+    expect(screen.queryByRole("button", { name: /cómo se juega/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Un jugador describe la palabra grande/)).not.toBeInTheDocument();
   });
 });

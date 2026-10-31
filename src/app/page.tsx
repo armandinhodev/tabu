@@ -1,10 +1,5 @@
-import { AppRoot } from "@/ui/app-root";
-import { Providers } from "@/ui/providers";
+import { LandingPage } from "@/ui/landing/landing-page";
 
 export default function Home() {
-  return (
-    <Providers>
-      <AppRoot />
-    </Providers>
-  );
+  return <LandingPage />;
 }

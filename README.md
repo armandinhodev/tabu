@@ -28,7 +28,7 @@ entonces se revela la carta y comienza el reloj completo. Mientras se espera no 
 saltar ni reportar cartas. El reloj vuelve a esperar esa confirmación al cambiar de equipo.
 
 Stack: Next.js 15 (App Router) + TypeScript estricto, Socket.IO 4.8 sobre un servidor HTTP propio,
-MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI y Vitest.
+MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI, Motion y Vitest.
 
 Durante el turno, el cronómetro aparece en el sidebar derecho. En móvil, el resumen y el reloj
 comparten una fila compacta sobre la carta; en escritorio, los paneles laterales dejan más espacio
@@ -62,7 +62,7 @@ pnpm install
 docker compose up -d          # MongoDB 7 en localhost:27017
 cp .env.example .env          # ajustá si usás otro puerto/host
 pnpm seed                     # 3 mazos: General (120), Cine y TV (60), Deportes (60)
-pnpm dev                      # http://localhost:3000
+pnpm dev                      # http://localhost:3000 (landing) y /jugar (sala)
 ```
 
 Para producción:
@@ -87,7 +87,8 @@ docker run -d --rm --name tabu-app -p 3000:3000 --env-file .env -e MONGODB_URI=m
 docker exec tabu-app node --import tsx src/infrastructure/seed/seed.ts
 ```
 
-Abrir `http://localhost:3000`. `localhost` dentro del contenedor no apunta al host: para otro
+Abrir `http://localhost:3000` para la landing y `http://localhost:3000/jugar` para crear o unirse a
+una sala. `localhost` dentro del contenedor no apunta al host: para otro
 despliegue, proporcionar la URI real de MongoDB y el origen público en `SOCKET_CORS_ORIGIN`.
 En Linux sin Docker Desktop, agregar `--add-host host.docker.internal:host-gateway` al comando
 `docker run` si MongoDB está en el host.
@@ -300,10 +301,11 @@ pnpm dev        # o pnpm build && pnpm start
 Regla práctica: **no alternes `dev` y `build` sobre el mismo `.next` sin limpiar**, y si cambiaste de
 modo, recargá el navegador con caché deshabilitada (Ctrl+Shift+R).
 
-Jugar: abrí la app en el teléfono o el navegador, poné tu nombre, **Crear partida** (elegís mazo,
+Jugar: abrí `/jugar` en el teléfono o el navegador, poné tu nombre, **Crear partida** (elegís mazo,
 equipos, tiempo por turno de 30/60/90/120 s y cuántas palabras prohibidas tiene cada carta, de 1 a 6)
 y compartí el código de 6 caracteres. Los demás entran con **Unirse con código**. Cuando cada equipo
-tenga el mínimo de jugadores, el host toca **Comenzar partida**.
+tenga el mínimo de jugadores, el host toca **Comenzar partida**. El encabezado de esa pantalla
+incluye **Inicio** para volver a la landing; las reglas se explican allí, no en un diálogo aparte.
 
 La pantalla separa la selección del mazo de las reglas y muestra un resumen antes de **Crear sala**.
 Los saltos se configuran de 0 a 5 por turno: saltar no resta puntos y 0 desactiva los saltos.
@@ -422,7 +424,12 @@ que más afectan el uso:
 - **`GET /api/decks`.** El catálogo de mazos va por HTTP porque el contrato de socket no lo expone
   (D43).
 - **Una ruta, pantallas por estado.** El cliente no navega entre rutas: cambia de pantalla según el
-  estado de la partida, así el socket y el `playerToken` sobreviven (D44).
+  estado de la partida, así el socket y el `playerToken` sobreviven (D44). La única excepción es la
+  landing pública: `/` explica el juego y su botón **Jugar** lleva a `/jugar`, donde vive el cliente
+  con esa navegación interna.
+- **Vista previa animada con Motion.** La carta de la landing rota entre tres ejemplos y su reloj
+  corre, con la barra de tiempo sincronizada; con `prefers-reduced-motion` la carta y el reloj quedan
+  quietos. El temporizador vive en un hook aparte (`use-turn-preview`) para probarlo sin animaciones.
 - **Mongo caído no bloquea.** El servidor arranca en modo memoria con un warning (D41).
 - **Sonido sintetizado.** Web Audio sin archivos ni dependencias adicionales: timbres suaves con
   armónicos, transiciones progresivas, ruido filtrado y mezcla con compresión ligera y ambiente corto.
