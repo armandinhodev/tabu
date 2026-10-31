@@ -219,7 +219,7 @@ describe("same origin protection", () => {
   });
 
   it("does not trust forwarded hosts or the bind origin over the HTTP Host", () => {
-    for (const origin of ["http://evil.example", "http://0.0.0.0:3000", "https://localhost:3000"]) {
+    for (const origin of ["http://evil.example", "http://0.0.0.0:3000"]) {
       expect(
         isSameOriginRequest(
           buildRequest({
@@ -229,6 +229,36 @@ describe("same origin protection", () => {
         ),
       ).toBe(false);
     }
+  });
+
+  it("accepts the same host over https when TLS terminates at the proxy", () => {
+    expect(
+      isSameOriginRequest(
+        buildRequest({
+          url: "http://0.0.0.0:3000/api/admin/auth",
+          headers: { host: "panel.example.com", origin: "https://panel.example.com" },
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isSameOriginRequest(
+        buildRequest({
+          url: "http://panel.example.com/api/admin/auth",
+          headers: { host: "panel.example.com", origin: "http://panel.example.com" },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("still rejects the same host on a port that is not the request's", () => {
+    expect(
+      isSameOriginRequest(
+        buildRequest({
+          headers: { host: "panel.example.com", origin: "https://panel.example.com:8443" },
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("fails closed for malformed HTTP authorities", () => {

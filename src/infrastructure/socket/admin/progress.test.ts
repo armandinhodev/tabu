@@ -251,6 +251,27 @@ describe("admin progress socket", () => {
     expect(ack).toMatchObject({ ok: true, job: { id: "job-1", status: "queued" } });
   }, 30_000);
 
+  it("accepts an https origin when TLS terminates at the proxy", async () => {
+    const config = readAdminConfig(process.env);
+    const token = createAdminSession(config!, harness.clock.now).token;
+    const httpsOrigin = harness.url.replace(/^http:/, "https:");
+
+    const client = adminClient(harness, { token, origin: httpsOrigin });
+
+    await expect(waitForConnect(client)).resolves.toBeUndefined();
+  }, 30_000);
+
+  it("still rejects a handshake from another origin", async () => {
+    const config = readAdminConfig(process.env);
+    const token = createAdminSession(config!, harness.clock.now).token;
+
+    const client = adminClient(harness, { token, origin: "https://evil.example" });
+
+    const error = await waitForConnectError(client);
+
+    expect(error.data?.code).toBe("admin_forbidden");
+  }, 30_000);
+
   it("rejects a handshake without a session cookie", async () => {
     const client = adminClient(harness, { token: null });
 

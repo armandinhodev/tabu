@@ -289,15 +289,56 @@ export function isSafeRequestMethod(method: string): boolean {
 
 function normalizeOrigin(value: string): string | null {
   try {
-    return new URL(value).origin;
+    const url = new URL(value);
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+
+    return url.origin;
   } catch {
     return null;
   }
 }
 
+/** Authority (host and port) of the request, preferring the HTTP `Host`. */
+function requestAuthority(request: Request): string | null {
+  let url: URL;
+
+  try {
+    url = new URL(request.url);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return null;
+  }
+
+  const host = request.headers.get("host");
+
+  // Next's URL uses the listening hostname (often 0.0.0.0), not the public
+  // host. Forwarded authorities are deliberately not trusted: the proxy keeps
+  // the real Host header.
+  if (host === null) {
+    return url.host.toLowerCase();
+  }
+
+  if (host.length === 0 || /[\s,/@\\?#]/u.test(host)) {
+    return null;
+  }
+
+  return host.toLowerCase();
+}
+
 /**
- * Tells whether the request comes from the same origin as the application. A
+ * Tells whether the request comes from the same site as the application. A
  * missing origin fails closed: browsers always send it on unsafe requests.
+ *
+ * The protocol is compared loosely on purpose. TLS usually terminates at a
+ * reverse proxy (Dokploy, Traefik, nginx), so the app sees plain HTTP while the
+ * browser sends `https://`. The cookie is `HttpOnly` and `SameSite=Strict`, and
+ * the authority must still match, so another site cannot forge this request.
  */
 export function isSameOriginRequest(request: Request): boolean {
   const header = request.headers.get("origin");
@@ -306,23 +347,19 @@ export function isSameOriginRequest(request: Request): boolean {
     return false;
   }
 
-  // Next's URL uses the listening hostname (often 0.0.0.0), not the public host.
-  // Forwarded authorities are deliberately not trusted without a proxy policy.
-  const host = request.headers.get("host");
-  let expected = normalizeOrigin(request.url);
-  if (host !== null) {
-    if (host.length === 0 || /[\s,/@\\?#]/u.test(host)) return false;
-    try {
-      const url = new URL(request.url);
-      if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-      expected = new URL(`${url.protocol}//${host}`).origin;
-    } catch {
-      return false;
-    }
+  const expected = requestAuthority(request);
+
+  if (expected === null) {
+    return false;
   }
+
   const provided = normalizeOrigin(header);
 
-  return expected !== null && provided !== null && expected === provided;
+  if (provided === null) {
+    return false;
+  }
+
+  return new URL(provided).host.toLowerCase() === expected;
 }
 
 /** Builds the cookie that carries a session. */

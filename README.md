@@ -178,10 +178,11 @@ funcionando. Las claves nunca se envían al navegador. En producción, servir el
 HTTPS para que el navegador envíe la cookie segura de sesión. Cambiar credenciales o secreto
 invalida las sesiones anteriores.
 
-La protección de origen compara `Origin` con el protocolo de la petición y su cabecera `Host`,
-no con la dirección de escucha `HOST` (que puede ser `0.0.0.0`). El proxy debe conservar el
-`Host` público y el protocolo original. No se confía en `X-Forwarded-Host`; no configurar un
-proxy que reescriba esos valores sin una política explícita de confianza y verificación.
+La protección de origen compara el `Host` de la petición con el `Host` de `Origin`, no con la
+dirección de escucha `HOST` (que puede ser `0.0.0.0`) ni con el protocolo. El TLS puede terminar en
+el proxy (Dokploy, Traefik, nginx): el navegador manda `https://` y la app recibe HTTP, y la sesión
+sigue siendo válida porque la cookie es `HttpOnly` y `SameSite=Strict` y el host debe coincidir. El
+proxy debe conservar el `Host` público. No se confía en `X-Forwarded-Host`.
 
 Desde el panel se indica nombre, temática y cantidad de cartas (1–600 por trabajo).
 **Temática e indicaciones** y **Reglas para buscar palabras prohibidas** son campos multilínea.
