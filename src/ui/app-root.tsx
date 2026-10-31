@@ -8,11 +8,10 @@ import { JoinScreen } from "@/ui/screens/join-screen";
 import { LobbyScreen } from "@/ui/screens/lobby-screen";
 import { GameScreen } from "@/ui/screens/game-screen";
 import { ResultScreen } from "@/ui/screens/result-screen";
-import { PenaltyOverlay } from "@/ui/screens/game/penalty-overlay";
 
 /** Raíz del cliente: una sola pantalla montada, sin perder el socket al navegar. */
 export function AppRoot() {
-  const { view, connection, state, penalty, dismissPenalty } = useGame();
+  const { view, connection } = useGame();
 
   return (
     <>
@@ -24,21 +23,6 @@ export function AppRoot() {
       {view === "lobby" ? <LobbyScreen /> : null}
       {view === "game" ? <GameScreen /> : null}
       {view === "result" ? <ResultScreen /> : null}
-
-      {penalty !== null && view !== "result" ? (
-        <PenaltyOverlay
-          penalty={penalty}
-          teams={
-            state?.teams.map((team) => ({
-              id: team.id,
-              name: team.name,
-              score: team.score,
-              color: team.color,
-            })) ?? []
-          }
-          onClose={dismissPenalty}
-        />
-      ) : null}
     </>
   );
 }

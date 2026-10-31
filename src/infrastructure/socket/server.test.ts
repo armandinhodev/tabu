@@ -159,7 +159,7 @@ describe("socket server", () => {
     expect(states.get(guesser.playerId)?.turn?.turnId).toBe(turnBefore);
   });
 
-  it("tells the other players which wrong word was written", async () => {
+  it("tells the whole room which word was written, including its author", async () => {
     const host = await harness.connect();
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
       playerName: "Host",
@@ -199,12 +199,14 @@ describe("socket server", () => {
       "rival",
     );
 
-    const missed = nextEvent<{ turnId: string; playerId: string; guess: string }>(
-      observer.client,
-      "turn:guessMissed",
-    );
+    const missed = nextEvent<{
+      turnId: string;
+      playerId: string;
+      guess: string;
+      correct: boolean;
+    }>(observer.client, "turn:guessWritten");
     let echoedToAuthor = false;
-    guesser.client.on("turn:guessMissed", () => {
+    guesser.client.on("turn:guessWritten", () => {
       echoedToAuthor = true;
     });
 
@@ -213,9 +215,10 @@ describe("socket server", () => {
     await expect(missed).resolves.toMatchObject({
       playerId: guesser.playerId,
       guess: "respuesta incorrecta",
+      correct: false,
     });
     await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(echoedToAuthor).toBe(false);
+    expect(echoedToAuthor).toBe(true);
   });
 
   it("accepts a single typo over the wire and reports the correction", async () => {

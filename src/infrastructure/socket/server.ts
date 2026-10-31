@@ -214,19 +214,16 @@ export function attachSocketServer(
         const { gameId, playerId } = requireBinding(socket);
         const result = guessWord(deps, gameId, playerId, input);
 
+        // Lo que escribió el jugador es público: la sala lo ve con su autor.
+        broadcaster.emitGuessWritten(gameId, {
+          turnId: result.turnId,
+          playerId,
+          guess: input.guess,
+          correct: result.correct,
+        });
+
         if (result.correct) {
           afterTurn(result.game, result.events);
-        } else if (result.game.currentTurn !== null) {
-          // The room sees the attempt; the author already got private feedback.
-          broadcaster.emitGuessMissed(
-            gameId,
-            {
-              turnId: result.game.currentTurn.id,
-              playerId,
-              guess: input.guess,
-            },
-            socket.id,
-          );
         }
 
         return {

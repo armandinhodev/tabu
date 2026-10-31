@@ -36,12 +36,6 @@ interface MessageAppearance {
 }
 
 const MESSAGE_STYLES: Record<GuessMessageKind, MessageAppearance> = {
-  guess: {
-    label: "Tu respuesta",
-    icon: MessageCircle,
-    surface: "border-line bg-surface",
-    accent: "text-fg-muted",
-  },
   feedback: {
     label: "Respuesta",
     icon: Info,
@@ -57,8 +51,14 @@ const MESSAGE_STYLES: Record<GuessMessageKind, MessageAppearance> = {
   skip: {
     label: "Carta saltada",
     icon: SkipForward,
-    surface: "border-warning/30 bg-warning-soft",
-    accent: "text-warning",
+    surface: "border-accent/30 bg-accent-soft",
+    accent: "text-accent",
+  },
+  written: {
+    label: "Respuesta escrita",
+    icon: MessageCircle,
+    surface: "border-line bg-surface",
+    accent: "text-fg-muted",
   },
   penalty: {
     label: "Carta anulada",
@@ -92,6 +92,23 @@ function appearanceFor(message: GuessMessage): MessageAppearance {
       accent: "text-warning",
     };
   }
+  if (message.kind === "written") {
+    // Lo que escribió un jugador se anuncia con su nombre: "Mika escribió:".
+    if (message.outcome === "correct") {
+      return {
+        label: `${message.author ?? "Alguien"} escribió:`,
+        icon: CheckCircle2,
+        surface: "border-success/30 bg-success-soft",
+        accent: "text-success",
+      };
+    }
+    return {
+      label: `${message.author ?? "Alguien"} escribió:`,
+      icon: XCircle,
+      surface: "border-warning/30 bg-warning-soft",
+      accent: "text-warning",
+    };
+  }
   return MESSAGE_STYLES[message.kind];
 }
 
@@ -101,7 +118,7 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
   const logRef = useRef<HTMLUListElement>(null);
   const visibleMessages = messages
     .filter((message) => message.kind !== "turn" && (active || isPublicMessage(message)))
-    .slice(-3);
+    .slice(-5);
   const PanelIcon = active ? MessageCircle : Bell;
 
   useEffect(() => {
@@ -135,8 +152,8 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
           </h2>
           <p className="mt-1 text-body-sm text-fg-muted">
             {active
-              ? "Tus respuestas son privadas."
-              : "Aciertos, cartas saltadas y penalizaciones."}
+              ? "Lo que escribís lo ve toda la sala; la confirmación es tuya."
+              : "Respuestas, aciertos, cartas saltadas y penalizaciones."}
           </p>
         </div>
       </header>
@@ -177,34 +194,44 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
         aria-label="Actividad de la partida"
         aria-live="polite"
         aria-relevant="additions text"
-        className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1"
+        className="flex h-80 flex-col justify-end gap-1.5 overflow-hidden"
       >
         {visibleMessages.length === 0 ? (
-          <li className="rounded-md border border-dashed border-line p-4 text-center text-body-sm text-fg-subtle">
+          <li className="my-auto rounded-md border border-dashed border-line p-4 text-center text-body-sm text-fg-subtle">
             Todavía no hay actividad.
           </li>
         ) : null}
         {visibleMessages.map((message) => {
           const appearance = appearanceFor(message);
           const Icon = appearance.icon;
+          const isWritten = message.kind === "written";
+
           return (
             <li
               key={message.id}
-              className={cn(
-                "flex items-start gap-3 rounded-md border p-3",
-                appearance.surface,
-                message.kind === "guess" && "ml-6",
-              )}
+              className={cn("flex items-start gap-3 rounded-md border p-2.5", appearance.surface)}
             >
               <Icon
                 aria-hidden="true"
                 className={cn("mt-0.5 size-4 shrink-0", appearance.accent)}
               />
               <div className="min-w-0">
-                <p className={`text-micro font-semibold uppercase ${appearance.accent}`}>
+                <p
+                  className={cn(
+                    "text-micro font-semibold",
+                    isWritten ? "text-fg-muted" : `uppercase ${appearance.accent}`,
+                  )}
+                >
                   {appearance.label}
                 </p>
-                <p className="mt-1 text-body-sm break-words text-fg">{message.text}</p>
+                <p
+                  className={cn(
+                    "mt-1 text-body-sm break-words text-fg",
+                    isWritten ? "whitespace-pre-wrap" : "line-clamp-2",
+                  )}
+                >
+                  {message.text}
+                </p>
               </div>
             </li>
           );

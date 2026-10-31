@@ -16,15 +16,11 @@ const context = vi.hoisted(() => ({
   state: { teams: [] },
   penalty: null as PenaltyAppliedView | null,
   roundSummary: null as RoundEndedView | null,
-  dismissPenalty: vi.fn(),
   dismissRoundSummary: vi.fn(),
 }));
 vi.mock("@/ui/providers/game-provider", () => ({ useGame: () => context }));
 vi.mock("@/ui/screens/game-screen", () => ({ GameScreen: () => <main>Next turn</main> }));
 vi.mock("@/ui/screens/result-screen", () => ({ ResultScreen: () => <main>Final result</main> }));
-vi.mock("@/ui/screens/game/penalty-overlay", () => ({
-  PenaltyOverlay: () => <aside>Penalty notice</aside>,
-}));
 
 afterEach(() => {
   cleanup();
@@ -42,7 +38,7 @@ it("continues playing without a popup when a turn completes the round", () => {
   expect(screen.queryByRole("button", { name: "Seguir jugando" })).not.toBeInTheDocument();
 });
 
-it("preserves the penalty notice and the final result screen", () => {
+it("no interrumpe la partida con un cartel de penalización", () => {
   context.penalty = {
     reason: "TABOO_WORD",
     tabooWord: "clue",
@@ -51,11 +47,19 @@ it("preserves the penalty notice and the final result screen", () => {
     reportedBy: "p3",
     cardDiscarded: true,
   };
+
+  render(<AppRoot />);
+
+  expect(screen.getByText("Next turn")).toBeInTheDocument();
+  expect(screen.queryByText("Palabra prohibida")).not.toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Continuar" })).not.toBeInTheDocument();
+});
+
+it("preserves the final result screen", () => {
   const { rerender } = render(<AppRoot />);
-  expect(screen.getByText("Penalty notice")).toBeInTheDocument();
   context.view = "result";
   rerender(<AppRoot />);
   expect(screen.getByText("Final result")).toBeInTheDocument();
   expect(screen.queryByText("Next turn")).not.toBeInTheDocument();
-  expect(screen.queryByText("Penalty notice")).not.toBeInTheDocument();
 });

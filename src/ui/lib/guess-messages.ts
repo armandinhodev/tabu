@@ -1,18 +1,20 @@
 /**
- * Local activity feed. Guess/feedback entries are private to their author;
- * event entries are derived from existing public game events.
+ * Local activity feed. Feedback entries are private to their author; event
+ * entries and written answers are shared with the whole room.
  */
 
 export type GuessMessageKind =
-  "guess" | "feedback" | "notice" | "skip" | "penalty" | "turn" | "score";
+  "feedback" | "notice" | "written" | "skip" | "penalty" | "turn" | "score";
 
 export interface GuessMessage {
   readonly id: number;
   readonly text: string;
   readonly kind: GuessMessageKind;
   readonly outcome?: "correct" | "incorrect";
+  /** Nombre de quien escribió el mensaje. */
+  readonly author?: string;
 }
 
 export function isPublicMessage(message: GuessMessage): boolean {
-  return message.kind !== "guess" && message.kind !== "feedback";
+  return message.kind !== "feedback";
 }

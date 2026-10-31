@@ -22,9 +22,12 @@ function teams(count: number): TeamView[] {
   }));
 }
 
-it("faces two teams across the central scores without changing their reading order", () => {
+it("keeps both teams inside one score block with a divider between them", () => {
   render(<ScoreBoard teams={teams(2)} activeTeamId="t1" />);
   const board = screen.getByRole("list", { name: "Puntajes" });
+  expect(board).toHaveClass("rounded-lg", "border", "bg-surface");
+  expect(board).toHaveClass("grid-cols-2");
+
   const entries = within(board).getAllByRole("listitem");
   expect(entries).toHaveLength(2);
   expect(within(entries[0]!).getByText("Equipo A")).toBeVisible();
@@ -32,7 +35,9 @@ it("faces two teams across the central scores without changing their reading ord
   expect(within(entries[1]!).getByText("Equipo B")).toBeVisible();
   expect(within(entries[1]!).getByText("8")).toBeVisible();
   expect(entries[1]).toHaveClass("flex-row-reverse");
-  expect(screen.getByText(":")).toHaveAttribute("aria-hidden", "true");
+  expect(entries[0]).not.toHaveClass("border-l");
+  expect(entries[1]).toHaveClass("border-l");
+  expect(screen.queryByText(":")).not.toBeInTheDocument();
 });
 
 it.each([3, 4])("keeps %i teams in one row with names above their scores", (count) => {
@@ -57,13 +62,13 @@ it("updates scores and active-team styling without reordering teams or hiding lo
   const first = screen.getAllByRole("listitem")[0]!;
   const second = screen.getAllByRole("listitem")[1]!;
   expect(first).toHaveAttribute("aria-current", "true");
-  expect(first).toHaveClass("border-team-1");
+  expect(first).toHaveClass("bg-team-1/18");
   expect(within(first).getByText(original[0].name)).not.toHaveClass("truncate");
   rerender(<ScoreBoard teams={[original[0], { ...original[1]!, score: 27 }]} activeTeamId="t2" />);
   expect(screen.getAllByRole("listitem")).toEqual([first, second]);
   expect(first).not.toHaveAttribute("aria-current");
   expect(second).toHaveAttribute("aria-current", "true");
-  expect(second).toHaveClass("border-team-2");
+  expect(second).toHaveClass("bg-team-2/18");
   expect(within(first).getByText("-3")).toBeVisible();
   expect(within(second).getByText("27")).toBeVisible();
 });

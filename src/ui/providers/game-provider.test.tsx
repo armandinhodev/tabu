@@ -136,11 +136,9 @@ describe("GameProvider adivinación escrita", () => {
       { guess: "Fuego" },
       expect.any(Function),
     );
-    expect(result.current.guessMessages.map((message) => message.text)).toEqual([
-      "Fuego",
-      "¡Acertaste!",
-    ]);
-    expect(result.current.guessMessages[1]?.outcome).toBe("correct");
+    // El texto ya es público: el autor solo ve su confirmación privada.
+    expect(result.current.guessMessages.map((message) => message.text)).toEqual(["¡Acertaste!"]);
+    expect(result.current.guessMessages[0]?.outcome).toBe("correct");
   });
 
   it("confirms an accepted answer that had a single typo", async () => {
@@ -153,10 +151,9 @@ describe("GameProvider adivinación escrita", () => {
     });
 
     expect(result.current.guessMessages.map((message) => message.text)).toEqual([
-      "Fuegp",
       "¡Acertaste! Corregimos la ortografía.",
     ]);
-    expect(result.current.guessMessages[1]?.outcome).toBe("correct");
+    expect(result.current.guessMessages[0]?.outcome).toBe("correct");
   });
 
   it("una respuesta incorrecta se confirma sin puntos", async () => {
@@ -169,13 +166,12 @@ describe("GameProvider adivinación escrita", () => {
     });
 
     expect(result.current.guessMessages.map((message) => message.text)).toEqual([
-      "Agua",
       "No es esa. Probá de nuevo.",
     ]);
-    expect(result.current.guessMessages[1]?.outcome).toBe("incorrect");
+    expect(result.current.guessMessages[0]?.outcome).toBe("incorrect");
   });
 
-  it("tells the room when a player misses and shows the written word", async () => {
+  it("muestra a todos lo que escribió un jugador con su nombre", () => {
     const { result } = renderHook(useGame, { wrapper: GameProvider });
     const state = toGameState(
       makeGame({
@@ -187,17 +183,19 @@ describe("GameProvider adivinación escrita", () => {
     act(() => socket.handlers.get("game:state")?.(state));
 
     act(() => {
-      socket.handlers.get("turn:guessMissed")?.({
+      socket.handlers.get("turn:guessWritten")?.({
         turnId: state.turn?.turnId,
         playerId: "p2",
         guess: "fuegp",
+        correct: false,
       });
     });
 
-    const notice = result.current.guessMessages.find((message) => message.kind === "notice");
-    expect(notice?.text).toContain("Jugador p2");
-    expect(notice?.text).toContain("fuegp");
-    expect(notice?.text).not.toContain(state.turn?.word ?? "___");
+    const written = result.current.guessMessages.find((message) => message.kind === "written");
+    expect(written?.author).toBe("Jugador p2");
+    expect(written?.text).toBe("fuegp");
+    expect(written?.outcome).toBe("incorrect");
+    expect(written?.text).not.toContain(state.turn?.word ?? "___");
   });
 
   it("avisa al equipo activo cuando el rival penaliza una palabra", async () => {
@@ -226,6 +224,7 @@ describe("GameProvider adivinación escrita", () => {
 
     expect(notices).toHaveLength(1);
     expect(notices[0]?.text).toContain("palabra prohibida");
+    expect(notices[0]?.text).toContain("pierde 1 punto");
   });
 
   it.each(["turn:ended", "card:resolved"])("clears previous guesses on %s", async (event) => {
@@ -237,17 +236,15 @@ describe("GameProvider adivinación escrita", () => {
       result.current.guess("Agua");
     });
 
-    expect(result.current.guessMessages).toHaveLength(2);
+    expect(result.current.guessMessages).toHaveLength(1);
 
     act(() => {
       socket.handlers.get(event)?.({ reason: event === "card:resolved" ? "CORRECT" : "TIME" });
     });
 
-    expect(
-      result.current.guessMessages.filter(
-        (message) => message.kind === "guess" || message.kind === "feedback",
-      ),
-    ).toEqual([]);
+    expect(result.current.guessMessages.filter((message) => message.kind === "feedback")).toEqual(
+      [],
+    );
   });
 
   it.each(["p1", "p2", "p3"])(

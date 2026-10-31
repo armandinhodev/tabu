@@ -29,6 +29,8 @@ export interface TurnActionData {
 
 export interface GuessActionData extends TurnActionData {
   readonly correct: boolean;
+  /** Turn the answer belongs to, even after the turn was resolved. */
+  readonly turnId: string;
   /** The answer was accepted despite a single typing mistake. */
   readonly acceptedWithTypo?: boolean;
 }
@@ -122,12 +124,20 @@ export function guessWord(
   if (!exact && !typo) {
     const team = game.teams.find((candidate) => candidate.id === turn.teamId);
 
-    return { game, correct: false, pointsDelta: 0, teamScore: team?.score.value ?? 0, events: [] };
+    return {
+      game,
+      correct: false,
+      turnId: turn.id,
+      pointsDelta: 0,
+      teamScore: team?.score.value ?? 0,
+      events: [],
+    };
   }
 
   return {
     ...apply(deps, game, { kind: "CORRECT", actorId: playerId }, turn.teamId),
     correct: true,
+    turnId: turn.id,
     ...(typo ? { acceptedWithTypo: true } : {}),
   };
 }

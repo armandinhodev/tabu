@@ -117,4 +117,16 @@ describe("TeamPanel", () => {
 
     expect(screen.getByRole("button", { name: /Unirme a/ })).toBeInTheDocument();
   });
+
+  it("mantiene el borde del color de cada equipo, activo o no", () => {
+    const { rerender } = render(
+      <TeamPanel team={makeTeam([makePlayer()])} canJoin={false} isMine={false} isActive={false} />,
+    );
+
+    const panel = screen.getByRole("region", { name: "Equipo Naranja" });
+    expect(panel).toHaveClass("border-team-1");
+
+    rerender(<TeamPanel team={makeTeam([makePlayer()])} canJoin={false} isMine={false} isActive />);
+    expect(screen.getByRole("region", { name: "Equipo Naranja" })).toHaveClass("border-team-1");
+  });
 });

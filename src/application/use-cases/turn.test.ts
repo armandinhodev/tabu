@@ -157,6 +157,20 @@ describe("guessWord", () => {
     expect(result.game.teams[0]?.players.find((player) => player.id === "p2")?.points).toBe(1);
   });
 
+  it("devuelve el turno al que pertenece la respuesta, acertada o no", () => {
+    const turnId = harness.game.currentTurn!.id;
+
+    const wrong = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {
+      guess: "incorrecta",
+    });
+    const right = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {
+      guess: activeWord(harness.game),
+    });
+
+    expect(wrong.turnId).toBe(turnId);
+    expect(right.turnId).toBe(turnId);
+  });
+
   it("keeps the game unchanged when an active guess is wrong", () => {
     const before = JSON.stringify(harness.deps.registry.findById(harness.game.id));
     const result = guessWord(harness.deps, harness.game.id, PlayerId.from("p2"), {

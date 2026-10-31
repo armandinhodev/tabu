@@ -5,6 +5,7 @@ import type { GameStateView } from "../../application/dto/game-state";
 import {
   emitAck,
   makeSocketHarness,
+  nextEvent,
   waitFor,
   startSelectedTurn,
   type SocketHarness,
@@ -108,6 +109,48 @@ describe("contrato cliente-servidor", () => {
 
     await expect(emitAck(active.client, "turn:skip")).resolves.toMatchObject({
       error: { code: "NOT_ALLOWED" },
+    });
+  });
+
+  it("lo que escribe un jugador lo ve toda la sala, con su autor", async () => {
+    const { players, states } = await playingGame();
+    await waitFor(
+      () => players.every(({ playerId }) => states.get(playerId)?.turn !== undefined) || undefined,
+      "turno activo para todos",
+    );
+
+    const guesser = players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE")!;
+    const descriptor = players.find(
+      ({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER",
+    )!;
+    // La palabra solo la ve quien describe: el adivinador no la recibe.
+    const active = states.get(descriptor.playerId)!.turn!;
+
+    // Todos lo ven, incluido el que lo escribió.
+    const received = players.map(({ client }) =>
+      nextEvent<{ guess: string; playerId: string; correct: boolean }>(client, "turn:guessWritten"),
+    );
+
+    await emitAck(guesser.client, "turn:guess", { guess: "respuesta incorrecta" });
+
+    for (const written of received) {
+      await expect(written).resolves.toMatchObject({
+        guess: "respuesta incorrecta",
+        playerId: guesser.playerId,
+        correct: false,
+      });
+    }
+
+    // El acierto también se comparte, con su texto.
+    const hit = nextEvent<{ guess: string; playerId: string; correct: boolean }>(
+      guesser.client,
+      "turn:guessWritten",
+    );
+    await emitAck(guesser.client, "turn:guess", { guess: active.word });
+    await expect(hit).resolves.toMatchObject({
+      guess: active.word,
+      playerId: guesser.playerId,
+      correct: true,
     });
   });
 

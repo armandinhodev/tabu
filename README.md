@@ -17,8 +17,8 @@ todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo ad
 - **Quien describe**: ve _Comenzar turno_ antes de que arranque el reloj. Durante el turno ve la
   palabra, los chips informativos y _Saltar esta carta_, a la derecha de la palabra objetivo.
   En móvil, el botón muestra el ícono de salto. No hay botón para saltar el turno.
-- **Equipo que adivina**: ve la carta en blanco y escribe la respuesta en un **chat privado**; el
-  servidor la verifica contra la carta activa y le confirma el acierto.
+- **Equipo que adivina**: ve la carta en blanco y escribe la respuesta; el servidor la verifica
+  contra la carta activa, le confirma el acierto y **el texto que escribió lo ve toda la sala**.
 - **Equipos rivales**: ven la palabra y los chips **reportables** al toque durante el turno activo.
 
 Al comenzar la partida se sortean el equipo inicial y su descriptor. Los equipos se alternan a
@@ -35,20 +35,26 @@ Las tipografías (Outfit, Inter y JetBrains Mono) viven versionadas en `src/app/
 
 Durante el turno, el cronómetro aparece en el sidebar derecho. En móvil, el resumen y el reloj
 comparten una fila compacta sobre la carta; en escritorio, los paneles laterales dejan más espacio
-al contenido central y la carta juega al lado de las notificaciones en dos columnas. El panel de
-puntajes enfrenta los nombres y resultados de dos equipos; con tres o cuatro, muestra una fila de
-bloques con el nombre arriba y el puntaje debajo. El equipo activo se destaca con su color.
+al contenido central y la carta juega al lado de las notificaciones en dos columnas. El marcador es
+**un solo bloque**: los equipos se enfrentan dentro de la misma caja, separados por una línea, con
+el nombre y el puntaje de cada lado; con tres o cuatro equipos, el nombre va arriba y el puntaje
+abajo. El equipo activo se destaca con su color. Cada equipo conserva el borde de su color, esté
+activo o no.
 El panel de
-actividad combina respuestas privadas y avisos públicos: quienes adivinan pueden escribir; el
-campo de respuesta aparece antes del historial para no quedar desplazado por los avisos. El
-descriptor y los rivales solo ven notificaciones. Los avisos muestran la palabra saltada, quién
-marcó una prohibida, la carta anulada, el equipo penalizado y cada desacierto con la palabra que se
-escribió; quien falló ya recibe su confirmación privada, así que el aviso público no se le repite.
-El panel muestra los **últimos tres** avisos.
-El panel no repite los avisos de inicio o fin del turno: esa información se consulta en el sidebar.
-La lista de jugadores muestra nombres y distintivos de rol, sin avatares con iniciales.
-Las respuestas y su confirmación nunca se comparten. Los avisos se conservan al cambiar de carta
-dentro del mismo turno y se reinician al seleccionar el turno siguiente, salir o cambiar de sala.
+actividad combina respuestas escritas y avisos públicos: quienes adivinan escriben en el panel y
+**lo que escriben lo ve toda la sala**, rival incluido; se anuncia como _"Mika escribió:"_ con el
+texto en una línea limpia debajo. La confirmación (¡Acertaste! / No es esa) es privada de quien
+escribió. El campo de respuesta aparece antes del historial para no quedar desplazado por los
+avisos. Losdescriptor y los rivales solo ven notificaciones. Los avisos muestran la palabra
+saltada, quién marcó una prohibida, el equipo que pierde el punto y cada respuesta escrita con su
+autor; el acierto se destaca en verde y el intento fallido en ámbar. Marcar una palabra prohibida no
+interrumpe la partida con un cartel: el aviso del panel informa que el equipo pierde 1 punto por
+decirla. El panel muestra los **últimos cinco** avisos, sin scroll y con alto fijo; cada evento usa
+su color: verde para el acierto, ámbar para el desacierto, naranja para la carta saltada y rojo para
+la anulada. El panel no repite los avisos de inicio o fin del turno: esa información se consulta en
+el sidebar. La lista de jugadores muestra nombres y distintivos de rol, sin avatares con iniciales.
+Las confirmaciones nunca se comparten. Los avisos se conservan al cambiar de carta dentro del mismo
+turno y se reinician al seleccionar el turno siguiente, salir o cambiar de sala.
 
 Una respuesta con **un solo error de tipeo** cuenta como acierto, siempre que el objetivo tenga
 al menos cinco letras. Se toleran una letra cambiada, faltante, sobrante o dos letras contiguas

@@ -41,6 +41,23 @@ it("shows the empty state when only turn announcements exist", () => {
   expect(screen.getByText("Todavía no hay actividad.")).toBeVisible();
 });
 
+it("gives every public event its own color and label", () => {
+  render(
+    <GuessChat
+      active={false}
+      onGuess={vi.fn()}
+      messages={[
+        { id: 1, kind: "score", text: "Acierto del equipo 1" },
+        { id: 2, kind: "written", text: 'Beto no acertó: "fuegp".' },
+        { id: 3, kind: "skip", text: "Carta saltada por el equipo rival" },
+      ]}
+    />,
+  );
+
+  expect(screen.getByText("Acierto").closest("li")).toHaveClass("border-success/30");
+  expect(screen.getByText("Carta saltada").closest("li")).toHaveClass("border-accent/30");
+});
+
 it("stacks the composer so the send button fills the panel width", () => {
   render(<GuessChat active onGuess={vi.fn()} messages={[]} />);
 
@@ -87,56 +104,62 @@ it("lets only an active guesser send an answer and shows private feedback", () =
   rerender(
     <GuessChat
       active={false}
-      messages={[
-        { id: 1, text: "Fuego", kind: "guess" },
-        { id: 2, text: "¡Acertaste!", kind: "feedback" },
-      ]}
+      messages={[{ id: 1, text: "Fuego", kind: "feedback", outcome: "incorrect" }]}
       onGuess={onGuess}
     />,
   );
   expect(screen.queryByText("Fuego")).not.toBeInTheDocument();
-  expect(screen.queryByText("¡Acertaste!")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Tu respuesta")).not.toBeInTheDocument();
 });
 
-it("shows only the last three activity entries", () => {
+it("shows only the last five activity entries without scrolling", () => {
   render(
     <GuessChat
       active={false}
       onGuess={vi.fn()}
       messages={[
         { id: 1, kind: "notice", text: "Uno" },
-        { id: 2, kind: "skip", text: "Dos" },
-        { id: 3, kind: "penalty", text: "Tres" },
-        { id: 4, kind: "notice", text: "Cuatro" },
-        { id: 5, kind: "score", text: "Cinco" },
+        { id: 2, kind: "notice", text: "Dos" },
+        { id: 3, kind: "skip", text: "Tres" },
+        { id: 4, kind: "penalty", text: "Cuatro" },
+        { id: 5, kind: "notice", text: "Cinco" },
+        { id: 6, kind: "score", text: "Seis" },
+        { id: 7, kind: "notice", text: "Siete" },
       ]}
     />,
   );
 
   expect(screen.queryByText("Uno")).not.toBeInTheDocument();
   expect(screen.queryByText("Dos")).not.toBeInTheDocument();
-  for (const text of ["Tres", "Cuatro", "Cinco"]) {
+  for (const text of ["Tres", "Cuatro", "Cinco", "Seis", "Siete"]) {
     expect(screen.getByText(text)).toBeInTheDocument();
   }
+
+  const log = screen.getByRole("log");
+  expect(log).toHaveClass("h-80");
+  expect(log).not.toHaveClass("overflow-y-auto");
+  expect(log).not.toHaveClass("max-h-72");
 });
 
-it("keeps the newest private answer visible in the last three entries", () => {
+it("keeps the newest private feedback visible in the last five entries", () => {
   render(
     <GuessChat
       active
       onGuess={vi.fn()}
       messages={[
-        { id: 1, kind: "notice", text: "Viejo" },
-        { id: 2, kind: "notice", text: "Menos viejo" },
-        { id: 3, kind: "guess", text: "agua" },
-        { id: 4, kind: "feedback", text: "No es esa", outcome: "incorrect" },
+        { id: 0, kind: "notice", text: "Aún más viejo" },
+        { id: 1, kind: "notice", text: "Más viejo" },
+        { id: 2, kind: "notice", text: "Viejo" },
+        { id: 3, kind: "notice", text: "Menos viejo" },
+        { id: 4, kind: "written", author: "Ana", text: "agua" },
+        { id: 5, kind: "feedback", text: "No es esa", outcome: "incorrect" },
       ]}
     />,
   );
 
-  expect(screen.queryByText("Viejo")).not.toBeInTheDocument();
-  expect(screen.getByText("agua")).toBeInTheDocument();
+  expect(screen.queryByText("Aún más viejo")).not.toBeInTheDocument();
+  expect(screen.getByText("Más viejo")).toBeInTheDocument();
+  expect(screen.getByText("Ana escribió:")).toBeInTheDocument();
   expect(screen.getByText("No es esa")).toBeInTheDocument();
 });
 
@@ -149,7 +172,7 @@ it.each([true, false])("shows styled game events with input only for guessers (%
         {
           id: 2,
           kind: "penalty",
-          text: 'Ana marcó "arena". Carta anulada: Equipo 1 pierde 1 punto.',
+          text: 'Ana marcó "arena": Equipo 1 pierde 1 punto.',
         },
       ]}
       onGuess={vi.fn()}
@@ -159,7 +182,7 @@ it.each([true, false])("shows styled game events with input only for guessers (%
   expect(screen.getByText('Se saltó "playa".')).toBeInTheDocument();
   const skipped = screen.getByText("Carta saltada").closest("li")!;
   const penalty = screen.getByText("Carta anulada").closest("li")!;
-  expect(skipped).toHaveClass("border-warning/30");
+  expect(skipped).toHaveClass("border-accent/30");
   expect(penalty).toHaveClass("border-danger/30");
   expect(skipped.querySelector("svg")).not.toBeNull();
   expect(penalty.querySelector("svg")).not.toBeNull();
@@ -171,4 +194,53 @@ it.each([true, false])("shows styled game events with input only for guessers (%
     expect(screen.queryByLabelText("Tu respuesta")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar" })).not.toBeInTheDocument();
   }
+});
+
+it.each([true, false])("shows what a player wrote to everyone with its author (%s)", (active) => {
+  render(
+    <GuessChat
+      active={active}
+      messages={[{ id: 1, kind: "written", author: "Mika", text: "Va con agua" }]}
+      onGuess={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByText("Mika escribió:")).toBeVisible();
+  expect(screen.getByText("Va con agua")).toBeVisible();
+  expect(screen.queryByText("Aviso")).not.toBeInTheDocument();
+});
+
+it("keeps the written answer on its own line without truncating it", () => {
+  render(
+    <GuessChat
+      active={false}
+      messages={[
+        { id: 1, kind: "written", author: "Mika", text: "Es algo que se usa todos los días" },
+      ]}
+      onGuess={vi.fn()}
+    />,
+  );
+
+  const label = screen.getByText("Mika escribió:");
+  const text = screen.getByText("Es algo que se usa todos los días");
+
+  expect(label).not.toHaveClass("uppercase");
+  expect(text).not.toHaveClass("line-clamp-1");
+  expect(text).not.toHaveClass("line-clamp-2");
+});
+
+it("marks a written answer that hit the card in green and a failed one in amber", () => {
+  render(
+    <GuessChat
+      active={false}
+      messages={[
+        { id: 1, kind: "written", author: "Mika", text: "agua", outcome: "correct" },
+        { id: 2, kind: "written", author: "Beto", text: "fuego", outcome: "incorrect" },
+      ]}
+      onGuess={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByText("Mika escribió:").closest("li")).toHaveClass("border-success/30");
+  expect(screen.getByText("Beto escribió:").closest("li")).toHaveClass("border-warning/30");
 });

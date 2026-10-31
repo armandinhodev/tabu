@@ -17,7 +17,7 @@ import type {
   ErrorAck,
   GameFinishedView,
   GuessAck,
-  GuessMissedView,
+  GuessWrittenView,
   PenaltyAppliedView,
   RoundEndedView,
   TurnStartedView,
@@ -57,7 +57,6 @@ interface GameContextValue {
   readonly penalty: PenaltyAppliedView | null;
   readonly roundSummary: RoundEndedView | null;
   readonly finish: GameFinishedView | null;
-  readonly dismissPenalty: () => void;
   readonly dismissRoundSummary: () => void;
   readonly createGame: (options: CreateGameOptions) => Promise<boolean>;
   readonly joinGame: (code: string, name?: string) => Promise<boolean>;
@@ -94,13 +93,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const guessMessageId = useRef<number>(0);
 
   const appendGuessMessage = useCallback(
-    (text: string, kind: GuessMessageKind, outcome?: GuessMessage["outcome"]): void => {
+    (
+      text: string,
+      kind: GuessMessageKind,
+      outcome?: GuessMessage["outcome"],
+      author?: string,
+    ): void => {
       guessMessageId.current += 1;
       const message: GuessMessage = {
         id: guessMessageId.current,
         text,
         kind,
         ...(outcome ? { outcome } : {}),
+        ...(author ? { author } : {}),
       };
 
       setGuessMessages((current) => [...current, message]);
@@ -245,10 +250,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       );
     };
 
-    const onGuessMissed = (payload: GuessMissedView): void => {
+    const onGuessWritten = (payload: GuessWrittenView): void => {
+      const author = playerName(payload.playerId);
+
       appendGuessMessage(
-        `${playerName(payload.playerId)} no acertó: "${payload.guess}".`,
-        "notice",
+        payload.guess,
+        "written",
+        payload.correct ? "correct" : "incorrect",
+        author,
       );
     };
 
@@ -261,7 +270,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           ? `marcó la palabra prohibida "${payload.tabooWord}"`
           : "reportó una infracción";
       appendGuessMessage(
-        `${playerName(payload.reportedBy)} ${action}. Carta anulada: ${teamName(payload.teamId)} pierde 1 punto.`,
+        `${playerName(payload.reportedBy)} ${action}: ${teamName(payload.teamId)} pierde 1 punto.`,
         "penalty",
       );
     };
@@ -297,7 +306,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.on("turn:ended", onTurnEnded);
     socket.on("card:resolved", onTurnEnded);
     socket.on("turn:skipped", onTurnSkipped);
-    socket.on("turn:guessMissed", onGuessMissed);
+    socket.on("turn:guessWritten", onGuessWritten);
     socket.on("penalty:applied", onPenalty);
     socket.on("score:updated", onScore);
     socket.on("round:ended", onRoundEnded);
@@ -321,7 +330,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off("turn:ended", onTurnEnded);
       socket.off("card:resolved", onTurnEnded);
       socket.off("turn:skipped", onTurnSkipped);
-      socket.off("turn:guessMissed", onGuessMissed);
+      socket.off("turn:guessWritten", onGuessWritten);
       socket.off("penalty:applied", onPenalty);
       socket.off("score:updated", onScore);
       socket.off("round:ended", onRoundEnded);
@@ -497,7 +506,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
-          appendGuessMessage(trimmed, "guess");
           appendGuessMessage(
             ack.correct
               ? ack.acceptedWithTypo === true
@@ -546,9 +554,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       penalty,
       roundSummary,
       finish,
-      dismissPenalty: () => {
-        setPenalty(null);
-      },
       dismissRoundSummary: () => {
         setRoundSummary(null);
       },

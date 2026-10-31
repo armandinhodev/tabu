@@ -76,9 +76,12 @@ export function TeamPanel({
     <section
       aria-label={team.name}
       className={cn(
-        "rounded-lg border bg-surface p-4",
-        isActive ? palette.border : "border-line",
-        isMine && !isActive && "border-line-strong",
+        "rounded-lg border p-4",
+        // Cada equipo conserva su propio color de borde; el activo además se
+        // tiñe y el propio se levanta sobre la superficie.
+        palette.border,
+        isActive ? palette.soft : "bg-surface",
+        isMine && !isActive && "bg-surface-2",
       )}
     >
       <header className="flex items-center justify-between gap-3">

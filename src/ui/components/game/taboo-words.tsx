@@ -85,12 +85,8 @@ export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) 
   return (
     <ul
       className={cn(
-        "relative grid items-stretch",
-        facing
-          ? "grid-cols-2 gap-6"
-          : teams.length === 3
-            ? "grid-cols-3 gap-2"
-            : "grid-cols-4 gap-2",
+        "relative grid items-stretch overflow-hidden rounded-lg border border-line bg-surface",
+        facing ? "grid-cols-2" : teams.length === 3 ? "grid-cols-3" : "grid-cols-4",
         className,
       )}
       aria-label="Puntajes"
@@ -104,11 +100,12 @@ export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) 
             key={team.id}
             aria-current={active ? "true" : undefined}
             className={cn(
-              "flex min-w-0 items-center gap-2 rounded-md border py-3",
+              "flex min-w-0 items-center gap-2 px-4 py-3",
               facing
-                ? ["justify-between px-3", index === 1 && "flex-row-reverse"]
-                : "flex-col px-2 text-center",
-              active ? [palette.soft, palette.border] : "border-line bg-surface",
+                ? ["justify-between", index === 1 && "flex-row-reverse"]
+                : "flex-col text-center",
+              index > 0 && "border-l border-line",
+              active && palette.soft,
             )}
           >
             <span
@@ -131,14 +128,6 @@ export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) 
           </li>
         );
       })}
-      {facing ? (
-        <li
-          aria-hidden="true"
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-h3 text-fg-muted"
-        >
-          :
-        </li>
-      ) : null}
     </ul>
   );
 }

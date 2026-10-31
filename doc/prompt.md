@@ -359,7 +359,7 @@ Todos los payloads se validan con Zod en el servidor. Los nombres de evento est�
 | `game:autoTeams` | `void` | `void` | cualquiera en la sala |
 | `game:start` | `void` | `void` | solo el host |
 | `game:leave` | `void` | `void` | cualquiera |
-| `turn:guess` | `void` | `{ pointsAwarded: number, teamScore: number }` | equipo que describe |
+| `turn:guess` | `{ guess: string }` | `{ pointsAwarded: number, teamScore: number }` | equipo que adivina |
 | `turn:reportViolation` | `{ reason: 'TABOO_WORD'\|'GESTURE'\|'SOUND', tabooWord?: string }` | `{ pointsDelta: number, teamScore: number }` | equipo rival, o el descriptor (autorreporte) |
 | `turn:skip` | `void` | `void` | solo el descriptor |
 | `turn:start` | `void` | `void` | solo el descriptor seleccionado, con turno pendiente |
@@ -379,6 +379,7 @@ prohibidas de la carta activa (comparación normalizada). Si no coincide ⇒ `ga
 | `turn:started` | `{ turnId, teamId, descriptorId, word, taboo: string[], deadlineAt, turnSeconds }` |
 | `turn:tick` | `{ remaining: number }` (1 por segundo) |
 | `turn:ended` | `{ turnId, reason: 'CORRECT'\|'VIOLATION'\|'SKIPPED'\|'TIME', pointsDelta, teamId, cardDiscarded: boolean }` |
+| `turn:guessWritten` | `{ turnId, playerId, guess, correct }` — lo que escribe un jugador lo ve toda la sala, con su autor |
 | `penalty:applied` | `{ reason, tabooWord?, teamId, pointsDelta, reportedBy, cardDiscarded: true }` |
 | `score:updated` | `{ teams: Array<{ id, name, score, color }> }` |
 | `round:ended` | `{ round, standings }` |
