@@ -9,6 +9,7 @@ import { ErrorState, ScreenSkeleton } from "@/ui/components/game/banners";
 import { MuteButton } from "@/ui/components/game/mute-button";
 import { TeamPanel } from "@/ui/components/game/team-panel";
 import { CurrentTurnCard } from "@/ui/components/game/current-turn-card";
+import { ScoreBoard } from "@/ui/components/game/taboo-words";
 import { TimerRing } from "@/ui/components/game/timer-ring";
 import { useGame } from "@/ui/providers/game-provider";
 import { ResultScreen } from "@/ui/screens/result-screen";
@@ -106,26 +107,35 @@ export function GameScreen() {
         ))}
       </aside>
 
-      <div
-        data-testid="game-columns"
-        className="order-2 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start xl:order-none"
-      >
-        <div className="flex min-w-0 flex-col gap-4">
-          {turn.status === "pending" ? (
-            <WaitingTurnView state={state} turn={turn} busy={busy} onStart={startTurn} />
-          ) : isRival ? (
-            <RivalView {...props} />
-          ) : (
-            <DescribingView {...props} />
-          )}
-        </div>
+      <div className="order-2 flex min-w-0 flex-col gap-4 xl:order-none">
+        {turn.status !== "pending" ? (
+          <section aria-label="Puntajes" aria-live="polite" className="flex min-w-0 flex-col gap-3">
+            <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
+            <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
+          </section>
+        ) : null}
 
-        <GuessChat
-          active={isGuesser && turn.status !== "pending"}
-          disabled={busy}
-          messages={guessMessages}
-          onGuess={guess}
-        />
+        <div
+          data-testid="game-columns"
+          className="grid min-w-0 gap-4 lg:grid-cols-2 lg:items-start"
+        >
+          <div className="flex min-w-0 flex-col gap-4">
+            {turn.status === "pending" ? (
+              <WaitingTurnView state={state} turn={turn} busy={busy} onStart={startTurn} />
+            ) : isRival ? (
+              <RivalView {...props} />
+            ) : (
+              <DescribingView {...props} />
+            )}
+          </div>
+
+          <GuessChat
+            active={isGuesser && turn.status !== "pending"}
+            disabled={busy}
+            messages={guessMessages}
+            onGuess={guess}
+          />
+        </div>
       </div>
 
       <aside

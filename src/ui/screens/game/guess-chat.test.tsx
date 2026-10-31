@@ -41,6 +41,18 @@ it("shows the empty state when only turn announcements exist", () => {
   expect(screen.getByText("Todavía no hay actividad.")).toBeVisible();
 });
 
+it("stacks the composer so the send button fills the panel width", () => {
+  render(<GuessChat active onGuess={vi.fn()} messages={[]} />);
+
+  const input = screen.getByLabelText("Tu respuesta");
+  const button = screen.getByRole("button", { name: "Enviar" });
+  const composer = input.closest("div");
+
+  expect(composer).toHaveClass("flex-col");
+  expect(button).toHaveClass("w-full");
+  expect(button).toHaveTextContent("Enviar");
+});
+
 it("distinguishes correct and incorrect private feedback with labels, colors and icons", () => {
   render(
     <GuessChat

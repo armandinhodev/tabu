@@ -82,9 +82,10 @@ it.each(["p1", "p2", "p3"])(
       expect(screen.queryByText(/ni tu equipo ni el rival ven/i)).not.toBeInTheDocument();
     } else {
       expect(screen.getByText(game.currentTurn!.card.word)).toBeInTheDocument();
-      expect(screen.getByText(game.currentTurn!.card.word)).toHaveClass("text-h2", "md:text-h1");
+      expect(screen.getByText(game.currentTurn!.card.word)).toHaveClass("text-h2");
+      expect(screen.getByText(game.currentTurn!.card.word)).not.toHaveClass("md:text-h1");
       for (const word of game.currentTurn!.card.taboo.words) {
-        expect(screen.getByText(word)).toBeInTheDocument();
+        expect(screen.getByText(word).closest("ul")).toHaveClass("uppercase");
       }
     }
     if (playerId !== "p3") {

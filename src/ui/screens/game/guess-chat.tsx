@@ -142,7 +142,7 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
       </header>
 
       {active ? (
-        <div className="flex gap-2 rounded-md border border-line bg-surface p-3">
+        <div className="flex flex-col gap-2 rounded-md border border-line bg-surface p-3">
           <label htmlFor="guess-answer" className="sr-only">
             Tu respuesta
           </label>
@@ -161,11 +161,12 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
           <Button
             aria-label="Enviar"
             title="Enviar"
+            className="w-full"
             disabled={disabled || answer.trim() === ""}
             onClick={submit}
           >
             <Send aria-hidden="true" className="size-4" />
-            <span className="hidden sm:inline">Enviar</span>
+            Enviar
           </Button>
         </div>
       ) : null}

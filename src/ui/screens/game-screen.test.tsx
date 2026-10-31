@@ -57,21 +57,27 @@ it.each(["p1", "p2", "p3"])(
   },
 );
 
-it("places the card and the notifications in two columns on wide screens", () => {
+it("keeps the score row above equal columns for the card and the notices", () => {
   context.state = toGameState(
     makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
     PlayerId.from("p1"),
   );
-  render(
+  const { container } = render(
     <SoundProvider>
       <GameScreen />
     </SoundProvider>,
   );
 
   const columns = screen.getByTestId("game-columns");
-  expect(columns.className).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]");
+  expect(columns.className).toContain("lg:grid-cols-2");
+
+  const scoreHeading = screen.getByRole("heading", { name: "Marcador" });
+  expect(columns.contains(scoreHeading)).toBe(false);
+  expect(
+    scoreHeading.compareDocumentPosition(columns) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   expect(within(columns).getByRole("log")).toBeInTheDocument();
-  expect(within(columns).getByRole("heading", { name: "Marcador" })).toBeInTheDocument();
+  expect(container.querySelector("[aria-label='Puntajes']")).not.toBeNull();
 });
 
 it("keeps synchronized mute controls in the sidebar and mobile header", () => {

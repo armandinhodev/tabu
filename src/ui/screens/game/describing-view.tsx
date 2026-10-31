@@ -3,7 +3,7 @@
 import { AlertTriangle, SkipForward } from "lucide-react";
 
 import { Button } from "@/ui/components/ui/button";
-import { ScoreBoard, TabooWords } from "@/ui/components/game/taboo-words";
+import { TabooWords } from "@/ui/components/game/taboo-words";
 import type { RoleViewProps } from "./role-view-props";
 
 /**
@@ -21,16 +21,10 @@ export function DescribingView({ state, turn, busy, onSkipCard }: RoleViewProps)
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4">
-      <section className="flex flex-col gap-3" aria-label="Puntajes" aria-live="polite">
-        <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
-
-        <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
-      </section>
-
       {isDescriptor ? (
         <section className="flex min-w-0 flex-col gap-4 rounded-xl border border-line-strong bg-surface-2 p-4 sm:p-5">
           <div className="flex items-start justify-between gap-3">
-            <p className="min-w-0 flex-1 font-display text-h2 font-extrabold break-words text-fg uppercase md:text-h1">
+            <p className="min-w-0 flex-1 font-display text-h2 font-extrabold break-words text-fg uppercase">
               {turn.word}
             </p>
             <Button

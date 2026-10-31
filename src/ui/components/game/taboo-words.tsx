@@ -39,7 +39,7 @@ export function TabooWords({
           Reportá si la dice
         </p>
       ) : null}
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-2 uppercase">
         {words.map((word) => {
           const reported = reportedWord === word;
 
