@@ -30,6 +30,9 @@ saltar ni reportar cartas. El reloj vuelve a esperar esa confirmación al cambia
 Stack: Next.js 15 (App Router) + TypeScript estricto, Socket.IO 4.8 sobre un servidor HTTP propio,
 MongoDB 7 + Mongoose 8, Tailwind v4 con tokens, Zod 4, Base UI, Motion y Vitest.
 
+Las tipografías (Outfit, Inter y JetBrains Mono) viven versionadas en `src/app/fonts` y se cargan con
+`next/font/local`: el build no descarga fuentes ni depende de la red.
+
 Durante el turno, el cronómetro aparece en el sidebar derecho. En móvil, el resumen y el reloj
 comparten una fila compacta sobre la carta; en escritorio, los paneles laterales dejan más espacio
 al contenido central. El panel de
