@@ -27,6 +27,7 @@ export function HouseRulesDialog({
       onOpenChange={onOpenChange}
       title={rules.title}
       icon={<ScrollText className="size-5" />}
+      className="sm:max-w-md lg:max-w-lg"
     >
       {rules.intro === "" ? null : <p className="leading-relaxed">{rules.intro}</p>}
       <ul className="flex flex-col gap-2">

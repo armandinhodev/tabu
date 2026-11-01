@@ -77,6 +77,7 @@ export function InfoDialog({
   onOpenChange,
   title,
   icon,
+  className,
   children,
 }: {
   readonly open: boolean;
@@ -84,13 +85,20 @@ export function InfoDialog({
   readonly title: string;
   /** Ícono junto al título; decorativo. */
   readonly icon?: React.ReactNode;
+  /** Ajustes de ancho para pantallas grandes. */
+  readonly className?: string;
   readonly children: React.ReactNode;
 }) {
   return (
     <BaseDialog.Root open={open} onOpenChange={onOpenChange}>
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-canvas/80 backdrop-blur-sm transition-opacity duration-[var(--dur-panel)] data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none" />
-        <BaseDialog.Popup className="fixed top-1/2 left-1/2 z-50 max-h-[80dvh] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line-strong bg-surface-2 p-6 shadow-float transition-[opacity,scale] duration-[var(--dur-panel)] data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 motion-reduce:transition-none">
+        <BaseDialog.Popup
+          className={cn(
+            "fixed top-1/2 left-1/2 z-50 max-h-[80dvh] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line-strong bg-surface-2 p-6 shadow-float transition-[opacity,scale] duration-[var(--dur-panel)] data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 motion-reduce:transition-none",
+            className,
+          )}
+        >
           <BaseDialog.Title className="flex items-center gap-3 font-display text-h2 font-bold text-fg">
             {icon === undefined ? null : (
               <span

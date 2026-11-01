@@ -35,6 +35,14 @@ it("hace entrar cada regla escalonada y con el movimiento del sistema", () => {
   expect(rows[1]).toHaveStyle({ animationDelay: "190ms" });
 });
 
+it("se abre más ancho en pantallas grandes", () => {
+  render(<HouseRulesDialog open onOpenChange={vi.fn()} rules={TEST_HOUSE_RULES} />);
+
+  const dialog = screen.getByRole("dialog");
+
+  expect(dialog).toHaveClass("max-w-sm", "sm:max-w-md", "lg:max-w-lg");
+});
+
 it("deja solo el cambio de opacidad cuando se pide menos movimiento", () => {
   const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
 
