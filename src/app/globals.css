@@ -163,6 +163,29 @@
   }
 }
 
+/* Entrada escalonada de las reglas de la casa (§7): opacidad + 8px hacia
+   arriba, una fila después de la otra. */
+@keyframes rules-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Con menos movimiento se conserva solo el cambio de opacidad (§7). */
+@keyframes rules-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @layer utilities {
   .landing-rise {
     animation: landing-rise var(--dur-panel) var(--ease-standard) both;
@@ -188,10 +211,18 @@
     animation: landing-float 6s var(--ease-standard) infinite;
   }
 
+  .rules-rise {
+    animation: rules-rise var(--dur-panel) var(--ease-standard) both;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .landing-rise,
     .landing-float {
       animation: none;
+    }
+
+    .rules-rise {
+      animation-name: rules-fade;
     }
   }
 }
