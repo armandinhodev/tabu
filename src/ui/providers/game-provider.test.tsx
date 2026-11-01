@@ -196,6 +196,21 @@ describe("GameProvider adivinación escrita", () => {
     expect(notice?.text).toContain("-1");
   });
 
+  it("usa el reloj del servidor para medir el tiempo restante", () => {
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+    const state = toGameState(
+      makeGame({
+        status: "playing",
+        currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+      }),
+      PlayerId.from("p2"),
+    );
+
+    act(() => socket.handlers.get("game:state")?.({ ...state, serverNow: Date.now() + 30_000 }));
+
+    expect(result.current.serverClockOffsetMs).toBeGreaterThan(29_000);
+  });
+
   it("muestra a todos lo que escribió un jugador con su nombre", () => {
     const { result } = renderHook(useGame, { wrapper: GameProvider });
     const state = toGameState(

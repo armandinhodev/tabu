@@ -16,6 +16,7 @@ import type { ViolationReason } from "@/domain/entities/Violation";
 import type {
   ErrorAck,
   GameFinishedView,
+  GameStatePayload,
   GuessAck,
   GuessWrittenView,
   PenaltyAppliedView,
@@ -52,6 +53,8 @@ interface GameContextValue {
   readonly goTo: (view: AppView) => void;
   readonly connection: ConnectionState;
   readonly state: GameStateView | null;
+  /** Diferencia entre el reloj del servidor y el del dispositivo, en ms. */
+  readonly serverClockOffsetMs: number;
   readonly playerName: string;
   readonly setPlayerName: (name: string) => void;
   readonly busy: boolean;
@@ -85,6 +88,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [view, setView] = useState<AppView>("home");
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [state, setState] = useState<GameStateView | null>(null);
+  /** Diferencia entre el reloj del servidor y el del dispositivo, en ms. */
+  const [serverClockOffset, setServerClockOffset] = useState(0);
   const [playerName, setPlayerNameState] = useState("");
   const [busy, setBusy] = useState(false);
   const [penalty, setPenalty] = useState<PenaltyAppliedView | null>(null);
@@ -116,7 +121,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const applyState = useCallback((next: GameStateView) => {
+  const applyState = useCallback((next: GameStatePayload) => {
+    // El servidor es la autoridad del reloj: si el dispositivo va atrasado o
+    // adelantado, el timer tiene que seguir marcando lo que queda de verdad.
+    const offset = next.serverNow - Date.now();
+
+    setServerClockOffset((current) => (Math.abs(current - offset) > 500 ? offset : current));
+
     if (
       stateRef.current !== null &&
       (stateRef.current.code !== next.code || stateRef.current.turn?.turnId !== next.turn?.turnId)
@@ -185,7 +196,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setConnection("offline");
     };
 
-    const onState = (next: GameStateView): void => {
+    const onState = (next: GameStatePayload): void => {
       applyState(next);
     };
 
@@ -196,7 +207,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      applyState({ ...current, teams: payload.teams });
+      applyState({ ...current, teams: payload.teams, serverNow: Date.now() });
     };
 
     const onStarted = (): void => {
@@ -575,6 +586,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       goTo: setView,
       connection,
       state,
+      serverClockOffsetMs: serverClockOffset,
       playerName,
       setPlayerName,
       busy,
@@ -601,6 +613,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       view,
       connection,
       state,
+      serverClockOffset,
       playerName,
       setPlayerName,
       busy,

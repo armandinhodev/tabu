@@ -18,7 +18,7 @@ const CARD_MS = 3_400;
 const WORD_CLASS =
   "font-display text-[2rem] leading-none font-extrabold break-words text-fg uppercase";
 const CHIP_CLASS =
-  "rounded-pill border border-danger bg-danger-soft px-3 py-1.5 text-body-sm text-fg";
+  "rounded-pill border border-danger bg-danger-soft px-3 py-1.5 text-body-sm text-fg uppercase";
 
 function CardFace({ card }: { readonly card: SampleCard }) {
   return (

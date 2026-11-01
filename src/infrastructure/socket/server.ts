@@ -22,6 +22,7 @@ import {
   type Ack,
   type ClientToServerEvents,
   type ErrorAck,
+  type GameStatePayload,
   type ServerToClientEvents,
 } from "./events";
 import {
@@ -407,8 +408,8 @@ function respond<T>(ack: Ack<T> | undefined, payload: T | ErrorAck): void {
   }
 }
 
-function requireState(game: Game, playerId: PlayerId) {
-  return toGameState(game, playerId);
+function requireState(game: Game, playerId: PlayerId): GameStatePayload {
+  return { ...toGameState(game, playerId), serverNow: Date.now() };
 }
 
 export function toErrorPayload(error: unknown): { code: string; message: string } {

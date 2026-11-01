@@ -7,6 +7,7 @@ import type { PlayerId } from "../../domain/value-objects/PlayerId";
 import {
   SERVER_EVENTS,
   type ClientToServerEvents,
+  type GameStatePayload,
   type PenaltyAppliedView,
   type ServerToClientEvents,
 } from "./events";
@@ -38,7 +39,7 @@ export class Broadcaster {
 
   emitState(game: Game): void {
     for (const { socketId, playerId } of this.sessions.playersOf(game.id)) {
-      this.io.to(socketId).emit(SERVER_EVENTS.gameState, toGameState(game, playerId));
+      this.io.to(socketId).emit(SERVER_EVENTS.gameState, statePayload(game, playerId));
     }
 
     this.io.to(game.id).emit(SERVER_EVENTS.gamePlayersUpdated, {
@@ -71,7 +72,7 @@ export class Broadcaster {
     const socketId = this.sessions.socketFor(game.id, playerId);
 
     if (socketId !== null) {
-      this.io.to(socketId).emit(SERVER_EVENTS.gameState, toGameState(game, playerId));
+      this.io.to(socketId).emit(SERVER_EVENTS.gameState, statePayload(game, playerId));
     }
   }
 
@@ -173,6 +174,11 @@ export class Broadcaster {
       }
     }
   }
+}
+
+/** El estado viaja con la hora del servidor: el timer del cliente la usa. */
+function statePayload(game: Game, playerId: PlayerId): GameStatePayload {
+  return { ...toGameState(game, playerId), serverNow: Date.now() };
 }
 
 function penaltyView(event: Extract<DomainEvent, { type: "PenaltyApplied" }>): PenaltyAppliedView {

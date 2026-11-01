@@ -1,7 +1,7 @@
 "use client";
 
 import { AlarmClock, Timer } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { remainingFraction, secondsRemaining } from "@/ui/lib/countdown";
 import { cn } from "@/ui/lib/cn";
@@ -9,6 +9,8 @@ import { cn } from "@/ui/lib/cn";
 interface TimerRingProps {
   readonly deadlineAt: number;
   readonly turnSeconds: number;
+  /** Diferencia entre el reloj del servidor y el del dispositivo, en ms. */
+  readonly clockOffsetMs?: number;
   readonly className?: string;
 }
 
@@ -18,29 +20,39 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 /**
  * Anillo del temporizador (§6, S25): pista y relleno en SVG, 8px de trazo.
  * Bajo 10 s cambia a `--danger` **y** cambia el ícono: nunca solo color.
+ *
+ * El tiempo restante se mide contra el reloj del **servidor** (`clockOffsetMs`):
+ * el deadline es absoluto y si el reloj del dispositivo se desvía, el timer
+ * mostraría un tiempo que no es el real.
  */
-export function TimerRing({ deadlineAt, turnSeconds, className }: TimerRingProps) {
-  const [remaining, setRemaining] = useState(() => secondsRemaining(deadlineAt));
+export function TimerRing({
+  deadlineAt,
+  turnSeconds,
+  clockOffsetMs = 0,
+  className,
+}: TimerRingProps) {
+  const now = useCallback(() => Date.now() + clockOffsetMs, [clockOffsetMs]);
+  const [remaining, setRemaining] = useState(() => secondsRemaining(deadlineAt, now()));
 
   useEffect(() => {
-    setRemaining(secondsRemaining(deadlineAt));
+    setRemaining(secondsRemaining(deadlineAt, now()));
 
     const timer = setInterval(() => {
-      setRemaining(secondsRemaining(deadlineAt));
+      setRemaining(secondsRemaining(deadlineAt, now()));
     }, 250);
 
     return () => {
       clearInterval(timer);
     };
-  }, [deadlineAt]);
+  }, [deadlineAt, now]);
 
-  const fraction = remainingFraction(deadlineAt, turnSeconds);
+  const fraction = remainingFraction(deadlineAt, turnSeconds, now());
   const urgent = remaining <= 10;
   const Icon = urgent ? AlarmClock : Timer;
 
   return (
     <div
-      className={cn("relative grid place-items-center size-[160px] md:size-[200px]", className)}
+      className={cn("relative grid size-[160px] place-items-center md:size-[200px]", className)}
       role="timer"
       aria-live="off"
       aria-label={`Quedan ${remaining} segundos`}
@@ -76,13 +88,13 @@ export function TimerRing({ deadlineAt, turnSeconds, className }: TimerRingProps
         />
         <span
           className={cn(
-            "font-mono text-[2.5rem] font-bold leading-none tabular-nums",
+            "font-mono text-[2.5rem] leading-none font-bold tabular-nums",
             urgent ? "text-danger" : "text-warning",
           )}
         >
           {remaining}
         </span>
-        <span className="text-micro uppercase text-fg-subtle">segundos</span>
+        <span className="text-micro text-fg-subtle uppercase">segundos</span>
       </div>
     </div>
   );

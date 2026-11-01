@@ -34,6 +34,7 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
     guess,
     adjustScore,
     guessMessages,
+    serverClockOffsetMs,
     startTurn,
     skipTurn,
     reportViolation,
@@ -181,6 +182,7 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
               <TimerRing
                 deadlineAt={turn.deadlineAt}
                 turnSeconds={turn.turnSeconds}
+                clockOffsetMs={serverClockOffsetMs}
                 className="size-24 md:size-28 xl:size-40 [&>div>span.font-mono]:text-h1 [&>div>span:last-child]:hidden xl:[&>div>span:last-child]:block [&>div>svg]:size-4"
               />
             </section>

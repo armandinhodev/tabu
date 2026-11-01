@@ -67,7 +67,7 @@ export interface JoinGameAck {
 }
 
 export interface ReconnectAck {
-  readonly state: GameStateView;
+  readonly state: GameStatePayload;
 }
 
 export interface GuessAck {
@@ -176,9 +176,18 @@ export interface RoundEndedView {
   readonly standings: readonly StandingView[];
 }
 
+/**
+ * El estado del juego más el reloj del servidor. El cliente lo usa para
+ * calcular el tiempo restante contra la hora del servidor y no contra la del
+ * dispositivo: si los relojes no coinciden, el timer mentiría.
+ */
+export interface GameStatePayload extends GameStateView {
+  readonly serverNow: number;
+}
+
 export interface ServerToClientEvents {
   "card:resolved": (payload: TurnEndedView) => void;
-  "game:state": (payload: GameStateView) => void;
+  "game:state": (payload: GameStatePayload) => void;
   "game:playersUpdated": (payload: { readonly teams: readonly TeamView[] }) => void;
   "game:started": (payload: GameStartedView) => void;
   "game:finished": (payload: GameFinishedView) => void;
