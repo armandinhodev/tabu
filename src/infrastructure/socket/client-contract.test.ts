@@ -112,6 +112,30 @@ describe("contrato cliente-servidor", () => {
     });
   });
 
+  it("solo el host ajusta el puntaje y la sala lo ve", async () => {
+    const { host, players, states } = await playingGame();
+    await waitFor(
+      () => players.every(({ playerId }) => states.get(playerId)?.turn !== undefined) || undefined,
+      "turno activo para todos",
+    );
+
+    const guesser = players.find(({ playerId }) => states.get(playerId)?.me.role === "ACTIVE")!;
+    const teamId = states.get(guesser.playerId)!.teams[0]!.id;
+
+    await expect(
+      emitAck(guesser.client, "game:adjustScore", { teamId, delta: 1 }),
+    ).resolves.toMatchObject({ error: { code: "NOT_HOST" } });
+
+    const adjusted = nextEvent<{ teamId: string; delta: number; byPlayerId: string }>(
+      guesser.client,
+      "score:adjusted",
+    );
+
+    await emitAck(host, "game:adjustScore", { teamId, delta: 1 });
+
+    await expect(adjusted).resolves.toMatchObject({ teamId, delta: 1 });
+  });
+
   it("lo que escribe un jugador lo ve toda la sala, con su autor", async () => {
     const { players, states } = await playingGame();
     await waitFor(

@@ -6,6 +6,7 @@ import { toGameState } from "@/application/dto/game-state";
 import { makeGame, makeTurn } from "@/domain/__fixtures__/game";
 import { PlayerId } from "@/domain/value-objects/PlayerId";
 import { SoundProvider } from "@/ui/providers/sound-provider";
+import { TEST_HOUSE_RULES } from "@/ui/__fixtures__/house-rules";
 import { GameScreen } from "./game-screen";
 import type { GuessMessage } from "@/ui/lib/guess-messages";
 
@@ -18,6 +19,7 @@ const context = vi.hoisted(() => ({
   state: null as GameStateView | null,
   busy: false,
   guess: vi.fn(),
+  adjustScore: vi.fn(),
   guessMessages: [] as readonly GuessMessage[],
   startTurn: vi.fn(),
   skipTurn: vi.fn(),
@@ -41,7 +43,7 @@ it.each(["p1", "p2", "p3"])(
     );
     render(
       <SoundProvider>
-        <GameScreen />
+        <GameScreen rules={TEST_HOUSE_RULES} />
       </SoundProvider>,
     );
     const sidebar = screen.getByRole("complementary", { name: "Información del turno" });
@@ -57,6 +59,57 @@ it.each(["p1", "p2", "p3"])(
   },
 );
 
+it("muestra las reglas de la casa en un modal, sin tocar la partida", () => {
+  context.state = toGameState(
+    makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
+    PlayerId.from("p2"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  expect(screen.queryByText("No digas abreviaturas.")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Reglas de la casa" }));
+
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(screen.getByText("No digas abreviaturas.")).toBeVisible();
+  expect(screen.getByText("No hagas onomatopeyas.")).toBeVisible();
+  expect(context.guess).not.toHaveBeenCalled();
+});
+
+it("solo el host puede ajustar el puntaje de cualquier equipo", () => {
+  const game = makeGame({
+    status: "playing",
+    currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+  });
+
+  context.state = toGameState(game, PlayerId.from("p1"));
+  const { rerender } = render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Ajustar puntaje" }));
+  fireEvent.click(screen.getByRole("button", { name: "Sumar un punto a Equipo 2" }));
+  expect(context.adjustScore).toHaveBeenCalledWith("t2", 1);
+
+  fireEvent.click(screen.getByRole("button", { name: "Restar un punto a Equipo 1" }));
+  expect(context.adjustScore).toHaveBeenCalledWith("t1", -1);
+
+  context.state = toGameState(game, PlayerId.from("p2"));
+  rerender(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  expect(screen.queryByRole("button", { name: "Ajustar puntaje" })).not.toBeInTheDocument();
+});
+
 it("keeps the score row above equal columns for the card and the notices", () => {
   context.state = toGameState(
     makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
@@ -64,7 +117,7 @@ it("keeps the score row above equal columns for the card and the notices", () =>
   );
   const { container } = render(
     <SoundProvider>
-      <GameScreen />
+      <GameScreen rules={TEST_HOUSE_RULES} />
     </SoundProvider>,
   );
 
@@ -87,7 +140,7 @@ it("keeps synchronized mute controls in the sidebar and mobile header", () => {
   );
   render(
     <SoundProvider>
-      <GameScreen />
+      <GameScreen rules={TEST_HOUSE_RULES} />
     </SoundProvider>,
   );
   const sidebar = screen.getByRole("complementary", { name: "Información del turno" });
@@ -113,7 +166,7 @@ it("moves the turn summary to the right sidebar only after activation", () => {
   context.state = toGameState(game, PlayerId.from("p1"));
   const { rerender } = render(
     <SoundProvider>
-      <GameScreen />
+      <GameScreen rules={TEST_HOUSE_RULES} />
     </SoundProvider>,
   );
   const sidebar = screen.getByRole("heading", { name: "Tu rol" }).closest("aside")!;
@@ -125,7 +178,7 @@ it("moves the turn summary to the right sidebar only after activation", () => {
   );
   rerender(
     <SoundProvider>
-      <GameScreen />
+      <GameScreen rules={TEST_HOUSE_RULES} />
     </SoundProvider>,
   );
   const summary = within(sidebar).getByRole("region", { name: "Turno actual" });
@@ -139,7 +192,7 @@ it("moves the turn summary to the right sidebar only after activation", () => {
   context.state = toGameState(game, PlayerId.from("p1"));
   rerender(
     <SoundProvider>
-      <GameScreen />
+      <GameScreen rules={TEST_HOUSE_RULES} />
     </SoundProvider>,
   );
   expect(sidebar).not.toContainElement(screen.getByRole("region", { name: "Turno actual" }));
@@ -155,7 +208,7 @@ it("moves the highlighted player and summary when the next team is selected", ()
   context.state = toGameState(game, PlayerId.from("p2"));
   const { rerender } = render(
     <SoundProvider>
-      <GameScreen />
+      <GameScreen rules={TEST_HOUSE_RULES} />
     </SoundProvider>,
   );
   context.state = toGameState(
@@ -164,7 +217,7 @@ it("moves the highlighted player and summary when the next team is selected", ()
   );
   rerender(
     <SoundProvider>
-      <GameScreen />
+      <GameScreen rules={TEST_HOUSE_RULES} />
     </SoundProvider>,
   );
   const highlighted = screen
@@ -187,7 +240,7 @@ it.each(["pending", "active"] as const)(
     context.state = toGameState(game, PlayerId.from("p2"));
     render(
       <SoundProvider>
-        <GameScreen />
+        <GameScreen rules={TEST_HOUSE_RULES} />
       </SoundProvider>,
     );
     const team = context.state.teams[0]!;
@@ -216,7 +269,7 @@ it.each(["p1", "p2", "p3"])(
     context.state = toGameState(game, PlayerId.from(playerId));
     render(
       <SoundProvider>
-        <GameScreen />
+        <GameScreen rules={TEST_HOUSE_RULES} />
       </SoundProvider>,
     );
     expect(screen.queryByText(game.currentTurn!.card.word)).not.toBeInTheDocument();

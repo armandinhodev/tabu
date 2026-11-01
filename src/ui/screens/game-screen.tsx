@@ -1,16 +1,19 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import { LogOut, Scale, ScrollText } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 import { ConfirmDialog } from "@/ui/components/ui/dialog";
 import { ErrorState, ScreenSkeleton } from "@/ui/components/game/banners";
+import { HouseRulesDialog } from "@/ui/components/game/house-rules-dialog";
 import { MuteButton } from "@/ui/components/game/mute-button";
+import { ScoreAdjustDialog } from "@/ui/components/game/score-adjust-dialog";
 import { TeamPanel } from "@/ui/components/game/team-panel";
 import { CurrentTurnCard } from "@/ui/components/game/current-turn-card";
 import { ScoreBoard } from "@/ui/components/game/taboo-words";
 import { TimerRing } from "@/ui/components/game/timer-ring";
+import type { HouseRules } from "@/infrastructure/content/house-rules";
 import { useGame } from "@/ui/providers/game-provider";
 import { ResultScreen } from "@/ui/screens/result-screen";
 import { DescribingView } from "./game/describing-view";
@@ -24,11 +27,12 @@ import type { RoleViewProps } from "./game/role-view-props";
  * descriptor y los rivales la palabra, el equipo que adivina solo su chat
  * privado de respuestas. En ≥1280 se suman los dos rails (§10).
  */
-export function GameScreen() {
+export function GameScreen({ rules }: { readonly rules: HouseRules }) {
   const {
     state,
     busy,
     guess,
+    adjustScore,
     guessMessages,
     startTurn,
     skipTurn,
@@ -37,6 +41,8 @@ export function GameScreen() {
     leaveGame,
   } = useGame();
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   if (state === null) {
     return <ScreenSkeleton />;
@@ -80,6 +86,15 @@ export function GameScreen() {
           {state.code} · ronda {state.round}
         </span>
         <div role="group" aria-label="Controles de la partida" className="flex items-center gap-2">
+          <Button
+            variant="quiet"
+            size="icon"
+            aria-label="Reglas"
+            title="Reglas de la casa"
+            onClick={() => setRulesOpen(true)}
+          >
+            <ScrollText aria-hidden="true" className="size-5" />
+          </Button>
           <MuteButton />
           <Button
             variant="quiet"
@@ -110,7 +125,15 @@ export function GameScreen() {
       <div className="order-2 flex min-w-0 flex-col gap-4 xl:order-none">
         {turn.status !== "pending" ? (
           <section aria-label="Puntajes" aria-live="polite" className="flex min-w-0 flex-col gap-3">
-            <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
+              {state.me.isHost ? (
+                <Button variant="quiet" size="sm" onClick={() => setAdjustOpen(true)}>
+                  <Scale aria-hidden="true" className="size-4" />
+                  Ajustar puntaje
+                </Button>
+              ) : null}
+            </div>
             <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
           </section>
         ) : null}
@@ -188,12 +211,30 @@ export function GameScreen() {
           variant="quiet"
           block
           className="hidden xl:inline-flex"
+          onClick={() => setRulesOpen(true)}
+        >
+          <ScrollText aria-hidden="true" className="size-4" />
+          Reglas de la casa
+        </Button>
+        <Button
+          variant="quiet"
+          block
+          className="hidden xl:inline-flex"
           onClick={() => setConfirmLeave(true)}
         >
           <LogOut aria-hidden="true" className="size-4" />
           Salir de la partida
         </Button>
       </aside>
+
+      <ScoreAdjustDialog
+        open={adjustOpen}
+        onOpenChange={setAdjustOpen}
+        teams={state.teams}
+        onAdjust={adjustScore}
+      />
+
+      <HouseRulesDialog open={rulesOpen} onOpenChange={setRulesOpen} rules={rules} />
 
       <ConfirmDialog
         open={confirmLeave}

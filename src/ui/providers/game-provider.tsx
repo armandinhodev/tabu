@@ -20,6 +20,7 @@ import type {
   GuessWrittenView,
   PenaltyAppliedView,
   RoundEndedView,
+  ScoreAdjustedView,
   TurnStartedView,
 } from "@/infrastructure/socket/events";
 import { isPublicMessage, type GuessMessage, type GuessMessageKind } from "@/ui/lib/guess-messages";
@@ -67,6 +68,8 @@ interface GameContextValue {
   /** Chat privado de adivinación: respuesta escrita y confirmación del servidor. */
   readonly guessMessages: readonly GuessMessage[];
   readonly guess: (answer: string) => void;
+  /** El host ajusta a mano el puntaje de un equipo. */
+  readonly adjustScore: (teamId: string, delta: number) => void;
   readonly reportViolation: (reason: ViolationReason, tabooWord?: string) => void;
   readonly skipTurn: () => void;
   readonly startTurn: () => void;
@@ -279,6 +282,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       playSound("score.change");
     };
 
+    const onScoreAdjusted = (payload: ScoreAdjustedView): void => {
+      const team = stateRef.current?.teams.find((candidate) => candidate.id === payload.teamId);
+      const host = playerName(payload.byPlayerId);
+
+      playSound("score.change");
+      appendGuessMessage(
+        `El host ${host} ajustó el puntaje de ${team?.name ?? "un equipo"}: ${payload.delta > 0 ? "+" : ""}${payload.delta}.`,
+        "adjust",
+      );
+    };
+
     const onRoundEnded = (payload: RoundEndedView): void => {
       setRoundSummary(payload);
       playSound("round.end");
@@ -309,6 +323,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.on("turn:guessWritten", onGuessWritten);
     socket.on("penalty:applied", onPenalty);
     socket.on("score:updated", onScore);
+    socket.on("score:adjusted", onScoreAdjusted);
     socket.on("round:ended", onRoundEnded);
     socket.on("game:finished", onFinished);
     socket.on("game:error", onError);
@@ -333,6 +348,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off("turn:guessWritten", onGuessWritten);
       socket.off("penalty:applied", onPenalty);
       socket.off("score:updated", onScore);
+      socket.off("score:adjusted", onScoreAdjusted);
       socket.off("round:ended", onRoundEnded);
       socket.off("game:finished", onFinished);
       socket.off("game:error", onError);
@@ -521,6 +537,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [appendGuessMessage, run],
   );
 
+  /**
+   * Ajuste manual del puntaje: solo el host puede pedirlo y el servidor lo
+   * valida. La sala ve el cambio y un aviso con el autor.
+   */
+  const adjustScore = useCallback(
+    (teamId: string, delta: number) => {
+      void run((done) => getSocket().emit("game:adjustScore", { teamId, delta }, done));
+    },
+    [run],
+  );
+
   const reportViolation = useCallback(
     (reason: ViolationReason, tabooWord?: string) => {
       void run((done) =>
@@ -565,6 +592,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       leaveGame,
       guessMessages,
       guess,
+      adjustScore,
       reportViolation,
       skipTurn,
       startTurn,
@@ -587,6 +615,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       leaveGame,
       guessMessages,
       guess,
+      adjustScore,
       reportViolation,
       skipTurn,
       startTurn,

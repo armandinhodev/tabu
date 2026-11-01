@@ -25,6 +25,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/src ./src
+COPY --from=build --chown=node:node /app/REGLAS.md ./REGLAS.md
 COPY --from=build --chown=node:node /app/server.ts /app/package.json /app/tsconfig.json /app/next.config.ts ./
 
 USER node

@@ -129,6 +129,13 @@ export class Broadcaster {
           })),
         });
         return;
+      case "ScoreAdjusted":
+        this.io.to(game.id).emit(SERVER_EVENTS.scoreAdjusted, {
+          teamId: event.teamId,
+          delta: event.delta,
+          byPlayerId: event.byPlayerId,
+        });
+        return;
       case "PenaltyApplied":
         this.io.to(game.id).emit(SERVER_EVENTS.penaltyApplied, penaltyView(event));
         return;

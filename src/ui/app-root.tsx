@@ -8,9 +8,10 @@ import { JoinScreen } from "@/ui/screens/join-screen";
 import { LobbyScreen } from "@/ui/screens/lobby-screen";
 import { GameScreen } from "@/ui/screens/game-screen";
 import { ResultScreen } from "@/ui/screens/result-screen";
+import type { HouseRules } from "@/infrastructure/content/house-rules";
 
 /** Raíz del cliente: una sola pantalla montada, sin perder el socket al navegar. */
-export function AppRoot() {
+export function AppRoot({ rules }: { readonly rules: HouseRules }) {
   const { view, connection } = useGame();
 
   return (
@@ -21,7 +22,7 @@ export function AppRoot() {
       {view === "create" ? <CreateScreen /> : null}
       {view === "join" ? <JoinScreen /> : null}
       {view === "lobby" ? <LobbyScreen /> : null}
-      {view === "game" ? <GameScreen /> : null}
+      {view === "game" ? <GameScreen rules={rules} /> : null}
       {view === "result" ? <ResultScreen /> : null}
     </>
   );

@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import type { PenaltyAppliedView, RoundEndedView } from "@/infrastructure/socket/events";
+import { TEST_HOUSE_RULES } from "@/ui/__fixtures__/house-rules";
 import { AppRoot } from "./app-root";
 
 vi.mock("react", async () => {
@@ -30,9 +31,9 @@ afterEach(() => {
 });
 
 it("continues playing without a popup when a turn completes the round", () => {
-  const { rerender } = render(<AppRoot />);
+  const { rerender } = render(<AppRoot rules={TEST_HOUSE_RULES} />);
   context.roundSummary = { round: 1, standings: [{ teamId: "t1", name: "Team 1", score: 2 }] };
-  rerender(<AppRoot />);
+  rerender(<AppRoot rules={TEST_HOUSE_RULES} />);
   expect(screen.getByText("Next turn")).toBeInTheDocument();
   expect(screen.queryByText("Fin de la ronda")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Seguir jugando" })).not.toBeInTheDocument();
@@ -48,7 +49,7 @@ it("no interrumpe la partida con un cartel de penalización", () => {
     cardDiscarded: true,
   };
 
-  render(<AppRoot />);
+  render(<AppRoot rules={TEST_HOUSE_RULES} />);
 
   expect(screen.getByText("Next turn")).toBeInTheDocument();
   expect(screen.queryByText("Palabra prohibida")).not.toBeInTheDocument();
@@ -57,9 +58,9 @@ it("no interrumpe la partida con un cartel de penalización", () => {
 });
 
 it("preserves the final result screen", () => {
-  const { rerender } = render(<AppRoot />);
+  const { rerender } = render(<AppRoot rules={TEST_HOUSE_RULES} />);
   context.view = "result";
-  rerender(<AppRoot />);
+  rerender(<AppRoot rules={TEST_HOUSE_RULES} />);
   expect(screen.getByText("Final result")).toBeInTheDocument();
   expect(screen.queryByText("Next turn")).not.toBeInTheDocument();
 });

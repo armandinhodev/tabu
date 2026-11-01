@@ -86,6 +86,15 @@ export type DomainEvent =
       readonly teams: readonly Standing[];
     }
   | {
+      /** El host ajustó a mano el puntaje de un equipo. */
+      readonly type: "ScoreAdjusted";
+      readonly gameId: GameId;
+      readonly teamId: TeamId;
+      readonly delta: number;
+      readonly byPlayerId: PlayerId;
+      readonly teams: readonly Standing[];
+    }
+  | {
       readonly type: "PenaltyApplied";
       readonly gameId: GameId;
       readonly reason: ViolationReason;

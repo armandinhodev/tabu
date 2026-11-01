@@ -15,6 +15,7 @@ export const CLIENT_EVENTS = {
   gameAutoTeams: "game:autoTeams",
   gameStart: "game:start",
   gameLeave: "game:leave",
+  gameAdjustScore: "game:adjustScore",
   turnGuess: "turn:guess",
   turnReportViolation: "turn:reportViolation",
   turnSkip: "turn:skip",
@@ -34,6 +35,7 @@ export const SERVER_EVENTS = {
   cardResolved: "card:resolved",
   penaltyApplied: "penalty:applied",
   scoreUpdated: "score:updated",
+  scoreAdjusted: "score:adjusted",
   roundEnded: "round:ended",
   gameError: "game:error",
 } as const;
@@ -79,6 +81,13 @@ export interface GuessAck {
 export interface ReportViolationAck {
   readonly pointsDelta: number;
   readonly teamScore: number;
+}
+
+/** El host ajustó el puntaje de un equipo a mano. */
+export interface ScoreAdjustedView {
+  readonly teamId: string;
+  readonly delta: number;
+  readonly byPlayerId: string;
 }
 
 export interface StandingView {
@@ -180,6 +189,7 @@ export interface ServerToClientEvents {
   "turn:ended": (payload: TurnEndedView) => void;
   "penalty:applied": (payload: PenaltyAppliedView) => void;
   "score:updated": (payload: { readonly teams: readonly ScoreTeamView[] }) => void;
+  "score:adjusted": (payload: ScoreAdjustedView) => void;
   "round:ended": (payload: RoundEndedView) => void;
   "game:error": (payload: ErrorPayload) => void;
 }
@@ -192,6 +202,7 @@ export interface ClientToServerEvents {
   "game:autoTeams": (ack: Ack<void>) => void;
   "game:start": (ack: Ack<void>) => void;
   "game:leave": (ack: Ack<void>) => void;
+  "game:adjustScore": (payload: unknown, ack: Ack<void>) => void;
   "turn:guess": (payload: unknown, ack: Ack<GuessAck>) => void;
   "turn:reportViolation": (payload: unknown, ack: Ack<ReportViolationAck>) => void;
   "turn:skip": (ack: Ack<void>) => void;

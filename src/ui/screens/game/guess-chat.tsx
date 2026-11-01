@@ -6,6 +6,7 @@ import {
   Clock3,
   Info,
   MessageCircle,
+  Scale,
   Send,
   ShieldAlert,
   SkipForward,
@@ -72,6 +73,12 @@ const MESSAGE_STYLES: Record<GuessMessageKind, MessageAppearance> = {
     icon: CheckCircle2,
     surface: "border-success/30 bg-success-soft",
     accent: "text-success",
+  },
+  adjust: {
+    label: "Ajuste del host",
+    icon: Scale,
+    surface: "border-line bg-surface",
+    accent: "text-gold",
   },
 };
 

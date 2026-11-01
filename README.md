@@ -25,6 +25,16 @@ todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo ad
 la adivinada, la penalizada, la que se salta y la que se agota el tiempo. La partida termina
 cuando el mazo se agota.
 
+**El host manda en el marcador.** Puede sumar o restar puntos a cualquier equipo en cualquier
+momento de la partida: el botón _Ajustar puntaje_ aparece junto al marcador y la sala ve el
+cambio más un aviso con el autor.
+
+**Reglas de la casa.** Los acuerdos de la mesa (no usar abreviaturas, diminutivos ni aumentativos,
+palabras en otros idiomas, la letra con la que empieza ni onomatopeyas) están en `REGLAS.md`, en la
+raíz del repositorio: se edita ese archivo y se redespliega. Durante la partida se leen en el modal
+_Reglas de la casa_ (icono de la barra superior en móvil, botón en el panel derecho en escritorio).
+Son acuerdos de la mesa: no cambian el juego ni se validan automáticamente.
+
 Al comenzar la partida se sortean el equipo inicial y su descriptor. Los equipos se alternan a
 partir de ese equipo; dentro de cada equipo se sortea entre quienes todavía no describieron, sin
 repetir hasta que pasen todos. Cada turno espera a que el descriptor pulse _Comenzar turno_: recién

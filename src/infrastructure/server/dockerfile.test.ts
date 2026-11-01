@@ -28,6 +28,7 @@ describe("Dockerfile", () => {
       ["/app/node_modules", "./node_modules"],
       ["/app/.next", "./.next"],
       ["/app/src", "./src"],
+      ["/app/REGLAS.md", "./REGLAS.md"],
     ] as const) {
       const [from, to] = sourceCopied;
       const line = new RegExp(

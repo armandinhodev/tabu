@@ -171,6 +171,31 @@ describe("GameProvider adivinación escrita", () => {
     expect(result.current.guessMessages[0]?.outcome).toBe("incorrect");
   });
 
+  it("avisa a la sala cuando el host ajusta el puntaje", () => {
+    const { result } = renderHook(useGame, { wrapper: GameProvider });
+    const state = toGameState(
+      makeGame({
+        status: "playing",
+        currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+      }),
+      PlayerId.from("p2"),
+    );
+    act(() => socket.handlers.get("game:state")?.(state));
+
+    act(() => {
+      socket.handlers.get("score:adjusted")?.({
+        teamId: "t1",
+        delta: -1,
+        byPlayerId: "p1",
+      });
+    });
+
+    const notice = result.current.guessMessages.find((message) => message.kind === "adjust");
+    expect(notice?.text).toContain("Jugador p1");
+    expect(notice?.text).toContain("Equipo 1");
+    expect(notice?.text).toContain("-1");
+  });
+
   it("muestra a todos lo que escribió un jugador con su nombre", () => {
     const { result } = renderHook(useGame, { wrapper: GameProvider });
     const state = toGameState(

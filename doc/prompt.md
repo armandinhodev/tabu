@@ -310,6 +310,8 @@ Violation {
 10. **Fin de partida:** cuando se completa el número de rondas configurado (default 1 = mazo entero) o se agota el mazo. Gana el equipo con más puntos. **Empate → se declara empate**, no se fuerza un ganador.
 11. **Reconexión:** el `playerToken` (UUID) se guarda en `localStorage`. Si el jugador se desconecta, el servidor lo marca `connected: false` y su turno **pasa al siguiente descriptor del mismo equipo**, con un aviso de 5 segundos. Al reconectar recibe el estado completo.
 12. **Sin trampas automáticas:** el servidor es la única autoridad sobre puntaje y tiempo. Los clientes **nunca** envían puntos ni tiempo: solo acciones.
+13. **Ajuste manual del host:** el host puede **sumar o restar puntos a cualquier equipo en cualquier momento de la partida** (`game:adjustScore`). El servidor valida que sea el host y que la partida esté en curso; el puntaje nunca queda negativo y la sala ve el cambio en el marcador más un aviso con el autor. No cambia ninguna otra regla del juego.
+14. **Reglas de la casa:** los acuerdos de la mesa (no usar abreviaturas, diminutivos ni aumentativos, palabras en otros idiomas, la letra inicial ni onomatopeyas) viven en `REGLAS.md`, en la raíz del repositorio, y se muestran en un modal dentro de la partida. Editar ese archivo y redesplegar es suficiente: son acuerdos informative y no alteran el flujo del juego.
 
 ---
 
@@ -362,6 +364,7 @@ Todos los payloads se validan con Zod en el servidor. Los nombres de evento est�
 | `game:autoTeams` | `void` | `void` | cualquiera en la sala |
 | `game:start` | `void` | `void` | solo el host |
 | `game:leave` | `void` | `void` | cualquiera |
+| `game:adjustScore` | `{ teamId: string, delta: number }` | `void` | solo el host |
 | `turn:guess` | `{ guess: string }` | `{ pointsAwarded: number, teamScore: number }` | equipo que adivina |
 | `turn:reportViolation` | `{ reason: 'TABOO_WORD'\|'GESTURE'\|'SOUND', tabooWord?: string }` | `{ pointsDelta: number, teamScore: number }` | equipo rival, o el descriptor (autorreporte) |
 | `turn:skip` | `void` | `void` | solo el descriptor |
@@ -385,6 +388,7 @@ prohibidas de la carta activa (comparación normalizada). Si no coincide ⇒ `ga
 | `turn:guessWritten` | `{ turnId, playerId, guess, correct }` — lo que escribe un jugador lo ve toda la sala, con su autor |
 | `penalty:applied` | `{ reason, tabooWord?, teamId, pointsDelta, reportedBy, cardDiscarded: true }` |
 | `score:updated` | `{ teams: Array<{ id, name, score, color }> }` |
+| `score:adjusted` | `{ teamId, delta, byPlayerId }` — el host ajustó el puntaje a mano |
 | `round:ended` | `{ round, standings }` |
 | `game:error` | `{ code: string, message: string }` |
 

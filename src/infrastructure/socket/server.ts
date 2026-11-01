@@ -6,7 +6,7 @@ import type { Game } from "../../domain/entities/Game";
 import { DomainError } from "../../domain/errors/DomainError";
 import type { DomainEvent } from "../../domain/events/events";
 import { reassignDescriptor } from "../../domain/services/GameStateMachine";
-import type { PlayerId } from "../../domain/value-objects/PlayerId";
+import { TeamId, type PlayerId } from "../../domain/value-objects/PlayerId";
 import { toGameState } from "../../application/dto/game-state";
 import { locatePlayer, type GameDeps } from "../../application/use-cases/common";
 import { createGame } from "../../application/use-cases/create-game";
@@ -15,6 +15,7 @@ import { assignTeam, autoAssignTeams } from "../../application/use-cases/team-as
 import { startGame } from "../../application/use-cases/lobby";
 import { leaveGame, markDisconnected, reconnectPlayer } from "../../application/use-cases/session";
 import { guessWord, startTurn, reportViolation, skipTurn } from "../../application/use-cases/turn";
+import { adjustScore } from "../../application/use-cases/score";
 import { logger } from "../config/logger";
 import {
   CLIENT_EVENTS,
@@ -25,6 +26,7 @@ import {
 } from "./events";
 import {
   InvalidPayloadError,
+  adjustScorePayload,
   assignTeamPayload,
   createGamePayload,
   guessPayload,
@@ -205,6 +207,33 @@ export function attachSocketServer(
             handOverDescriptor(gameId, playerId);
           }
         }
+      });
+    });
+
+    socket.on(CLIENT_EVENTS.gameAdjustScore, (payload, ack) => {
+      void run(socket, ack, () => {
+        const input = parsePayload(adjustScorePayload, payload);
+        const { gameId, playerId } = requireBinding(socket);
+        const adjustment = adjustScore(
+          deps,
+          gameId,
+          playerId,
+          TeamId.from(input.teamId),
+          input.delta,
+        );
+
+        snapshot(adjustment.game);
+        broadcaster.emitEvents(adjustment.game, [
+          {
+            type: "ScoreAdjusted",
+            gameId: adjustment.game.id,
+            teamId: adjustment.teamId,
+            delta: adjustment.delta,
+            byPlayerId: adjustment.byPlayerId,
+            teams: adjustment.standings,
+          },
+        ]);
+        broadcaster.emitState(adjustment.game);
       });
     });
 

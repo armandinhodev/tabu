@@ -4,7 +4,7 @@
  */
 
 export type GuessMessageKind =
-  "feedback" | "notice" | "written" | "skip" | "penalty" | "turn" | "score";
+  "feedback" | "notice" | "written" | "skip" | "penalty" | "turn" | "score" | "adjust";
 
 export interface GuessMessage {
   readonly id: number;
