@@ -168,9 +168,7 @@ export function reportViolation(
   const violation = validateReport(
     game,
     turn,
-    input.reason === "TABOO_WORD"
-      ? { reason: "TABOO_WORD", tabooWord: input.tabooWord ?? "" }
-      : { reason: input.reason },
+    { reason: "TABOO_WORD", tabooWord: input.tabooWord },
     { reporterId: playerId, at: deps.clock.now() },
   );
 

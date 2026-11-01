@@ -35,7 +35,6 @@ export interface ReportMeta {
 
 /**
  * Only rival teams may report taboo words from the active card.
- * Legacy gesture/sound reports also allow the descriptor to self-report.
  * Invalid reports throw without changing the game.
  */
 export function validateReport(
@@ -54,29 +53,17 @@ export function validateReport(
 
   const role = reporterRole(game, turn, meta.reporterId);
 
-  if (role !== "RIVAL" && role !== "DESCRIBER") {
-    throw new NotAllowedError("Only the rival team or the descriptor can report");
+  if (role !== "RIVAL") {
+    throw new NotAllowedError("Only players on other teams can report taboo words");
   }
 
-  if (input.reason === "TABOO_WORD") {
-    if (role !== "RIVAL") {
-      throw new NotAllowedError("Only players on other teams can report taboo words");
-    }
-
-    if (!turn.card.taboo.contains(input.tabooWord)) {
-      throw new InvalidTabooWordError(input.tabooWord);
-    }
-
-    return {
-      reason: "TABOO_WORD",
-      tabooWord: normalizeWord(input.tabooWord),
-      reportedBy: meta.reporterId,
-      at: meta.at,
-    };
+  if (!turn.card.taboo.contains(input.tabooWord)) {
+    throw new InvalidTabooWordError(input.tabooWord);
   }
 
   return {
-    reason: input.reason,
+    reason: "TABOO_WORD",
+    tabooWord: normalizeWord(input.tabooWord),
     reportedBy: meta.reporterId,
     at: meta.at,
   };

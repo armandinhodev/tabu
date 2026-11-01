@@ -446,23 +446,20 @@ describe("reportViolation", () => {
     ).toThrow(NotAllowedError);
   });
 
-  it("acepta gesto y sonido del rival", () => {
-    const gesture = reportViolation(harness.deps, harness.game.id, PlayerId.from("p3"), {
-      reason: "GESTURE",
+  it("una penalización no reinicia el reloj ni cambia al descriptor", () => {
+    const word = harness.game.currentTurn!.card.taboo.words[0]!;
+    const banned = reportViolation(harness.deps, harness.game.id, PlayerId.from("p3"), {
+      reason: "TABOO_WORD",
+      tabooWord: word,
     });
 
-    expect(gesture.pointsDelta).toBe(-1);
-    expect(gesture.game.currentTurn?.teamId).toBe("t1");
-    expect(gesture.game.currentTurn?.descriptorId).toBe("p1");
-    expect(gesture.game.currentTurn?.deadlineAt).toEqual(harness.game.currentTurn?.deadlineAt);
-  });
-
-  it("acepta el autorreporte del descriptor", () => {
-    const self = reportViolation(harness.deps, harness.game.id, PlayerId.from("p1"), {
-      reason: "SOUND",
-    });
-
-    expect(self.pointsDelta).toBe(-1);
+    expect(banned.pointsDelta).toBe(-1);
+    expect(banned.game.currentTurn?.teamId).toBe("t1");
+    expect(banned.game.currentTurn?.descriptorId).toBe("p1");
+    expect(banned.game.currentTurn?.deadlineAt).toEqual(harness.game.currentTurn?.deadlineAt);
+    // La carta se anula y viene otra (las palabras se repiten entre cartas,
+    // así que la prueba es la identidad, no el texto).
+    expect(banned.game.currentTurn?.card.id).not.toBe(harness.game.currentTurn?.card.id);
   });
 });
 

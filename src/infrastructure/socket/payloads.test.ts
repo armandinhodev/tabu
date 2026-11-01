@@ -71,13 +71,13 @@ describe("createGamePayload", () => {
     }
 
     for (const turnSeconds of [20, 45, 121]) {
-    expect(() =>
-      parsePayload(createGamePayload, {
-        playerName: "Luz",
-        deckId: "deck-1",
-        options: { turnSeconds },
-      }),
-    ).toThrowError(/turnSeconds/);
+      expect(() =>
+        parsePayload(createGamePayload, {
+          playerName: "Luz",
+          deckId: "deck-1",
+          options: { turnSeconds },
+        }),
+      ).toThrowError(/turnSeconds/);
     }
   });
 
@@ -92,7 +92,9 @@ describe("createGamePayload", () => {
   });
 
   it("rejects an empty name", () => {
-    expect(() => parsePayload(createGamePayload, { playerName: "   ", deckId: "deck-1" })).toThrow();
+    expect(() =>
+      parsePayload(createGamePayload, { playerName: "   ", deckId: "deck-1" }),
+    ).toThrow();
   });
 });
 
@@ -127,7 +129,9 @@ describe("reconnectPayload", () => {
   });
 
   it("rejects a token that is not a uuid", () => {
-    expect(() => parsePayload(reconnectPayload, { gameId: "game-1", playerToken: "nope" })).toThrow();
+    expect(() =>
+      parsePayload(reconnectPayload, { gameId: "game-1", playerToken: "nope" }),
+    ).toThrow();
   });
 });
 
@@ -144,9 +148,9 @@ describe("reportViolationPayload", () => {
     );
   });
 
-  it("accepts GESTURE and SOUND without a word", () => {
-    expect(parsePayload(reportViolationPayload, { reason: "GESTURE" })).toEqual({ reason: "GESTURE" });
-    expect(parsePayload(reportViolationPayload, { reason: "SOUND" })).toEqual({ reason: "SOUND" });
+  it("rejects gesture and sound reasons: the game only penalizes taboo words", () => {
+    expect(() => parsePayload(reportViolationPayload, { reason: "GESTURE" })).toThrow();
+    expect(() => parsePayload(reportViolationPayload, { reason: "SOUND" })).toThrow();
   });
 
   it("rejects an unknown reason", () => {

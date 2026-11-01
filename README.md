@@ -389,7 +389,7 @@ Cliente → servidor:
 | `game:start`                    | —                                  | —                                               | solo el host                                                     |
 | `game:leave`                    | —                                  | —                                               | cualquiera                                                       |
 | `turn:guess`                    | `{ guess }`                        | `{ correct, pointsAwarded, teamScore }`         | equipo que adivina                                               |
-| `turn:reportViolation`          | `{ reason, tabooWord? }`           | `{ pointsDelta, teamScore }`                    | solo rivales para palabras; rival o descriptor para gesto/sonido |
+| `turn:reportViolation`          | `{ reason, tabooWord, cardId? }`   | `{ pointsDelta, teamScore }`                    | solo el equipo rival                                             |
 | `turn:skip`                     | —                                  | —                                               | solo el descriptor                                               |
 | `turn:start`                    | —                                  | —                                               | solo el descriptor elegido, antes de iniciar el reloj            |
 

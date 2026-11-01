@@ -56,7 +56,7 @@ El juego usa **mazos precargados en MongoDB** (no hay carga de mazos por el usua
 | Rol activo | El equipo al que le toca describe **y** adivina: puede *Adiviné*, *Aceptar* y *Reportar*. |
 | Rol rival | El equipo que espera **vigila**: ve la misma lista y **marca** qué palabra prohibida se dijo. |
 | Penalización | El equipo rival toca el chip de la palabra exacta que se dijo → **−1 al equipo que describe**, el turno **termina en el acto** y **la carta se anula** (se descarta del mazo). |
-| Gestos y sonidos | Se reportan a mano: *Reportar gesto* / *Reportar sonido* → mismo castigo que la palabra prohibida. |
+| Gestos y sonidos | **No se reportan.** La única acción de vigilancia es marcar una palabra prohibida. |
 | Equipos | De 2 a 4 por partida. Multiequipos real: equipos nombrados, con colores propios. |
 | Palabras prohibidas | Fijadas por la carta del mazo, no editables en partida. |
 | Detección de infracciones | **Manual y por palabra**: se marca el chip concreto. Sin reconocimiento de voz. |
@@ -254,7 +254,7 @@ Card { id: CardId; word: string; taboo: TabooWords }   // TabooWords: 1..4 térm
 Turn { id: TurnId; teamId: TeamId; descriptorId: PlayerId; card: Card; startedAt: Date; deadlineAt: Date; status: 'pending' | 'active' | 'ended' }
 
 Violation {
-  reason: 'TABOO_WORD' | 'GESTURE' | 'SOUND';
+  reason: 'TABOO_WORD';
   tabooWord?: string;              // obligatorio y exacto cuando reason = 'TABOO_WORD'
   reportedBy: PlayerId;
   at: Date;
@@ -273,8 +273,7 @@ Violation {
 - `TurnOrderPolicy`: se sortea el primer equipo y luego los equipos se alternan en orden. En cada equipo se sortea el descriptor entre quienes todavía no describieron, sin repetir hasta que hayan pasado todos los jugadores conectados de ese equipo.
 - `ScoringPolicy`: acierto `+1`; penalización `−1`; skip y timeout `0`.
 - `PenaltyPolicy`: valida quién puede reportar y qué castigo corresponde.
-  - Puede reportar el **equipo rival** (rol vigilante) y **el descriptor** (autorreporte).
-  - Solo jugadores de otros equipos pueden marcar palabras prohibidas. El descriptor y sus compañeros no pueden hacerlo; el autorreporte del descriptor se conserva únicamente para gesto/sonido en el contrato del servidor.
+  - Solo el **equipo rival** (rol vigilante) puede reportar. El descriptor y sus compañeros no pueden hacerlo, ni siquiera enviando el evento directamente.
   - Con `reason = 'TABOO_WORD'`, la palabra marcada debe coincidir (normalizada: minúsculas, sin acentos, sin espacios extra) con una de las palabras prohibidas de la carta. Si no coincide → `InvalidTabooWordError`, **sin penalización y sin cerrar el turno**.
   - Todo reporte válido termina el turno y **descarta la carta**.
 - `DeckShuffler`: barajado con RNG inyectable (semilla determinista en tests).
@@ -285,7 +284,7 @@ Violation {
 |---|---|
 | Se sortea | Sale del mazo (`draw()`). |
 | Adivinada | Se consume; queda en el historial de la partida. |
-| **Penalizada** (palabra prohibida, gesto o sonido) | **Se anula**: se descarta del mazo y **no vuelve a salir**. |
+| **Penalizada** (palabra prohibida) | **Se anula**: se descarta del mazo y **no vuelve a salir**. |
 | Tiempo agotado | **Se consume**: no vuelve al mazo. |
 | Saltada por el descriptor | **Se consume**: no pasa al equipo contrario y no vuelve a salir. |
 
@@ -304,7 +303,7 @@ Violation {
    - **Equipos rivales (vigilantes):** los chips de palabras prohibidas son **reportables** (tap) durante el turno activo. No hay botones para reportar gesto/sonido ni pasar turno.
 5. **Acierto:** un compañero distinto del descriptor envía la respuesta correcta → **+1** al equipo y al jugador, y se entrega otra carta al mismo descriptor, con el mismo equipo, reloj y saltos usados. El equipo cambia cuando termina el reloj o se agotan las cartas disponibles. Cada nuevo turno queda pendiente hasta que su descriptor pulsa *Comenzar turno*; antes de ese momento no corre el reloj ni se revela la carta.
 6. **Penalización por palabra prohibida:** un miembro del **equipo rival** toca el chip de la palabra que se dijo (el chip muestra la palabra exacta, p. ej. *fuego*) → **−1** al equipo que describe y **la carta se anula** (se descarta del mazo: no vuelve a salir). Se entrega otra carta sin cambiar el descriptor ni el reloj. El servidor valida que la palabra marcada sea una de las prohibidas de esa carta; si no coincide, se rechaza con `game:error` (`INVALID_TABOO_WORD`) y no hay penalización ni cambio de carta. El aviso incluye la carta que el jugador vio: si la carta ya cambió (doble click o dos rivales a la vez), se rechaza con `game:error` (`STALE_CARD`) y **no** se penaliza la carta nueva. **Ventana de cambio (500 ms):** recién cambia la carta, el cliente pinta el bloque de palabras prohibidas en esqueleto y no hay chip que se pueda tocar, así el dedo que venía de la carta anterior no marca la nueva por error. La ventana se mide desde que esa pantalla pintó la carta: reconectarse a mitad de turno no la abre.
-7. **Gestos y sonidos:** el equipo rival (o el descriptor) puede reportarlos con *Reportar gesto* / *Reportar sonido* → **−1** al equipo que describe y la carta se anula, igual que en el caso anterior, sin reiniciar el reloj ni cambiar al descriptor.
+7. **Gestos y sonidos:** no se reportan. No hay acción para penalizarlos; la única vigilancia es marcar una palabra prohibida.
 8. **Aceptado (skip):** el descriptor puede *Aceptar y pasar carta* (la descripción es demasiado ambigua) → la carta **se descarta** y el descriptor recibe otra del mazo, con el mismo reloj, sin puntos ni penalización. La carta no pasa al equipo contrario: ninguna carta se repite en la partida.
 9. **Tiempo agotado:** el turno termina, sin puntos ni penalización; la carta **se consume** y no vuelve al mazo.
 10. **Fin de partida:** cuando se completa el número de rondas configurado (default 1 = mazo entero) o se agota el mazo. Gana el equipo con más puntos. **Empate → se declara empate**, no se fuerza un ganador.
@@ -366,7 +365,7 @@ Todos los payloads se validan con Zod en el servidor. Los nombres de evento est�
 | `game:leave` | `void` | `void` | cualquiera |
 | `game:adjustScore` | `{ teamId: string, delta: number }` | `void` | solo el host |
 | `turn:guess` | `{ guess: string }` | `{ pointsAwarded: number, teamScore: number }` | equipo que adivina |
-| `turn:reportViolation` | `{ reason: 'TABOO_WORD'\|'GESTURE'\|'SOUND', tabooWord?: string, cardId?: string }` | `{ pointsDelta: number, teamScore: number }` | equipo rival, o el descriptor (autorreporte) |
+| `turn:reportViolation` | `{ reason: 'TABOO_WORD', tabooWord: string, cardId?: string }` | `{ pointsDelta: number, teamScore: number }` | solo el equipo rival |
 | `turn:skip` | `void` | `void` | solo el descriptor |
 | `turn:start` | `void` | `void` | solo el descriptor seleccionado, con turno pendiente |
 
@@ -497,8 +496,8 @@ Validá todo con Zod al arrancar: si falta una variable crítica, el server no l
    **"Aceptar y pasar carta"** y "Reportar palabra prohibida".
 7. **Juego — equipo rival (vigilante)**: banner verde azulado "Equipo rival · Vigilá", palabra
    objetivo, **los mismos chips de palabras prohibidas pero reportables** (táctiles, con badge de
-   "!" en cada chip), temporizador, botones **"Reportar gesto"**, **"Reportar sonido"** y "Pasar
-   turno". Al tocar un chip se reporta al instante (sin modal de confirmación: es un juego rápido y
+   "!" en cada chip), temporizador y salida de la partida. No hay botones de gesto, sonido ni de
+   "pasar turno". Al tocar un chip se reporta al instante (sin modal de confirmación: es un juego rápido y
    el servidor valida la palabra).
 8. **Penalización**: cartel rojo con **la palabra marcada**, el equipo penalizado, el delta de
    puntos y la línea "La carta se anuló · pasa a la siguiente".
@@ -519,7 +518,7 @@ de turno y acciones), según `11-desktop-lobby.png`, `12-desktop-juego-activo.pn
 - Tests del dominio (policies, value objects, máquina de estados) con **cobertura ≥ 80 % de
   branches** en `src/domain`.
 - Tests de integración del flujo: crear → unirse → repartir → arrancar → turno con acierto →
-  turno con penalización por palabra → turno con penalización por gesto → fin de partida.
+  turno con penalización por palabra → fin de partida.
 - Test de **visibilidad pública**: el estado que recibe cualquier jugador contiene la palabra
   objetivo **y** la lista de palabras prohibidas (assert explícito).
 - Test de **penalización por palabra**: marcar una palabra que **no** pertenece a la carta se

@@ -126,27 +126,12 @@ describe("PenaltyPolicy", () => {
     ).toThrow(NotAllowedError);
   });
 
-  it("acepta gestos y sonidos del rival y del descriptor", () => {
-    expect(
-      validateReport(
-        game,
-        turn,
-        { reason: "GESTURE" },
-        { reporterId: PlayerId.from("p3"), at: NOW },
-      ).reason,
-    ).toBe("GESTURE");
-    expect(
-      validateReport(game, turn, { reason: "SOUND" }, { reporterId: PlayerId.from("p1"), at: NOW })
-        .reason,
-    ).toBe("SOUND");
-  });
-
   it("rechaza al compañero de equipo que no describe y a un ajeno", () => {
     expect(() =>
       validateReport(
         game,
         turn,
-        { reason: "GESTURE" },
+        { reason: "TABOO_WORD", tabooWord: "calor" },
         { reporterId: PlayerId.from("p2"), at: NOW },
       ),
     ).toThrow(NotAllowedError);
@@ -155,7 +140,7 @@ describe("PenaltyPolicy", () => {
       validateReport(
         game,
         turn,
-        { reason: "GESTURE" },
+        { reason: "TABOO_WORD", tabooWord: "calor" },
         { reporterId: PlayerId.from("outsider"), at: NOW },
       ),
     ).toThrow(NotAllowedError);
@@ -177,7 +162,7 @@ describe("PenaltyPolicy", () => {
       validateReport(
         { ...game, status: "waiting" },
         turn,
-        { reason: "GESTURE" },
+        { reason: "TABOO_WORD", tabooWord: "calor" },
         { reporterId: PlayerId.from("p3"), at: NOW },
       ),
     ).toThrow(GameNotPlayingError);
@@ -188,7 +173,7 @@ describe("PenaltyPolicy", () => {
       validateReport(
         game,
         { ...turn, status: "ended" },
-        { reason: "GESTURE" },
+        { reason: "TABOO_WORD", tabooWord: "calor" },
         { reporterId: PlayerId.from("p3"), at: LATER },
       ),
     ).toThrow(TurnNotActiveError);

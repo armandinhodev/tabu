@@ -1,25 +1,20 @@
 import type { PlayerId } from "../value-objects/PlayerId";
 
-export type ViolationReason = "TABOO_WORD" | "GESTURE" | "SOUND";
+export type ViolationReason = "TABOO_WORD";
 
 /**
- * Infracción reportada. La unión garantiza que TABOO_WORD siempre traiga la
- * palabra exacta marcada.
+ * Infracción reportada. Hay una sola forma de penalizar: marcar una palabra
+ * prohibida de la carta activa, con la palabra exacta que se dijo.
  */
-export type Violation =
-  | {
-      readonly reason: "TABOO_WORD";
-      readonly tabooWord: string;
-      readonly reportedBy: PlayerId;
-      readonly at: Date;
-    }
-  | {
-      readonly reason: "GESTURE" | "SOUND";
-      readonly reportedBy: PlayerId;
-      readonly at: Date;
-    };
+export interface Violation {
+  readonly reason: "TABOO_WORD";
+  readonly tabooWord: string;
+  readonly reportedBy: PlayerId;
+  readonly at: Date;
+}
 
 /** Entrada cruda del reporte, antes de validarla contra la carta. */
-export type ViolationInput =
-  | { readonly reason: "TABOO_WORD"; readonly tabooWord: string }
-  | { readonly reason: "GESTURE" | "SOUND" };
+export interface ViolationInput {
+  readonly reason: "TABOO_WORD";
+  readonly tabooWord: string;
+}

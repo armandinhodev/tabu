@@ -78,24 +78,14 @@ export const assignTeamPayload = z.object({
   teamId: z.string().trim().min(1, "teamId cannot be empty"),
 });
 
-export const reportViolationPayload = z
-  .object({
-    reason: z.enum(["TABOO_WORD", "GESTURE", "SOUND"], {
-      error: "must be TABOO_WORD, GESTURE or SOUND",
-    }),
-    tabooWord: z.string().trim().min(1).max(40).optional(),
-    /** La carta que el jugador vio: si ya cambió, el aviso no se aplica. */
-    cardId: z.string().trim().min(1).max(80).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.reason === "TABOO_WORD" && value.tabooWord === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["tabooWord"],
-        message: "tabooWord is required when reason is TABOO_WORD",
-      });
-    }
-  });
+export const reportViolationPayload = z.object({
+  reason: z.literal("TABOO_WORD", {
+    error: "must be TABOO_WORD",
+  }),
+  tabooWord: z.string().trim().min(1).max(40),
+  /** La carta que el jugador vio: si ya cambió, el aviso no se aplica. */
+  cardId: z.string().trim().min(1).max(80).optional(),
+});
 
 export const guessPayload = z.object({
   guess: z.string().trim().min(1, "guess cannot be empty").max(80, "guess is too long"),
