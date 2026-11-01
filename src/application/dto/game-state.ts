@@ -46,6 +46,12 @@ export interface TurnView {
   readonly teamId: string;
   readonly descriptorId: string;
   readonly word?: string;
+  /**
+   * Identidad de la carta activa. Solo la ven quienes pueden reportar (el
+   * descriptor y el rival): el aviso manda la carta que el jugador vio, para
+   * que un clic sobre una carta que ya cambió no penalice la nueva.
+   */
+  readonly cardId?: string;
   readonly taboo: readonly string[];
   readonly startedAt: number;
   readonly deadlineAt: number;
@@ -103,7 +109,12 @@ export function toTurnView(turn: Turn, turnSeconds: number, role: PlayerRole): T
     turnId: turn.id,
     teamId: turn.teamId,
     descriptorId: turn.descriptorId,
-    ...(visible ? { word: turn.card.word } : {}),
+    ...(visible
+      ? {
+          word: turn.card.word,
+          cardId: turn.card.id,
+        }
+      : {}),
     taboo: visible ? turn.card.taboo.words : [],
     startedAt: turn.startedAt.getTime(),
     deadlineAt: turn.deadlineAt.getTime(),

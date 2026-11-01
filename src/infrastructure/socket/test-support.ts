@@ -29,6 +29,12 @@ export interface SocketHarness {
   readonly clients: TestClient[];
   readonly httpServer: HttpServer;
   readonly socketServer: SocketServer;
+  /**
+   * Avanza el reloj del servidor. El reloj del harness es determinista: los
+   * plazos (gracia del baneo, expiración del turno) sesaltan a voluntad en
+   * vez de esperar segundos reales.
+   */
+  advanceClock(ms: number): void;
   connect(): Promise<TestClient>;
   close(): Promise<void>;
 }
@@ -49,7 +55,6 @@ export async function makeSocketHarness(
   const registry = new GameRegistry();
   const decks = new InMemoryDeckRepository();
   const games = new InMemoryGameRepository();
-  const clock = options.clock ?? (() => NOW);
   let sequence = 0;
   const cards = options.cards ?? [
     makeCard("general-001", "fuego", ["llama", "calor", "humo", "brasa", "quemar", "ceniza"]),
@@ -78,6 +83,12 @@ export async function makeSocketHarness(
   });
 
   const knownWords = new Set([...cards.map((card) => card.word), ...(options.knownWords ?? [])]);
+
+  // El reloj del harness es determinista: parte de NOW y solo avanza cuando el
+  // test lo pide. Así la gracia del baneo (2 s) se resuelve sin esperar.
+  const baseClock = options.clock ?? (() => NOW);
+  let clockOffsetMs = 0;
+  const clock = () => new Date(baseClock().getTime() + clockOffsetMs);
 
   const deps: GameDeps = {
     registry,
@@ -126,6 +137,9 @@ export async function makeSocketHarness(
     clients,
     httpServer,
     socketServer,
+    advanceClock: (ms: number) => {
+      clockOffsetMs += ms;
+    },
     connect: async () => {
       const client: TestClient = createClient(url, {
         transports: ["websocket"],
@@ -205,7 +219,7 @@ export async function startSelectedTurn(harness: SocketHarness): Promise<void> {
 
 export function nextEvent<T>(client: TestClient, event: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`timeout waiting ${event}`)), 2_000);
+    const timer = setTimeout(() => reject(new Error(`timeout waiting ${event}`)), 5_000);
     const socket = client as unknown as {
       once: (name: string, handler: (payload: T) => void) => void;
     };

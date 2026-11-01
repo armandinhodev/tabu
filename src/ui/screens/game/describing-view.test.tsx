@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { toGameState } from "@/application/dto/game-state";
-import { makeGame, makeTurn } from "@/domain/__fixtures__/game";
+import { makeGame, makeTurn, NOW } from "@/domain/__fixtures__/game";
 import { PlayerId } from "@/domain/value-objects/PlayerId";
 import { DescribingView } from "./describing-view";
 import { RivalView } from "./rival-view";
@@ -14,7 +14,15 @@ vi.mock("react", async () => {
   return { ...react, default: react };
 });
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 it.each([
   "Sos quien describe",
@@ -85,7 +93,8 @@ it.each(["p1", "p2", "p3"])(
       expect(screen.getByText(game.currentTurn!.card.word)).toHaveClass("text-h2");
       expect(screen.getByText(game.currentTurn!.card.word)).not.toHaveClass("md:text-h1");
       for (const word of game.currentTurn!.card.taboo.words) {
-        expect(screen.getByText(word).closest("ul")).toHaveClass("uppercase");
+        // El texto en mayúsculas, no solo el estilo: se lee así en todos lados.
+        expect(screen.getByText(word.toUpperCase()).closest("ul")).toHaveClass("uppercase");
       }
     }
     if (playerId !== "p3") {
@@ -110,10 +119,15 @@ it.each(["p1", "p2", "p3"])(
     if (playerId === "p3") {
       expect(screen.getByText("Reportá si la dice")).toBeVisible();
       expect(screen.queryByText("Equipo rival · Vigilá")).not.toBeInTheDocument();
+
+      // Entrar a la partida no abre la ventana de cambio: el rival ya ve la
+      // carta y el chip marca en el acto.
       fireEvent.click(
-        screen.getByRole("button", { name: `Reportar palabra prohibida: ${state.turn!.taboo[0]}` }),
+        screen.getByRole("button", {
+          name: `Reportar palabra prohibida: ${state.turn!.taboo[0]!.toUpperCase()}`,
+        }),
       );
-      expect(onReport).toHaveBeenCalledWith("TABOO_WORD", state.turn!.taboo[0]);
+      expect(onReport).toHaveBeenCalledWith("TABOO_WORD", state.turn!.taboo[0], state.turn!.cardId);
     }
   },
 );

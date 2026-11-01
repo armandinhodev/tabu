@@ -13,5 +13,6 @@ export interface RoleViewProps {
   /** Palabra ya reportada en este turno, para pintar el chip en rojo sólido. */
   readonly reportedWord: string | null;
   readonly onSkipCard: () => void;
-  readonly onReport: (reason: ViolationReason, tabooWord?: string) => void;
+  /** `cardId` es la carta que el jugador vio: evita penalizar otra por error. */
+  readonly onReport: (reason: ViolationReason, tabooWord?: string, cardId?: string) => void;
 }

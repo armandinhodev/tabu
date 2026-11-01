@@ -84,6 +84,8 @@ export const reportViolationPayload = z
       error: "must be TABOO_WORD, GESTURE or SOUND",
     }),
     tabooWord: z.string().trim().min(1).max(40).optional(),
+    /** La carta que el jugador vio: si ya cambió, el aviso no se aplica. */
+    cardId: z.string().trim().min(1).max(80).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.reason === "TABOO_WORD" && value.tabooWord === undefined) {

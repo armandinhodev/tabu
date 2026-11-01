@@ -3,6 +3,7 @@ import {
   GameNotFoundError,
   NotAllowedError,
   SkipLimitReachedError,
+  StaleCardError,
   TurnNotActiveError,
 } from "../../domain/errors/DomainError";
 import type { DomainEvent } from "../../domain/events/events";
@@ -157,6 +158,12 @@ export function reportViolation(
 
   const turn = activeTurn(game);
   requirePlayer(game, playerId);
+
+  // El aviso identifica la carta que el jugador vio: si la carta ya cambió
+  // (doble click o dos rivales reportando a la vez), no penaliza la nueva.
+  if (input.cardId !== undefined && input.cardId !== turn.card.id) {
+    throw new StaleCardError(input.cardId);
+  }
 
   const violation = validateReport(
     game,

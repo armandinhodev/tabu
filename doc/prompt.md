@@ -303,7 +303,7 @@ Violation {
    - **Equipo que describe (activo):** el resto del equipo adivina. Solo el descriptor elegido ve *Comenzar turno* antes de iniciar el reloj, y *Saltar esta carta* durante el turno activo. No hay acción de pasar o saltar el turno. El descriptor se mantiene durante todo el reloj, salvo desconexión o agotamiento de cartas disponibles.
    - **Equipos rivales (vigilantes):** los chips de palabras prohibidas son **reportables** (tap) durante el turno activo. No hay botones para reportar gesto/sonido ni pasar turno.
 5. **Acierto:** un compañero distinto del descriptor envía la respuesta correcta → **+1** al equipo y al jugador, y se entrega otra carta al mismo descriptor, con el mismo equipo, reloj y saltos usados. El equipo cambia cuando termina el reloj o se agotan las cartas disponibles. Cada nuevo turno queda pendiente hasta que su descriptor pulsa *Comenzar turno*; antes de ese momento no corre el reloj ni se revela la carta.
-6. **Penalización por palabra prohibida:** un miembro del **equipo rival** toca el chip de la palabra que se dijo (el chip muestra la palabra exacta, p. ej. *fuego*) → **−1** al equipo que describe y **la carta se anula** (se descarta del mazo: no vuelve a salir). Se entrega otra carta sin cambiar el descriptor ni el reloj. El servidor valida que la palabra marcada sea una de las prohibidas de esa carta; si no coincide, se rechaza con `game:error` (`INVALID_TABOO_WORD`) y no hay penalización ni cambio de carta.
+6. **Penalización por palabra prohibida:** un miembro del **equipo rival** toca el chip de la palabra que se dijo (el chip muestra la palabra exacta, p. ej. *fuego*) → **−1** al equipo que describe y **la carta se anula** (se descarta del mazo: no vuelve a salir). Se entrega otra carta sin cambiar el descriptor ni el reloj. El servidor valida que la palabra marcada sea una de las prohibidas de esa carta; si no coincide, se rechaza con `game:error` (`INVALID_TABOO_WORD`) y no hay penalización ni cambio de carta. El aviso incluye la carta que el jugador vio: si la carta ya cambió (doble click o dos rivales a la vez), se rechaza con `game:error` (`STALE_CARD`) y **no** se penaliza la carta nueva. **Ventana de cambio (500 ms):** recién cambia la carta, el cliente pinta el bloque de palabras prohibidas en esqueleto y no hay chip que se pueda tocar, así el dedo que venía de la carta anterior no marca la nueva por error. La ventana se mide desde que esa pantalla pintó la carta: reconectarse a mitad de turno no la abre.
 7. **Gestos y sonidos:** el equipo rival (o el descriptor) puede reportarlos con *Reportar gesto* / *Reportar sonido* → **−1** al equipo que describe y la carta se anula, igual que en el caso anterior, sin reiniciar el reloj ni cambiar al descriptor.
 8. **Aceptado (skip):** el descriptor puede *Aceptar y pasar carta* (la descripción es demasiado ambigua) → la carta **se descarta** y el descriptor recibe otra del mazo, con el mismo reloj, sin puntos ni penalización. La carta no pasa al equipo contrario: ninguna carta se repite en la partida.
 9. **Tiempo agotado:** el turno termina, sin puntos ni penalización; la carta **se consume** y no vuelve al mazo.
@@ -366,13 +366,25 @@ Todos los payloads se validan con Zod en el servidor. Los nombres de evento est�
 | `game:leave` | `void` | `void` | cualquiera |
 | `game:adjustScore` | `{ teamId: string, delta: number }` | `void` | solo el host |
 | `turn:guess` | `{ guess: string }` | `{ pointsAwarded: number, teamScore: number }` | equipo que adivina |
-| `turn:reportViolation` | `{ reason: 'TABOO_WORD'\|'GESTURE'\|'SOUND', tabooWord?: string }` | `{ pointsDelta: number, teamScore: number }` | equipo rival, o el descriptor (autorreporte) |
+| `turn:reportViolation` | `{ reason: 'TABOO_WORD'\|'GESTURE'\|'SOUND', tabooWord?: string, cardId?: string }` | `{ pointsDelta: number, teamScore: number }` | equipo rival, o el descriptor (autorreporte) |
 | `turn:skip` | `void` | `void` | solo el descriptor |
 | `turn:start` | `void` | `void` | solo el descriptor seleccionado, con turno pendiente |
 
 `reason = 'TABOO_WORD'` ⇒ `tabooWord` es **obligatorio** y debe coincidir con una de las palabras
 prohibidas de la carta activa (comparación normalizada). Si no coincide ⇒ `game:error` con code
 `INVALID_TABOO_WORD`, **sin** penalización y **sin** cerrar el turno.
+
+El aviso manda además `cardId`: la carta que el jugador vio al tocar el chip. Si la carta ya cambió
+(otro jugador reportó primero, o doble click), el servidor responde `game:error` con code
+`STALE_CARD`, **sin** penalizar: la palabra que se marcó no es la de la carta que está en juego.
+
+**Ventana de cambio (cliente, 500 ms).** El servidor no mide tiempo: la única regla es que el baneo
+nombre la palabra de la carta que está en juego. La ambigüedad que queda es perceptiva y vive en
+cada pantalla, así que la resuelve el cliente: cuando cambia la carta, el bloque de palabras
+prohibidas se pinta en esqueleto durante 500 ms y los chips no existen en el DOM. El dedo que venía
+de la carta anterior no tiene dónde caer y, si dos rivales tocan antes de que a uno le llegue el
+cambio, ese aviso viaja con la carta vieja y lo rechaza `STALE_CARD`.
+El orden de las validaciones es: `STALE_CARD` → permiso y palabra válida.
 
 ### 8.2 Servidor → Cliente
 

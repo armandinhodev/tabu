@@ -9,6 +9,7 @@ export type DomainErrorCode =
   | "INVALID_DURATION"
   | "INVALID_TABOO_WORDS"
   | "INVALID_TABOO_WORD"
+  | "STALE_CARD"
   | "INVALID_STATE"
   | "INVALID_SETTINGS"
   | "NOT_ALLOWED"
@@ -69,6 +70,16 @@ export class InvalidTabooWordsError extends DomainError {
 export class InvalidTabooWordError extends DomainError {
   constructor(word: string) {
     super("INVALID_TABOO_WORD", `"${word}" is not one of the active card taboo words`);
+  }
+}
+
+/**
+ * El aviso era sobre una carta que ya cambió (doble click o dos jugadores
+ * reportando a la vez): la penalización no corresponde a la carta actual.
+ */
+export class StaleCardError extends DomainError {
+  constructor(cardId: string) {
+    super("STALE_CARD", `The card changed before the report arrived (${cardId})`);
   }
 }
 

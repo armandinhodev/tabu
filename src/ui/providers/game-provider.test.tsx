@@ -264,6 +264,7 @@ describe("GameProvider adivinación escrita", () => {
 
     expect(notices).toHaveLength(1);
     expect(notices[0]?.text).toContain("palabra prohibida");
+    expect(notices[0]?.text).toContain("LLAMA");
     expect(notices[0]?.text).toContain("pierde 1 punto");
   });
 
@@ -316,7 +317,7 @@ describe("GameProvider adivinación escrita", () => {
       );
       const notice = result.current.guessMessages.find((message) => message.kind === "penalty")!;
       expect(notice.text).toContain("Jugador p3");
-      expect(notice.text).toContain("llama");
+      expect(notice.text).toContain("LLAMA");
       expect(notice.text).toContain("Equipo 1");
       act(() => socket.handlers.get("turn:ended")?.({ reason: "TIME", teamId: "t1" }));
       expect(

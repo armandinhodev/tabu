@@ -1,20 +1,28 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import type { GameStateView } from "@/application/dto/game-state";
 import type { TeamView } from "@/application/dto/game-state";
 import { Chip } from "@/ui/components/ui/chip";
+import { Skeleton } from "@/ui/components/ui/skeleton";
 import { cn } from "@/ui/lib/cn";
 import { teamPalette } from "./team-colors";
 
 interface TabooWordsProps {
   readonly words: readonly string[];
   readonly variant: "informative" | "reportable";
-  readonly onReport?: (word: string) => void;
+  /** `cardId` es la carta que el jugador vio al tocar el chip. */
+  readonly onReport?: (word: string, cardId?: string) => void;
+  /** Carta activa: el aviso la manda para no penalizar otra carta por error. */
+  readonly cardId?: string | undefined;
   readonly reportedWord?: string | null;
   readonly disabled?: boolean;
 }
+
+/** Ventana del esqueleto: mientras dura, no hay chip que se pueda tocar. */
+export const CARD_SWAP_QUIET_MS = 500;
 
 /**
  * Lista de palabras prohibidas (§6.1). Todos ven lo mismo; el rival además
@@ -23,14 +31,47 @@ interface TabooWordsProps {
  * Se muestra en **columna**, tipo menú ya desplegado: una palabra por fila,
  * sin acordeón ni estado colapsado. El click del rival banea la carta (ya
  * implementado: `turn:reportViolation` con `TABOO_WORD`).
+ *
+ * Recién cambia la carta, el bloque de palabras se pinta en esqueleto durante
+ * `CARD_SWAP_QUIET_MS`: los chips no existen en el DOM, así que el dedo que
+ * venía de la carta anterior no puede marcar la nueva. La ventana se mide
+ * desde que ESTA pantalla pintó la carta, no desde el servidor: cada
+ * dispositivo recibe el cambio en un momento distinto.
+ *
+ * El aviso manda la carta en pantalla (`cardId`). Si dos rivales tocan antes de
+ * que llegue el cambio a uno de ellos, ese aviso viaja con la carta vieja y el
+ * servidor lo rechaza (`STALE_CARD`) sin penalizar la nueva.
  */
 export function TabooWords({
   words,
   variant,
   onReport,
+  cardId,
   reportedWord = null,
   disabled = false,
 }: TabooWordsProps) {
+  /** Última carta pintada: el esqueleto se dispara cuando cambia. */
+  const shownCard = useRef(cardId);
+  const [settling, setSettling] = useState(false);
+
+  useEffect(() => {
+    if (shownCard.current === cardId) {
+      return;
+    }
+
+    shownCard.current = cardId;
+    setSettling(true);
+    const timer = setTimeout(() => setSettling(false), CARD_SWAP_QUIET_MS);
+    return () => clearTimeout(timer);
+  }, [cardId]);
+
+  const report = (word: string): void => {
+    onReport?.(word, cardId);
+  };
+
+  /** El esqueleto es solo para quien puede reportar: el descriptor no toca. */
+  const skeleton = variant === "reportable" && settling;
+
   return (
     <div className="flex flex-col gap-3">
       {variant === "reportable" ? (
@@ -39,34 +80,45 @@ export function TabooWords({
           Reportá si la dice
         </p>
       ) : null}
+      {skeleton ? (
+        <p role="status" className="sr-only">
+          Carta nueva
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-2 uppercase">
-        {words.map((word) => {
-          const reported = reportedWord === word;
-
-          if (variant === "informative") {
-            return (
+        {skeleton
+          ? words.map((word) => (
               <li key={word}>
-                <span className="flex h-9 w-full items-center rounded-pill border border-danger bg-danger-soft px-4 text-body-sm text-fg">
-                  {word}
-                </span>
+                <Skeleton className="h-11 rounded-pill" />
               </li>
-            );
-          }
+            ))
+          : words.map((word) => {
+              const reported = reportedWord === word;
 
-          return (
-            <li key={word}>
-              <Chip
-                tone={reported ? "reported" : "reportable"}
-                badge={!reported}
-                disabled={disabled || reported}
-                aria-label={`Reportar palabra prohibida: ${word}`}
-                onClick={() => onReport?.(word)}
-              >
-                {word}
-              </Chip>
-            </li>
-          );
-        })}
+              if (variant === "informative") {
+                return (
+                  <li key={word}>
+                    <span className="flex h-9 w-full items-center rounded-pill border border-danger bg-danger-soft px-4 text-body-sm text-fg">
+                      {word.toUpperCase()}
+                    </span>
+                  </li>
+                );
+              }
+
+              return (
+                <li key={word}>
+                  <Chip
+                    tone={reported ? "reported" : "reportable"}
+                    badge={!reported}
+                    disabled={disabled || reported}
+                    aria-label={`Reportar palabra prohibida: ${word.toUpperCase()}`}
+                    onClick={() => report(word)}
+                  >
+                    {word.toUpperCase()}
+                  </Chip>
+                </li>
+              );
+            })}
       </ul>
     </div>
   );

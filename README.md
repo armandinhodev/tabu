@@ -402,6 +402,13 @@ pero no para los compañeros que adivinan. Solo los jugadores de otros equipos p
 palabra prohibida: se descarta la carta activa y se resta un punto al equipo que describe.
 Ni el descriptor ni sus compañeros pueden marcar esas palabras, incluso enviando el evento directamente.
 
+Recién cambia la carta hay una **ventana de 500 ms** para marcar: las pantallas de cada rol se
+actualizan en momentos distintos y un clic a destiempo puede caer sobre la palabra de otra carta.
+Durante esa ventana el cliente pinta el bloque de palabras prohibidas en esqueleto, sin chips donde
+tocar. La ventana se mide desde que esa pantalla pintó la carta, así que reconectarse a mitad de
+turno no la abre. El servidor no cuenta tiempo: solo exige que el aviso nombre la carta vigente
+(`STALE_CARD` si no).
+
 `turn:guess` solo lo puede enviar un teammate del equipo que describe: el servidor compara la
 respuesta con la carta activa, sin distinguir mayúsculas, y devuelve `correct`. Un acierto suma el
 punto y cambia la carta, sin cambiar el descriptor, el equipo, el reloj ni los saltos usados;
@@ -413,7 +420,7 @@ el `game:state` de quien tiene rol `DESCRIBER` o `RIVAL`.
 
 Todo error de acción viaja en el ack (`{ error: { code, message } }`) **y** como `game:error` al
 mismo socket. Los códigos son estables (`INVALID_TABOO_WORD`, `NOT_ALLOWED`, `INVALID_STATE`,
-`GAME_NOT_FOUND`, `TEAM_FULL`, …).
+`GAME_NOT_FOUND`, `TEAM_FULL`, `STALE_CARD`, …).
 
 Al terminar la partida, `game:finished` incluye la tabla de equipos, el MVP y un `ranking` con
 **todos los jugadores** ordenados por palabras adivinadas durante la partida, con su equipo. Los

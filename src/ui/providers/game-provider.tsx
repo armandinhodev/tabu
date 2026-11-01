@@ -73,7 +73,7 @@ interface GameContextValue {
   readonly guess: (answer: string) => void;
   /** El host ajusta a mano el puntaje de un equipo. */
   readonly adjustScore: (teamId: string, delta: number) => void;
-  readonly reportViolation: (reason: ViolationReason, tabooWord?: string) => void;
+  readonly reportViolation: (reason: ViolationReason, tabooWord?: string, cardId?: string) => void;
   readonly skipTurn: () => void;
   readonly startTurn: () => void;
 }
@@ -281,7 +281,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
       const action =
         payload.reason === "TABOO_WORD" && payload.tabooWord
-          ? `marcó la palabra prohibida "${payload.tabooWord}"`
+          ? `marcó la palabra prohibida "${payload.tabooWord.toUpperCase()}"`
           : "reportó una infracción";
       appendGuessMessage(
         `${playerName(payload.reportedBy)} ${action}: ${teamName(payload.teamId)} pierde 1 punto.`,
@@ -560,11 +560,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reportViolation = useCallback(
-    (reason: ViolationReason, tabooWord?: string) => {
+    (reason: ViolationReason, tabooWord?: string, cardId?: string) => {
       void run((done) =>
         getSocket().emit(
           "turn:reportViolation",
-          tabooWord === undefined ? { reason } : { reason, tabooWord },
+          {
+            reason,
+            ...(tabooWord === undefined ? {} : { tabooWord }),
+            ...(cardId === undefined ? {} : { cardId }),
+          },
           done,
         ),
       );

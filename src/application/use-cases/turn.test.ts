@@ -17,6 +17,7 @@ import {
   InvalidTabooWordError,
   NotAllowedError,
   SkipLimitReachedError,
+  StaleCardError,
   TurnNotActiveError,
 } from "../../domain/errors/DomainError";
 import {
@@ -55,6 +56,9 @@ function makeHarness(overrides: Partial<Game> = {}): Harness {
   const started = activateTurn(pending.game, { now, rng: () => 0, newTurnId: ids.turnId });
 
   registry.save(started.game);
+
+  // Pasada la gracia del baneo: la carta de este turno ya tiene unos segundos.
+  now = new Date(now.getTime() + 3_000);
 
   return {
     game: started.game,
@@ -374,6 +378,61 @@ describe("reportViolation", () => {
     expect(after?.currentTurn?.card.word).toBe(activeWord(harness.game));
     expect(after?.teams[0]?.score.value).toBe(0);
     expect(before?.discardedCardIds).toEqual(after?.discardedCardIds);
+  });
+
+  it("rechaza un aviso sobre una carta que ya cambió, sin penalizar la nueva", () => {
+    const cardId = harness.game.currentTurn!.card.id;
+    const word = harness.game.currentTurn!.card.taboo.words[0]!;
+    const rival = PlayerId.from("p3");
+
+    // El rival marca la palabra: la carta se anula y el descriptor recibe otra.
+    const banned = reportViolation(harness.deps, harness.game.id, rival, {
+      reason: "TABOO_WORD",
+      tabooWord: word,
+      cardId,
+    });
+
+    expect(banned.game.currentTurn?.card.id).not.toBe(cardId);
+
+    const before = JSON.stringify(harness.deps.registry.findById(harness.game.id));
+
+    // El doble click (o el otro rival) llega con la carta vieja: no penaliza.
+    expect(() =>
+      reportViolation(harness.deps, harness.game.id, rival, {
+        reason: "TABOO_WORD",
+        tabooWord: word,
+        cardId,
+      }),
+    ).toThrow(StaleCardError);
+
+    expect(JSON.stringify(harness.deps.registry.findById(harness.game.id))).toBe(before);
+  });
+
+  it("banea apenas la carta entra en juego: no hay ventana muerta", () => {
+    const harness = makeHarness();
+    const word = harness.game.currentTurn!.card.taboo.words[0]!;
+    const cardId = harness.game.currentTurn!.card.id;
+
+    const result = reportViolation(harness.deps, harness.game.id, PlayerId.from("p3"), {
+      reason: "TABOO_WORD",
+      tabooWord: word,
+      cardId,
+    });
+
+    expect(result.pointsDelta).toBe(-1);
+  });
+
+  it("acepta el aviso con la carta que el jugador está viendo", () => {
+    const cardId = harness.game.currentTurn!.card.id;
+    const word = harness.game.currentTurn!.card.taboo.words[0]!;
+
+    const result = reportViolation(harness.deps, harness.game.id, PlayerId.from("p3"), {
+      reason: "TABOO_WORD",
+      tabooWord: word,
+      cardId,
+    });
+
+    expect(result.pointsDelta).toBe(-1);
   });
 
   it("rechaza el reporte del compañero del descriptor", () => {

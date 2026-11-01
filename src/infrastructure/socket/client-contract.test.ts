@@ -202,6 +202,43 @@ describe("contrato cliente-servidor", () => {
     }
   });
 
+  it("a double ban on the card that changed does not penalize the new one", async () => {
+    const { players, states } = await playingGame();
+    await waitFor(
+      () => players.every(({ playerId }) => states.get(playerId)?.turn !== undefined) || undefined,
+      "turno activo para todos",
+    );
+
+    const descriptor = players.find(
+      ({ playerId }) => states.get(playerId)?.me.role === "DESCRIBER",
+    )!;
+    const rival = players.find(({ playerId }) => states.get(playerId)?.me.role === "RIVAL")!;
+    const initial = states.get(descriptor.playerId)!.turn!;
+
+    await expect(
+      emitAck(rival.client, "turn:reportViolation", {
+        reason: "TABOO_WORD",
+        tabooWord: initial.taboo[0],
+        cardId: initial.cardId,
+      }),
+    ).resolves.toMatchObject({ pointsDelta: -1 });
+
+    const afterFirst = harness.deps.registry.all()[0]!;
+    const newCardId = afterFirst.currentTurn?.card.id;
+    expect(newCardId).not.toBe(initial.cardId);
+
+    // El doble click o el otro rival llega con la carta vieja: no penaliza.
+    const before = JSON.stringify(harness.deps.registry.all());
+    await expect(
+      emitAck(rival.client, "turn:reportViolation", {
+        reason: "TABOO_WORD",
+        tabooWord: initial.taboo[0],
+        cardId: initial.cardId,
+      }),
+    ).resolves.toMatchObject({ error: { code: "STALE_CARD" } });
+    expect(JSON.stringify(harness.deps.registry.all())).toBe(before);
+  });
+
   it("lets only other teams ban the current card and deduct one point", async () => {
     const { players, states } = await playingGame(3);
     await waitFor(
