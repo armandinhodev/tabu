@@ -1,4 +1,4 @@
-import type { GameStateView, SettingsView, TeamView } from "../../application/dto/game-state";
+import type { GameStateView, SettingsView } from "../../application/dto/game-state";
 import type { ViolationReason } from "../../domain/entities/Violation";
 
 /**
@@ -24,7 +24,6 @@ export const CLIENT_EVENTS = {
 
 export const SERVER_EVENTS = {
   gameState: "game:state",
-  gamePlayersUpdated: "game:playersUpdated",
   gameStarted: "game:started",
   gameFinished: "game:finished",
   turnStarted: "turn:started",
@@ -188,7 +187,6 @@ export interface GameStatePayload extends GameStateView {
 export interface ServerToClientEvents {
   "card:resolved": (payload: TurnEndedView) => void;
   "game:state": (payload: GameStatePayload) => void;
-  "game:playersUpdated": (payload: { readonly teams: readonly TeamView[] }) => void;
   "game:started": (payload: GameStartedView) => void;
   "game:finished": (payload: GameFinishedView) => void;
   "turn:started": (payload: TurnStartedView) => void;

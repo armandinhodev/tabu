@@ -2,7 +2,7 @@ import type { Server } from "socket.io";
 
 import type { Game } from "../../domain/entities/Game";
 import type { DomainEvent } from "../../domain/events/events";
-import { toGameState, toSettingsView, toTeamViews } from "../../application/dto/game-state";
+import { toGameState, toSettingsView } from "../../application/dto/game-state";
 import type { PlayerId } from "../../domain/value-objects/PlayerId";
 import {
   SERVER_EVENTS,
@@ -41,10 +41,6 @@ export class Broadcaster {
     for (const { socketId, playerId } of this.sessions.playersOf(game.id)) {
       this.io.to(socketId).emit(SERVER_EVENTS.gameState, statePayload(game, playerId));
     }
-
-    this.io.to(game.id).emit(SERVER_EVENTS.gamePlayersUpdated, {
-      teams: toTeamViews(game.teams),
-    });
   }
 
   emitTick(gameId: string, remaining: number): void {

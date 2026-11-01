@@ -390,7 +390,6 @@ El orden de las validaciones es: `STALE_CARD` → permiso y palabra válida.
 | Evento | Payload |
 |---|---|
 | `game:state` | `{ status, code, settings, teams, me, turn?, round }` — `turn` incluye **siempre** `word` y `taboo[]` (información pública) |
-| `game:playersUpdated` | `{ teams }` |
 | `game:started` | `{ startedAt, settings }` |
 | `game:finished` | `{ winnerTeamId \| null, standings: Array<{ teamId, name, score }>, mvp: { playerId, name, points } }` |
 | `turn:started` | `{ turnId, teamId, descriptorId, word, taboo: string[], deadlineAt, turnSeconds }` |

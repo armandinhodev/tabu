@@ -393,7 +393,7 @@ Cliente → servidor:
 | `turn:skip`                     | —                                  | —                                               | solo el descriptor                                               |
 | `turn:start`                    | —                                  | —                                               | solo el descriptor elegido, antes de iniciar el reloj            |
 
-Servidor → cliente: `game:state` (por socket, con `me` y la palabra filtrada por rol), `game:playersUpdated`, `game:started`,
+Servidor → cliente: `game:state` (por socket, con `me` y la palabra filtrada por rol), `game:started`,
 `turn:started`, `turn:tick`, `turn:ended`, `card:resolved`, `penalty:applied`, `score:updated`, `round:ended`,
 `game:finished`, `game:error`.
 

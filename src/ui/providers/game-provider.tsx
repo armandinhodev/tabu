@@ -200,16 +200,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       applyState(next);
     };
 
-    const onPlayersUpdated = (payload: { teams: GameStateView["teams"] }): void => {
-      const current = stateRef.current;
-
-      if (current === null) {
-        return;
-      }
-
-      applyState({ ...current, teams: payload.teams, serverNow: Date.now() });
-    };
-
     const onStarted = (): void => {
       playSound("game.start");
     };
@@ -324,7 +314,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.io.on("reconnect_attempt", onReconnectAttempt);
     socket.on("connect_error", onConnectError);
     socket.on("game:state", onState);
-    socket.on("game:playersUpdated", onPlayersUpdated);
     socket.on("game:started", onStarted);
     socket.on("turn:started", onTurnStarted);
     socket.on("turn:tick", onTick);
@@ -349,7 +338,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.io.off("reconnect_attempt", onReconnectAttempt);
       socket.off("connect_error", onConnectError);
       socket.off("game:state", onState);
-      socket.off("game:playersUpdated", onPlayersUpdated);
       socket.off("game:started", onStarted);
       socket.off("turn:started", onTurnStarted);
       socket.off("turn:tick", onTick);
