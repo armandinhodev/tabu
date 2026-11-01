@@ -49,6 +49,28 @@ describe("createGamePayload", () => {
     }
   });
 
+  it("accepts rounds between 1 and 10 and rejects out-of-range values", () => {
+    for (const rounds of [1, 3, 10]) {
+      expect(
+        parsePayload(createGamePayload, {
+          playerName: "Luz",
+          deckId: "deck-1",
+          options: { rounds },
+        }).options,
+      ).toEqual({ rounds });
+    }
+
+    for (const rounds of [0, 11, 2.5]) {
+      expect(() =>
+        parsePayload(createGamePayload, {
+          playerName: "Luz",
+          deckId: "deck-1",
+          options: { rounds },
+        }),
+      ).toThrowError(/rounds/);
+    }
+  });
+
   it("accepts only 30, 60, 90 or 120 seconds and 1..6 taboo words", () => {
     for (const turnSeconds of [30, 60, 90, 120]) {
       expect(

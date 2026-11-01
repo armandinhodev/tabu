@@ -71,6 +71,7 @@ describe("CreateScreen", () => {
       turnSeconds: 60,
       tabooWordCount: 4,
       skipLimit: 3,
+      rounds: 1,
       randomTeams: false,
     });
   });
@@ -95,6 +96,11 @@ describe("CreateScreen", () => {
         name: "0",
       }),
     );
+    await user.click(
+      within(screen.getByLabelText("Cantidad de vueltas al mazo")).getByRole("button", {
+        name: "3",
+      }),
+    );
     await user.click(screen.getByRole("switch", { name: "Equipos balanceados" }));
     const summary = screen.getByRole("status", { name: "Resumen de la partida" });
     expect(summary).toHaveTextContent("Cine y TV");
@@ -102,6 +108,7 @@ describe("CreateScreen", () => {
     expect(summary).toHaveTextContent("90 s por turno");
     expect(summary).toHaveTextContent("6 prohibidas");
     expect(summary).toHaveTextContent("Sin saltos");
+    expect(summary).toHaveTextContent("3 vueltas");
     await user.click(screen.getByRole("button", { name: "Crear sala" }));
     expect(game.createGame).toHaveBeenCalledExactlyOnceWith({
       deckId: "cinema",
@@ -109,6 +116,7 @@ describe("CreateScreen", () => {
       turnSeconds: 90,
       tabooWordCount: 6,
       skipLimit: 0,
+      rounds: 3,
       randomTeams: true,
     });
     await user.click(screen.getByRole("button", { name: "Volver" }));

@@ -45,6 +45,8 @@ export interface CreateGameOptions {
   readonly tabooWordCount: number;
   /** Skips por turno (S4). */
   readonly skipLimit: number;
+  /** Vueltas configuradas: 1 = jugar el mazo entero (§6.10). */
+  readonly rounds: number;
   readonly randomTeams: boolean;
 }
 
@@ -400,6 +402,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
               turnSeconds: options.turnSeconds,
               tabooWordCount: options.tabooWordCount,
               skipLimit: options.skipLimit,
+              rounds: options.rounds,
               randomTeams: options.randomTeams,
             },
           },

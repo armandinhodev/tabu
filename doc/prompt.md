@@ -356,7 +356,7 @@ Todos los payloads se validan con Zod en el servidor. Los nombres de evento est�
 
 | Evento | Payload | Ack | Quién puede |
 |---|---|---|---|
-| `game:create` | `{ playerName, deckId, options?: { teamCount, turnSeconds, randomTeams } }` | `{ gameId, code, playerToken, playerId }` | cualquiera |
+| `game:create` | `{ playerName, deckId, options?: { teamCount, turnSeconds, tabooWordCount, skipLimit, rounds, randomTeams } }` | `{ gameId, code, playerToken, playerId }` | cualquiera |
 | `game:join` | `{ code, playerName }` | `{ gameId, playerToken, playerId, playerName }` | cualquiera |
 | `game:reconnect` | `{ gameId, playerToken }` | `{ state: GameState }` | el mismo jugador |
 | `game:assignTeam` | `{ teamId }` | `void` | cualquiera en la sala |
@@ -482,7 +482,8 @@ Validá todo con Zod al arrancar: si falta una variable crítica, el server no l
 1. **Inicio** (`/`): logo, campo "¿Cómo te llamás?", botón Continuar, accesos a *Crear partida* y
    *Unirse con código*. El nombre se guarda en `localStorage` y se reutiliza.
 2. **Crear partida** (`/crear`): nombre, mazo (chips), cantidad de equipos (segmented 2/3/4), tiempo
-   por turno (chips 30/45/60), toggle de reparto aleatorio. Botón "Crear sala".
+   por turno (chips 30/60/90/120), palabras prohibidas por carta, saltos por turno, vueltas al mazo
+   (1 = mazo entero), toggle de reparto aleatorio. Botón "Crear sala".
 3. **Unirse** (`/unirse`): 6 cajas de código con foco automático en la primera, campo nombre,
    botón "Entrar a la sala".
 4. **Sala de espera** (`/sala/[code]`): código grande con copiar, paneles de equipo con jugadores,

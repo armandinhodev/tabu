@@ -54,6 +54,15 @@ const SKIP_LIMIT_OPTIONS = [
   { value: "5", label: "5" },
 ] as const;
 
+/** Vueltas al mazo (§6.10): 1 = jugar el mazo entero, sin tope por rondas. */
+const ROUNDS_OPTIONS = [
+  { value: "1", label: "Mazo" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
+  { value: "5", label: "5" },
+] as const;
+
 /** 02 — Crear partida: mazo, equipos y tiempo por turno (§6.1, §12). */
 export function CreateScreen() {
   const { createGame, busy, goTo, playerName } = useGame();
@@ -64,6 +73,7 @@ export function CreateScreen() {
   const [turnSeconds, setTurnSeconds] = useState<"30" | "60" | "90" | "120">("60");
   const [tabooWordCount, setTabooWordCount] = useState<"1" | "2" | "3" | "4" | "5" | "6">("4");
   const [skipLimit, setSkipLimit] = useState<"0" | "1" | "2" | "3" | "4" | "5">("3");
+  const [rounds, setRounds] = useState<"1" | "2" | "3" | "4" | "5">("1");
   const [randomTeams, setRandomTeams] = useState(false);
 
   const loadDecks = (): void => {
@@ -241,6 +251,21 @@ export function CreateScreen() {
               Saltar no resta puntos. Elegí 0 para jugar sin saltos.
             </p>
           </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-body-sm font-semibold text-fg">Vueltas al mazo</span>
+            <SegmentedControl
+              label="Cantidad de vueltas al mazo"
+              value={rounds}
+              options={ROUNDS_OPTIONS}
+              onValueChange={setRounds}
+              className="grid grid-cols-3 min-[375px]:grid-cols-5 [&>button]:px-2"
+            />
+            <p className="text-body-sm text-fg-muted">
+              Con «Mazo» se juega hasta agotar las cartas; desde 2, la partida termina al completar
+              esa cantidad de vueltas.
+            </p>
+          </div>
         </div>
 
         <div className="mt-6 flex items-center justify-between gap-4 border-t border-line pt-5">
@@ -281,7 +306,8 @@ export function CreateScreen() {
             <p className="font-semibold break-words text-fg">{selectedDeck.name}</p>
             <p className="mt-1 text-fg-muted">
               {teamCount} equipos · {turnSeconds} s por turno · {tabooWordCount} prohibidas ·{" "}
-              {skipLimit === "0" ? "Sin saltos" : `${skipLimit} saltos`}
+              {skipLimit === "0" ? "Sin saltos" : `${skipLimit} saltos`} ·{" "}
+              {rounds === "1" ? "mazo entero" : `${rounds} vueltas`}
             </p>
           </div>
         )}
@@ -299,6 +325,7 @@ export function CreateScreen() {
               turnSeconds: Number(turnSeconds),
               tabooWordCount: Number(tabooWordCount),
               skipLimit: Number(skipLimit),
+              rounds: Number(rounds),
               randomTeams,
             });
           }}

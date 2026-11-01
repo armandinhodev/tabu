@@ -67,7 +67,7 @@ export async function createGame(
     turnSeconds: Duration.fromSeconds(input.options?.turnSeconds ?? deps.config.turnSecondsDefault),
     tabooWordCount,
     skipLimit: input.options?.skipLimit ?? DEFAULT_SKIP_LIMIT,
-    rounds: deps.config.rounds,
+    rounds: input.options?.rounds ?? deps.config.rounds,
     randomTeams: input.options?.randomTeams ?? false,
     minPlayersPerTeam: deps.config.minPlayersPerTeam,
   };

@@ -121,12 +121,19 @@ describe("createGame", () => {
     const { game } = await createGame(harness.deps, {
       playerName: "Luz",
       deckId: harness.deckId,
-      options: { teamCount: 4, turnSeconds: 120, tabooWordCount: 6, randomTeams: true },
+      options: {
+        teamCount: 4,
+        turnSeconds: 120,
+        tabooWordCount: 6,
+        rounds: 3,
+        randomTeams: true,
+      },
     });
 
     expect(game.teams).toHaveLength(4);
     expect(game.settings.turnSeconds.seconds).toBe(120);
     expect(game.settings.tabooWordCount).toBe(6);
+    expect(game.settings.rounds).toBe(3);
     expect(game.settings.randomTeams).toBe(true);
     expect(game.teams.map((team) => team.name)).toEqual([
       "Equipo Naranja",

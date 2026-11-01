@@ -59,6 +59,7 @@ export const createGamePayload = z.object({
       tabooWordCount: z.number().int().min(1).max(6),
       skipLimit: z.number().int().min(0).max(10),
       randomTeams: z.boolean(),
+      rounds: z.number().int().min(1).max(10),
     })
     .partial()
     .optional(),
