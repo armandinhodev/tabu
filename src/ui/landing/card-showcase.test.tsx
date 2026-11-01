@@ -59,9 +59,10 @@ describe("CardShowcase", () => {
   it("muestra las palabras prohibidas en mayúscula, como en la partida", () => {
     render(<CardShowcase />);
 
-    const taboo = screen.getByText("llama");
+    const taboo = screen.getByText("LLAMA");
 
     expect(taboo).toHaveClass("uppercase");
+    expect(screen.queryByText("llama")).not.toBeInTheDocument();
   });
 
   it("keeps the card and the clock still when motion is reduced", () => {

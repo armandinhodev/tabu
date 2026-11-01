@@ -29,7 +29,7 @@ function CardFace({ card }: { readonly card: SampleCard }) {
       <ul className="flex flex-wrap items-start gap-2">
         {card.taboo.map((word) => (
           <li key={word} className={CHIP_CLASS}>
-            {word}
+            {word.toUpperCase()}
           </li>
         ))}
       </ul>
@@ -65,7 +65,7 @@ function AnimatedCard({ card }: { readonly card: SampleCard }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.24, delay: 0.05 * index, ease: "easeOut" }}
           >
-            {word}
+            {word.toUpperCase()}
           </motion.li>
         ))}
       </ul>
