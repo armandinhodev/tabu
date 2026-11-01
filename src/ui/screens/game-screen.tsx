@@ -1,12 +1,12 @@
 "use client";
 
-import { LogOut, Scale, ScrollText } from "lucide-react";
+import { LogOut, Scale } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 import { ConfirmDialog } from "@/ui/components/ui/dialog";
 import { ErrorState, ScreenSkeleton } from "@/ui/components/game/banners";
-import { HouseRulesDialog } from "@/ui/components/game/house-rules-dialog";
+import { HouseRulesButton } from "@/ui/components/game/house-rules-button";
 import { MuteButton } from "@/ui/components/game/mute-button";
 import { ScoreAdjustDialog } from "@/ui/components/game/score-adjust-dialog";
 import { TeamPanel } from "@/ui/components/game/team-panel";
@@ -42,7 +42,6 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
   } = useGame();
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
-  const [rulesOpen, setRulesOpen] = useState(false);
 
   if (state === null) {
     return <ScreenSkeleton />;
@@ -86,15 +85,7 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
           {state.code} · ronda {state.round}
         </span>
         <div role="group" aria-label="Controles de la partida" className="flex items-center gap-2">
-          <Button
-            variant="quiet"
-            size="icon"
-            aria-label="Reglas"
-            title="Reglas de la casa"
-            onClick={() => setRulesOpen(true)}
-          >
-            <ScrollText aria-hidden="true" className="size-5" />
-          </Button>
+          <HouseRulesButton rules={rules} variant="icon" />
           <MuteButton />
           <Button
             variant="quiet"
@@ -207,15 +198,7 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
                   : "Mirás"}
           </p>
         </div>
-        <Button
-          variant="quiet"
-          block
-          className="hidden xl:inline-flex"
-          onClick={() => setRulesOpen(true)}
-        >
-          <ScrollText aria-hidden="true" className="size-4" />
-          Reglas de la casa
-        </Button>
+        <HouseRulesButton rules={rules} variant="block" className="hidden xl:inline-flex" />
         <Button
           variant="quiet"
           block
@@ -233,8 +216,6 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
         teams={state.teams}
         onAdjust={adjustScore}
       />
-
-      <HouseRulesDialog open={rulesOpen} onOpenChange={setRulesOpen} rules={rules} />
 
       <ConfirmDialog
         open={confirmLeave}

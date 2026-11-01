@@ -2,6 +2,7 @@
 
 import { useGame } from "@/ui/providers/game-provider";
 import { ReconnectBanner } from "@/ui/components/game/banners";
+import { HouseRulesButton } from "@/ui/components/game/house-rules-button";
 import { HomeScreen } from "@/ui/screens/home-screen";
 import { CreateScreen } from "@/ui/screens/create-screen";
 import { JoinScreen } from "@/ui/screens/join-screen";
@@ -24,6 +25,9 @@ export function AppRoot({ rules }: { readonly rules: HouseRules }) {
       {view === "lobby" ? <LobbyScreen /> : null}
       {view === "game" ? <GameScreen rules={rules} /> : null}
       {view === "result" ? <ResultScreen /> : null}
+
+      {/* En la partida el acceso vive en la cabecera y en el panel lateral. */}
+      {view === "game" ? null : <HouseRulesButton rules={rules} variant="fab" />}
     </>
   );
 }

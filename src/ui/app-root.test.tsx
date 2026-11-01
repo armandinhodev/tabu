@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import type { PenaltyAppliedView, RoundEndedView } from "@/infrastructure/socket/events";
@@ -12,7 +12,7 @@ vi.mock("react", async () => {
 });
 
 const context = vi.hoisted(() => ({
-  view: "game" as "game" | "result",
+  view: "game" as "game" | "result" | "lobby",
   connection: "online",
   state: { teams: [] },
   penalty: null as PenaltyAppliedView | null,
@@ -21,6 +21,7 @@ const context = vi.hoisted(() => ({
 }));
 vi.mock("@/ui/providers/game-provider", () => ({ useGame: () => context }));
 vi.mock("@/ui/screens/game-screen", () => ({ GameScreen: () => <main>Next turn</main> }));
+vi.mock("@/ui/screens/lobby-screen", () => ({ LobbyScreen: () => <main>Lobby</main> }));
 vi.mock("@/ui/screens/result-screen", () => ({ ResultScreen: () => <main>Final result</main> }));
 
 afterEach(() => {
@@ -63,4 +64,23 @@ it("preserves the final result screen", () => {
   rerender(<AppRoot rules={TEST_HOUSE_RULES} />);
   expect(screen.getByText("Final result")).toBeInTheDocument();
   expect(screen.queryByText("Next turn")).not.toBeInTheDocument();
+});
+
+it("ofrece las reglas de la casa en las pantallas fuera de la partida", () => {
+  context.view = "lobby";
+  render(<AppRoot rules={TEST_HOUSE_RULES} />);
+
+  const button = screen.getByRole("button", { name: "Reglas de la casa" });
+  expect(button).toBeInTheDocument();
+
+  fireEvent.click(button);
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(screen.getByText("No digas abreviaturas.")).toBeVisible();
+});
+
+it("en la partida el acceso a las reglas vive en la pantalla de juego", () => {
+  render(<AppRoot rules={TEST_HOUSE_RULES} />);
+
+  // El botón flotante no se duplica: en la partida lo muestra la pantalla.
+  expect(screen.queryByRole("button", { name: "Reglas de la casa" })).not.toBeInTheDocument();
 });

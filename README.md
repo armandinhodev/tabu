@@ -31,9 +31,10 @@ cambio más un aviso con el autor.
 
 **Reglas de la casa.** Los acuerdos de la mesa (no usar abreviaturas, diminutivos ni aumentativos,
 palabras en otros idiomas, la letra con la que empieza ni onomatopeyas) están en `REGLAS.md`, en la
-raíz del repositorio: se edita ese archivo y se redespliega. Durante la partida se leen en el modal
-_Reglas de la casa_ (icono de la barra superior en móvil, botón en el panel derecho en escritorio).
-Son acuerdos de la mesa: no cambian el juego ni se validan automáticamente.
+raíz del repositorio: se edita ese archivo y se redespliega. El botón **Reglas** está en todas las
+pantallas: flotante abajo a la derecha en la landing, el lobby y los formularios; en la partida, el
+ícono de la barra superior en móvil y el botón del panel derecho en escritorio. Abre el modal con
+las reglas. Son acuerdos de la mesa: no cambian el juego ni se validan automáticamente.
 
 Al comenzar la partida se sortean el equipo inicial y su descriptor. Los equipos se alternan a
 partir de ese equipo; dentro de cada equipo se sortea entre quienes todavía no describieron, sin
