@@ -85,6 +85,17 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
           {state.code} · ronda {state.round}
         </span>
         <div role="group" aria-label="Controles de la partida" className="flex items-center gap-2">
+          {state.me.isHost ? (
+            <Button
+              variant="quiet"
+              size="icon"
+              aria-label="Ajustar"
+              title="Ajustar puntaje"
+              onClick={() => setAdjustOpen(true)}
+            >
+              <Scale aria-hidden="true" className="size-5" />
+            </Button>
+          ) : null}
           <HouseRulesButton rules={rules} variant="icon" />
           <MuteButton />
           <Button
@@ -116,15 +127,7 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
       <div className="order-2 flex min-w-0 flex-col gap-4 xl:order-none">
         {turn.status !== "pending" ? (
           <section aria-label="Puntajes" aria-live="polite" className="flex min-w-0 flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
-              {state.me.isHost ? (
-                <Button variant="quiet" size="sm" onClick={() => setAdjustOpen(true)}>
-                  <Scale aria-hidden="true" className="size-4" />
-                  Ajustar puntaje
-                </Button>
-              ) : null}
-            </div>
+            <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
             <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
           </section>
         ) : null}
@@ -198,6 +201,17 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
                   : "Mirás"}
           </p>
         </div>
+        {state.me.isHost ? (
+          <Button
+            variant="quiet"
+            block
+            className="hidden xl:inline-flex"
+            onClick={() => setAdjustOpen(true)}
+          >
+            <Scale aria-hidden="true" className="size-4" />
+            Ajustar puntaje
+          </Button>
+        ) : null}
         <HouseRulesButton rules={rules} variant="block" className="hidden xl:inline-flex" />
         <Button
           variant="quiet"

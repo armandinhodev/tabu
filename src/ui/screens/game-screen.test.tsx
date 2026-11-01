@@ -93,7 +93,7 @@ it("solo el host puede ajustar el puntaje de cualquier equipo", () => {
     </SoundProvider>,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Ajustar puntaje" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "Ajustar puntaje" })[0]!);
   fireEvent.click(screen.getByRole("button", { name: "Sumar un punto a Equipo 2" }));
   expect(context.adjustScore).toHaveBeenCalledWith("t2", 1);
 
@@ -108,6 +108,28 @@ it("solo el host puede ajustar el puntaje de cualquier equipo", () => {
   );
 
   expect(screen.queryByRole("button", { name: "Ajustar puntaje" })).not.toBeInTheDocument();
+});
+
+it("el host puede ajustar el puntaje también con el turno pendiente", () => {
+  context.state = toGameState(
+    makeGame({
+      status: "playing",
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1", status: "pending" }),
+    }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  expect(screen.queryByRole("button", { name: "Ajustar puntaje" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Ajustar puntaje" })[0]!);
+  fireEvent.click(screen.getByRole("button", { name: "Sumar un punto a Equipo 2" }));
+
+  expect(context.adjustScore).toHaveBeenCalledWith("t2", 1);
 });
 
 it("keeps the score row above equal columns for the card and the notices", () => {
