@@ -17,6 +17,7 @@ const game = vi.hoisted(() => ({
   state: null as GameStateView | null,
   busy: false,
   assignTeam: vi.fn(),
+  renameTeam: vi.fn(),
   autoTeams: vi.fn(),
   startGame: vi.fn(),
   leaveGame: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("@/ui/components/game/mute-button", () => ({ MuteButton: () => null }));
 afterEach(() => {
   cleanup();
   game.startGame.mockClear();
+  game.renameTeam.mockClear();
 });
 
 it.each(["p1", "p2"])("shows the start button only to the host (%s)", (playerId) => {
@@ -58,4 +60,29 @@ it("keeps the host start button disabled when teams are incomplete", () => {
   );
   render(<LobbyScreen />);
   expect(screen.getByRole("button", { name: "Comenzar partida" })).toBeDisabled();
+});
+
+it("deja al host renombrar cualquier equipo y avisa al servidor", () => {
+  game.state = toGameState(makeGame(), PlayerId.from("p1"));
+  render(<LobbyScreen />);
+
+  const pencils = screen.getAllByRole("button", { name: /Renombrar/ });
+  expect(pencils).toHaveLength(2);
+
+  fireEvent.click(pencils[0]!);
+  const input = screen.getByLabelText("Nombre del equipo");
+  fireEvent.change(input, { target: { value: "Los Pibes" } });
+  fireEvent.click(screen.getByRole("button", { name: "Guardar nombre" }));
+
+  expect(game.renameTeam).toHaveBeenCalledWith(game.state!.teams[0]!.id, "Los Pibes");
+});
+
+it("un jugador solo renombra el equipo al que pertenece", () => {
+  // p2 juega en el primer equipo: solo ese panel tiene lápiz.
+  game.state = toGameState(makeGame(), PlayerId.from("p2"));
+  render(<LobbyScreen />);
+
+  const pencils = screen.getAllByRole("button", { name: /Renombrar/ });
+  expect(pencils).toHaveLength(1);
+  expect(pencils[0]).toHaveAccessibleName(`Renombrar ${game.state!.teams[0]!.name}`);
 });

@@ -384,7 +384,8 @@ Cliente → servidor:
 | `game:create`                   | `{ playerName, deckId, options? }` | `{ gameId, code, playerToken, playerId }`       | cualquiera                                                       |
 | `game:join`                     | `{ code, playerName }`             | `{ gameId, playerToken, playerId, playerName }` | cualquiera                                                       |
 | `game:reconnect`                | `{ gameId, playerToken }`          | `{ state }`                                     | el mismo jugador                                                 |
-| `game:assignTeam`               | `{ teamId }`                       | —                                               | en la sala                                                       |
+| `game:assignTeam`               | `{ teamId }`                       | -                                               | en la sala                                                       |
+| `game:renameTeam`               | `{ teamId, name }`                 | -                                               | miembro del equipo, o el host; solo antes de arrancar            |
 | `game:autoTeams` / `game:ready` | —                                  | —                                               | en la sala                                                       |
 | `game:start`                    | —                                  | —                                               | solo el host                                                     |
 | `game:leave`                    | —                                  | —                                               | cualquiera                                                       |
@@ -420,7 +421,7 @@ el `game:state` de quien tiene rol `DESCRIBER` o `RIVAL`.
 
 Todo error de acción viaja en el ack (`{ error: { code, message } }`) **y** como `game:error` al
 mismo socket. Los códigos son estables (`INVALID_TABOO_WORD`, `NOT_ALLOWED`, `INVALID_STATE`,
-`GAME_NOT_FOUND`, `TEAM_FULL`, `STALE_CARD`, …).
+`GAME_NOT_FOUND`, `TEAM_FULL`, `INVALID_TEAM_NAME`, `STALE_CARD`, …).
 
 Al terminar la partida, `game:finished` incluye la tabla de equipos, el MVP y un `ranking` con
 **todos los jugadores** ordenados por palabras adivinadas durante la partida, con su equipo. Los

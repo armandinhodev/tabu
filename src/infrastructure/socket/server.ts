@@ -12,6 +12,7 @@ import { locatePlayer, type GameDeps } from "../../application/use-cases/common"
 import { createGame } from "../../application/use-cases/create-game";
 import { joinGame } from "../../application/use-cases/join-game";
 import { assignTeam, autoAssignTeams } from "../../application/use-cases/team-assignment";
+import { renameTeam } from "../../application/use-cases/team-name";
 import { startGame } from "../../application/use-cases/lobby";
 import { leaveGame, markDisconnected, reconnectPlayer } from "../../application/use-cases/session";
 import { guessWord, startTurn, reportViolation, skipTurn } from "../../application/use-cases/turn";
@@ -34,6 +35,7 @@ import {
   joinGamePayload,
   parsePayload,
   reconnectPayload,
+  renameTeamPayload,
   reportViolationPayload,
 } from "./payloads";
 import { Broadcaster, type GameServer } from "./broadcaster";
@@ -155,6 +157,17 @@ export function attachSocketServer(
         const input = parsePayload(assignTeamPayload, payload);
         const { gameId, playerId } = requireBinding(socket);
         const game = assignTeam(deps, gameId, playerId, input.teamId);
+
+        snapshot(game);
+        broadcaster.emitState(game);
+      });
+    });
+
+    socket.on(CLIENT_EVENTS.gameRenameTeam, (payload, ack) => {
+      void run(socket, ack, () => {
+        const input = parsePayload(renameTeamPayload, payload);
+        const { gameId, playerId } = requireBinding(socket);
+        const game = renameTeam(deps, gameId, playerId, input.teamId, input.name);
 
         snapshot(game);
         broadcaster.emitState(game);

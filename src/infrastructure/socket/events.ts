@@ -12,6 +12,7 @@ export const CLIENT_EVENTS = {
   gameJoin: "game:join",
   gameReconnect: "game:reconnect",
   gameAssignTeam: "game:assignTeam",
+  gameRenameTeam: "game:renameTeam",
   gameAutoTeams: "game:autoTeams",
   gameStart: "game:start",
   gameLeave: "game:leave",
@@ -206,6 +207,7 @@ export interface ClientToServerEvents {
   "game:join": (payload: unknown, ack: Ack<JoinGameAck>) => void;
   "game:reconnect": (payload: unknown, ack: Ack<ReconnectAck>) => void;
   "game:assignTeam": (payload: unknown, ack: Ack<void>) => void;
+  "game:renameTeam": (payload: unknown, ack: Ack<void>) => void;
   "game:autoTeams": (ack: Ack<void>) => void;
   "game:start": (ack: Ack<void>) => void;
   "game:leave": (ack: Ack<void>) => void;

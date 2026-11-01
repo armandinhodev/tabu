@@ -14,7 +14,8 @@ import { useGame } from "@/ui/providers/game-provider";
 
 /** 04 — Sala de espera (y 11 en desktop): código, equipos y arranque (§6.3). */
 export function LobbyScreen() {
-  const { state, busy, assignTeam, autoTeams, startGame, leaveGame, goTo, connection } = useGame();
+  const { state, busy, assignTeam, renameTeam, autoTeams, startGame, leaveGame, goTo, connection } =
+    useGame();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   if (state === null) {
@@ -52,6 +53,8 @@ export function LobbyScreen() {
                   key={team.id}
                   team={team}
                   canJoin={!busy}
+                  canRename={!busy && (state.me.isHost || team.id === state.me.teamId)}
+                  onRename={(name) => renameTeam(team.id, name)}
                   isMine={team.id === state.me.teamId}
                   onJoin={() => assignTeam(team.id)}
                 />

@@ -362,6 +362,40 @@ describe("contrato cliente-servidor", () => {
     });
   });
 
+  it("el lobby permite renombrar el propio equipo y el host cualquiera", async () => {
+    const host = await harness.connect();
+    const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {
+      playerName: "Host",
+      deckId: harness.deckId,
+      options: { teamCount: 2 },
+    });
+    const guest = await harness.connect();
+    await emitAck<{ playerId: string }>(guest, "game:join", {
+      code: created.code,
+      playerName: "Ana",
+    });
+
+    const [first, second] = harness.deps.registry.all()[0]!.teams;
+
+    if (first === undefined || second === undefined) {
+      throw new Error("missing teams");
+    }
+
+    await emitAck(guest, "game:assignTeam", { teamId: first.id });
+    await expect(
+      emitAck(guest, "game:renameTeam", { teamId: first.id, name: "Los Pibes" }),
+    ).resolves.toBeNull();
+    expect(harness.deps.registry.all()[0]!.teams[0]!.name).toBe("Los Pibes");
+
+    await expect(
+      emitAck(guest, "game:renameTeam", { teamId: second.id, name: "Ajenos" }),
+    ).resolves.toMatchObject({ error: { code: "NOT_ALLOWED" } });
+
+    await expect(
+      emitAck(host, "game:renameTeam", { teamId: second.id, name: "Fuego" }),
+    ).resolves.toBeNull();
+    expect(harness.deps.registry.all()[0]!.teams[1]!.name).toBe("Fuego");
+  });
   it("con randomTeams el arranque reparte a los que esperan (S19)", async () => {
     const host = await harness.connect();
     const created = await emitAck<{ code: string; playerId: string }>(host, "game:create", {

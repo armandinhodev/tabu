@@ -23,6 +23,7 @@ export type DomainErrorCode =
   | "DECK_NOT_FOUND"
   | "GAME_FULL"
   | "TEAM_FULL"
+  | "INVALID_TEAM_NAME"
   | "PLAYER_NOT_IN_GAME"
   | "NOT_HOST"
   | "SKIP_LIMIT_REACHED";
@@ -158,6 +159,12 @@ export class GameFullError extends DomainError {
 export class TeamFullError extends DomainError {
   constructor(teamName: string) {
     super("TEAM_FULL", `Team ${teamName} is full`);
+  }
+}
+
+export class InvalidTeamNameError extends DomainError {
+  constructor(message: string) {
+    super("INVALID_TEAM_NAME", message);
   }
 }
 

@@ -67,6 +67,8 @@ interface GameContextValue {
   readonly createGame: (options: CreateGameOptions) => Promise<boolean>;
   readonly joinGame: (code: string, name?: string) => Promise<boolean>;
   readonly assignTeam: (teamId: string) => void;
+  /** Renombra un equipo del lobby: el propio, o cualquiera si sos host. */
+  readonly renameTeam: (teamId: string, name: string) => void;
   readonly autoTeams: () => void;
   readonly startGame: () => void;
   readonly leaveGame: () => void;
@@ -471,6 +473,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [run],
   );
 
+  const renameTeam = useCallback(
+    (teamId: string, name: string) => {
+      void run((done) => getSocket().emit("game:renameTeam", { teamId, name }, done));
+    },
+    [run],
+  );
+
   const autoTeams = useCallback(() => {
     void run((done) => getSocket().emit("game:autoTeams", done));
   }, [run]);
@@ -594,6 +603,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       createGame,
       joinGame,
       assignTeam,
+      renameTeam,
       autoTeams,
       startGame: startGameAction,
       leaveGame,
@@ -618,6 +628,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       createGame,
       joinGame,
       assignTeam,
+      renameTeam,
       autoTeams,
       startGameAction,
       leaveGame,

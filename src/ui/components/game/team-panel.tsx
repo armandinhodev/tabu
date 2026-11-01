@@ -1,7 +1,8 @@
 "use client";
 
 import type { PlayerView, TeamView } from "@/application/dto/game-state";
-import { Mic } from "lucide-react";
+import { Check, Mic, Pencil, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/ui/components/ui/button";
 import { cn } from "@/ui/lib/cn";
 import { NEUTRAL_PALETTE, teamPalette } from "./team-colors";
@@ -54,6 +55,9 @@ interface TeamPanelProps {
   readonly team: TeamView;
   readonly canJoin: boolean;
   readonly onJoin?: () => void;
+  /** Solo en la sala de espera: un miembro, o el host, puede nombrar el equipo. */
+  readonly canRename?: boolean;
+  readonly onRename?: (name: string) => void;
   readonly isMine: boolean;
   readonly isActive?: boolean;
   readonly showScore?: boolean;
@@ -65,12 +69,38 @@ export function TeamPanel({
   team,
   canJoin,
   onJoin,
+  canRename = false,
+  onRename,
   isMine,
   isActive = false,
   showScore = false,
   descriptorId,
 }: TeamPanelProps) {
   const palette = teamPalette(team.color);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(team.name);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      input.current?.focus();
+      input.current?.select();
+    }
+  }, [editing]);
+
+  const startEditing = (): void => {
+    setDraft(team.name);
+    setEditing(true);
+  };
+
+  const commit = (): void => {
+    setEditing(false);
+    const name = draft.trim();
+
+    if (name !== "" && name !== team.name) {
+      onRename?.(name);
+    }
+  };
 
   return (
     <section
@@ -85,9 +115,60 @@ export function TeamPanel({
       )}
     >
       <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span aria-hidden="true" className={cn("size-2.5 rounded-pill", palette.dot)} />
-          <h3 className={cn("text-h3 font-semibold", palette.text)}>{team.name}</h3>
+        <div className="flex min-w-0 items-center gap-2">
+          <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-pill", palette.dot)} />
+          {editing ? (
+            <form
+              className="flex min-w-0 flex-1 items-center gap-1"
+              onSubmit={(event) => {
+                event.preventDefault();
+                commit();
+              }}
+            >
+              <input
+                ref={input}
+                value={draft}
+                aria-label="Nombre del equipo"
+                onChange={(event) => setDraft(event.target.value)}
+                onBlur={commit}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setEditing(false);
+                  }
+                }}
+                className="min-w-0 flex-1 rounded-md border border-line bg-surface px-2 py-1 text-h3 font-semibold text-fg"
+              />
+              <button
+                type="submit"
+                aria-label="Guardar nombre"
+                className="shrink-0 rounded-md p-1.5 text-fg-muted hover:text-fg"
+              >
+                <Check aria-hidden="true" className="size-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Cancelar"
+                onClick={() => setEditing(false)}
+                className="shrink-0 rounded-md p-1.5 text-fg-muted hover:text-fg"
+              >
+                <X aria-hidden="true" className="size-4" />
+              </button>
+            </form>
+          ) : (
+            <>
+              <h3 className={cn("truncate text-h3 font-semibold", palette.text)}>{team.name}</h3>
+              {canRename ? (
+                <button
+                  type="button"
+                  aria-label={`Renombrar ${team.name}`}
+                  onClick={startEditing}
+                  className="shrink-0 rounded-md p-1 text-fg-subtle hover:text-fg"
+                >
+                  <Pencil aria-hidden="true" className="size-3.5" />
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
         {showScore ? (
           <span className={cn("font-mono text-h2 font-bold tabular-nums", palette.text)}>

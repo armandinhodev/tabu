@@ -360,6 +360,7 @@ Todos los payloads se validan con Zod en el servidor. Los nombres de evento est�
 | `game:join` | `{ code, playerName }` | `{ gameId, playerToken, playerId, playerName }` | cualquiera |
 | `game:reconnect` | `{ gameId, playerToken }` | `{ state: GameState }` | el mismo jugador |
 | `game:assignTeam` | `{ teamId }` | `void` | cualquiera en la sala |
+| `game:renameTeam` | `{ teamId, name }` | `void` | un miembro del equipo, o el host |
 | `game:autoTeams` | `void` | `void` | cualquiera en la sala |
 | `game:start` | `void` | `void` | solo el host |
 | `game:leave` | `void` | `void` | cualquiera |
@@ -487,7 +488,9 @@ Validá todo con Zod al arrancar: si falta una variable crítica, el server no l
 3. **Unirse** (`/unirse`): 6 cajas de código con foco automático en la primera, campo nombre,
    botón "Entrar a la sala".
 4. **Sala de espera** (`/sala/[code]`): código grande con copiar, paneles de equipo con jugadores,
-   opción de reparto automático, botón "Comenzar partida" (solo host).
+   opción de reparto automático, botón "Comenzar partida" (solo host). Cada equipo se puede renombrar
+   mientras la partida no arrancó: cualquier miembro pone nombre al suyo y el host a cualquiera
+   (1..24 caracteres, sin repetir). Al arrancar, los nombres quedan congelados.
 5. **Juego — equipo que describe (activo)**: puntaje de ambos equipos, ronda, **palabra objetivo
    grande**, aviso ámbar "No digas estas palabras" + **chips de palabras prohibidas** (informativos,
    sin acción), temporizador circular y botón "Saltar esta carta" solo para el descriptor. Antes del reloj, solo el descriptor seleccionado ve "Comenzar turno".

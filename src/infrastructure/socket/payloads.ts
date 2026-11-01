@@ -79,6 +79,12 @@ export const assignTeamPayload = z.object({
   teamId: z.string().trim().min(1, "teamId cannot be empty"),
 });
 
+/** El nombre se valida en el dominio: acá solo viaja como texto. */
+export const renameTeamPayload = z.object({
+  teamId: z.string().trim().min(1, "teamId cannot be empty"),
+  name: z.string().max(60, "name is too long"),
+});
+
 export const reportViolationPayload = z.object({
   reason: z.literal("TABOO_WORD", {
     error: "must be TABOO_WORD",

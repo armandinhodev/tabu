@@ -11,6 +11,7 @@ import {
   GameNotFoundError,
   InvalidSettingsError,
   NotAllowedError,
+  InvalidTeamNameError,
   NotHostError,
   TooFewPlayersError,
   TeamFullError,
@@ -20,6 +21,7 @@ import { InvalidRoomCodeError } from "../../domain/errors/DomainError";
 import { createGame } from "./create-game";
 import { joinGame } from "./join-game";
 import { assignTeam, autoAssignTeams } from "./team-assignment";
+import { renameTeam } from "./team-name";
 import { startGame } from "./lobby";
 import type { GameDeps } from "./common";
 
@@ -383,5 +385,84 @@ describe("startGame", () => {
     expect(() => joinGame(harness.deps, { code: "ABC", playerName: "Ana" })).toThrow(
       InvalidRoomCodeError,
     );
+  });
+});
+
+describe("renameTeam", () => {
+  let harness: Harness;
+
+  beforeEach(async () => {
+    harness = await makeHarness();
+  });
+
+  /** Sala con host sin equipo y un invitado ya ubicado en el primer equipo. */
+  async function roomWithGuest() {
+    const created = await createGame(harness.deps, { playerName: "Luz", deckId: harness.deckId });
+    const teamId = created.game.teams[0]?.id ?? "";
+    const joined = joinGame(harness.deps, { code: created.data.code, playerName: "Beto" });
+    assignTeam(harness.deps, created.data.gameId, joined.data.playerId, teamId);
+
+    return {
+      gameId: created.data.gameId,
+      host: created.data.playerId,
+      guest: joined.data.playerId,
+      teamId,
+    };
+  }
+
+  it("un jugador renombra su propio equipo", async () => {
+    const room = await roomWithGuest();
+
+    const next = renameTeam(harness.deps, room.gameId, room.guest, room.teamId, "  Los Pibes  ");
+
+    expect(next.teams[0]?.name).toBe("Los Pibes");
+    expect(harness.deps.registry.findById(room.gameId)?.teams[0]?.name).toBe("Los Pibes");
+  });
+
+  it("el host renombra cualquier equipo aunque no juegue en él", async () => {
+    const room = await roomWithGuest();
+
+    const next = renameTeam(harness.deps, room.gameId, room.host, room.teamId, "Fuego");
+
+    expect(next.teams[0]?.name).toBe("Fuego");
+  });
+
+  it("rechaza a un jugador que quiere renombrar otro equipo", async () => {
+    const room = await roomWithGuest();
+    const otherTeamId = harness.deps.registry.findById(room.gameId)?.teams[1]?.id ?? "";
+
+    expect(() => renameTeam(harness.deps, room.gameId, room.guest, otherTeamId, "Ajeno")).toThrow(
+      NotAllowedError,
+    );
+  });
+
+  it("no permite renombrar con la partida ya empezada", async () => {
+    const room = await roomWithGuest();
+    const game = harness.deps.registry.findById(room.gameId);
+    harness.deps.registry.save({ ...game!, status: "playing" });
+
+    expect(() => renameTeam(harness.deps, room.gameId, room.host, room.teamId, "Tarde")).toThrow(
+      NotAllowedError,
+    );
+  });
+
+  it("rechaza nombres vacíos o demasiado largos", async () => {
+    const room = await roomWithGuest();
+
+    expect(() => renameTeam(harness.deps, room.gameId, room.host, room.teamId, "   ")).toThrow(
+      InvalidTeamNameError,
+    );
+    expect(() =>
+      renameTeam(harness.deps, room.gameId, room.host, room.teamId, "x".repeat(25)),
+    ).toThrow(InvalidTeamNameError);
+  });
+
+  it("rechaza un nombre que ya usa otro equipo", async () => {
+    const room = await roomWithGuest();
+    const taken = harness.deps.registry.findById(room.gameId)?.teams[1]?.name ?? "";
+
+    expect(() =>
+      renameTeam(harness.deps, room.gameId, room.host, room.teamId, taken.toUpperCase()),
+    ).toThrow(InvalidTeamNameError);
   });
 });
