@@ -569,6 +569,55 @@ describe("rondas y fin de partida", () => {
     ]);
   });
 
+  it("ranks the people who described by the cards their team solved", () => {
+    const entry = (
+      turnId: string,
+      teamId: string,
+      descriptorId: string,
+      reason: "CORRECT" | "VIOLATION" | "TIME",
+    ) => ({
+      turnId: TurnId.from(turnId),
+      teamId: TeamId.from(teamId),
+      descriptorId: PlayerId.from(descriptorId),
+      reason,
+      pointsDelta: reason === "CORRECT" ? 1 : 0,
+      cardDiscarded: reason !== "CORRECT",
+      at: NOW,
+    });
+
+    const game = makeGame({
+      teams: [
+        makeTeam(0, [
+          makePlayer("p1", "t1", { name: "Ana" }),
+          makePlayer("p2", "t1", { name: "Beto" }),
+        ]),
+        makeTeam(1, [
+          makePlayer("p3", "t2", { name: "Caro" }),
+          makePlayer("p4", "t2", { name: "Dani" }),
+        ]),
+      ],
+      turnHistory: [
+        entry("turn-1", "t1", "p1", "CORRECT"),
+        entry("turn-2", "t2", "p3", "CORRECT"),
+        entry("turn-3", "t1", "p2", "TIME"),
+        entry("turn-4", "t2", "p3", "CORRECT"),
+        entry("turn-5", "t2", "p3", "VIOLATION"),
+      ],
+    });
+
+    const finished = finishGame(game, { now: NOW }).events.find(
+      (event) => event.type === "GameFinished",
+    );
+    const ranking = finished && "descriptorRanking" in finished ? finished.descriptorRanking : null;
+
+    expect(ranking).toEqual([
+      { playerId: "p3", name: "Caro", teamId: "t2", teamName: "Equipo 2", solved: 2 },
+      { playerId: "p1", name: "Ana", teamId: "t1", teamName: "Equipo 1", solved: 1 },
+      { playerId: "p2", name: "Beto", teamId: "t1", teamName: "Equipo 1", solved: 0 },
+    ]);
+    // Dani nunca describió: no tiene número que mostrar.
+    expect(ranking?.some((row) => row.playerId === "p4")).toBe(false);
+  });
   it("breaks ranking ties by player name so the order is stable", () => {
     const game = makeGame({
       teams: [

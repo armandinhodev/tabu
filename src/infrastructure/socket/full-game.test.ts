@@ -160,6 +160,10 @@ describe("partida completa por socket", () => {
     expect(ended.standings).toHaveLength(2);
     expect(ended.winnerTeamId).toBeNull();
     expect(ended.mvp?.points).toBe(1);
+    // El ranking de descripciones viaja en el mismo evento: acá describió una
+    // sola persona y su equipo acertó una carta.
+    expect(ended.descriptorRanking).toHaveLength(1);
+    expect(ended.descriptorRanking[0]?.solved).toBe(1);
 
     const final = await waitFor(() => {
       const snapshot = states.get(created.playerId);

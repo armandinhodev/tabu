@@ -392,7 +392,7 @@ El orden de las validaciones es: `STALE_CARD` → permiso y palabra válida.
 |---|---|
 | `game:state` | `{ status, code, settings, teams, me, turn?, round }` — `turn` incluye **siempre** `word` y `taboo[]` (información pública) |
 | `game:started` | `{ startedAt, settings }` |
-| `game:finished` | `{ winnerTeamId \| null, standings: Array<{ teamId, name, score }>, mvp: { playerId, name, points } }` |
+| `game:finished` | `{ winnerTeamId \| null, standings: Array<{ teamId, name, score }>, mvp: { playerId, name, points }, ranking: Array<{ playerId, name, teamId, teamName, guessed }>, descriptorRanking: Array<{ playerId, name, teamId, teamName, solved }> }` |
 | `turn:started` | `{ turnId, teamId, descriptorId, word, taboo: string[], deadlineAt, turnSeconds }` |
 | `turn:tick` | `{ remaining: number }` (1 por segundo) |
 | `turn:ended` | `{ turnId, reason: 'CORRECT'\|'VIOLATION'\|'SKIPPED'\|'TIME', pointsDelta, teamId, cardDiscarded: boolean }` |

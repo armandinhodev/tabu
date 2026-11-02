@@ -13,7 +13,13 @@ import {
   TooFewPlayersError,
   TurnNotActiveError,
 } from "../errors/DomainError";
-import type { DomainEvent, Mvp, PlayerRanking, Standing } from "../events/events";
+import type {
+  DescriptorRanking,
+  DomainEvent,
+  Mvp,
+  PlayerRanking,
+  Standing,
+} from "../events/events";
 import { pointsForOutcome, scoreAfterOutcome } from "../policies/ScoringPolicy";
 import { nextDescriptor, nextTeam } from "../policies/TurnOrderPolicy";
 import type { Rng } from "../rng";
@@ -459,6 +465,7 @@ export function finishGame(game: Game, ctx: { readonly now: Date }): TransitionR
         standings,
         mvp: mvpOf(game.teams),
         ranking: rankingOf(game.teams),
+        descriptorRanking: descriptorRankingOf(game),
       },
     ],
   };
@@ -565,6 +572,45 @@ function mvpOf(teams: readonly Team[]): Mvp | null {
   return { playerId: best.id, name: best.name, points: best.points };
 }
 
+/**
+ * End-of-game ranking of the people who described, by the cards their team
+ * solved on their turns. A correct answer does not end the turn, so every
+ * CORRECT entry in the history belongs to the descriptor of that turn.
+ */
+function descriptorRankingOf(game: Game): readonly DescriptorRanking[] {
+  const solved = new Map<string, number>();
+  const described = new Set<string>();
+
+  for (const entry of game.turnHistory) {
+    described.add(entry.descriptorId);
+
+    if (entry.reason === "CORRECT") {
+      solved.set(entry.descriptorId, (solved.get(entry.descriptorId) ?? 0) + 1);
+    }
+  }
+
+  const rows: DescriptorRanking[] = [];
+
+  for (const team of game.teams) {
+    for (const player of team.players) {
+      if (!described.has(player.id)) {
+        continue;
+      }
+
+      rows.push({
+        playerId: player.id,
+        name: player.name,
+        teamId: team.id,
+        teamName: team.name,
+        solved: solved.get(player.id) ?? 0,
+      });
+    }
+  }
+
+  return rows.sort(
+    (left, right) => right.solved - left.solved || left.name.localeCompare(right.name),
+  );
+}
 /**
  * End-of-game ranking by words guessed. `points` only grows on a correct
  * answer, so it is the per-player count of guessed words. Ties fall back to

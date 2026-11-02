@@ -426,7 +426,9 @@ mismo socket. Los códigos son estables (`INVALID_TABOO_WORD`, `NOT_ALLOWED`, `I
 Al terminar la partida, `game:finished` incluye la tabla de equipos, el MVP y un `ranking` con
 **todos los jugadores** ordenados por palabras adivinadas durante la partida, con su equipo. Los
 empates se ordenan por nombre para que todos vean la misma lista. La pantalla final muestra ese
-ranking global por encima del botón de salida.
+ranking global por encima del botón de salida, junto a un segundo ranking,
+`descriptorRanking`, con **quienes describieron** ordenados por las cartas que su equipo adivinó
+mientras ellos describían; quien nunca describió no aparece.
 
 ## Calidad
 

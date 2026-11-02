@@ -29,6 +29,7 @@ export function ResultScreen() {
   const winner = finish?.winnerTeamId ?? null;
   const mvp = finish?.mvp ?? null;
   const ranking = finish?.ranking ?? [];
+  const descriptorRanking = finish?.descriptorRanking ?? [];
   const isDraw = winner === null;
 
   return (
@@ -128,6 +129,45 @@ export function ResultScreen() {
                   </span>
                   <span className="font-mono text-h3 font-bold text-gold tabular-nums">
                     {row.guessed}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
+
+      {descriptorRanking.length > 0 ? (
+        <section className="flex flex-col gap-2" aria-labelledby="descriptors-heading">
+          <h2 id="descriptors-heading" className="text-caption text-fg-subtle uppercase">
+            Mejores descripciones
+          </h2>
+          <p className="text-body-sm text-fg-muted">
+            Palabras que su equipo adivinó mientras describían.
+          </p>
+          <ol className="flex flex-col gap-2" aria-label="Mejores descripciones">
+            {descriptorRanking.map((row, index) => {
+              const mine = row.playerId === state.me.playerId;
+
+              return (
+                <li
+                  key={row.playerId}
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-lg border px-4 py-3",
+                    mine ? "border-line-strong bg-surface-2" : "border-line bg-surface",
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="font-mono text-body-sm text-fg-subtle tabular-nums">
+                      {index + 1}
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-body text-fg">{row.name}</span>
+                      <span className="truncate text-body-sm text-fg-muted">{row.teamName}</span>
+                    </span>
+                  </span>
+                  <span className="font-mono text-h3 font-bold text-gold tabular-nums">
+                    {row.solved}
                   </span>
                 </li>
               );

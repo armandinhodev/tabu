@@ -81,3 +81,54 @@ it("falls back to an empty ranking when the server sends none", () => {
   expect(screen.queryByRole("list", { name: "Palabras adivinadas" })).not.toBeInTheDocument();
   expect(screen.getByRole("list", { name: "Tabla final" })).toBeVisible();
 });
+
+it("muestra aparte el ranking de quienes describieron", () => {
+  context.state = finishedState("p2");
+  context.finish = {
+    winnerTeamId: "t1",
+    standings: [
+      { teamId: "t1", name: "Equipo 1", score: 4 },
+      { teamId: "t2", name: "Equipo 2", score: 1 },
+    ],
+    mvp: null,
+    ranking: [{ playerId: "p2", name: "Beto", teamId: "t1", teamName: "Equipo 1", guessed: 2 }],
+    descriptorRanking: [
+      { playerId: "p1", name: "Ana", teamId: "t1", teamName: "Equipo 1", solved: 4 },
+      { playerId: "p3", name: "Caro", teamId: "t2", teamName: "Equipo 2", solved: 1 },
+    ],
+  };
+
+  render(
+    <SoundProvider>
+      <ResultScreen />
+    </SoundProvider>,
+  );
+
+  const list = screen.getByRole("list", { name: "Mejores descripciones" });
+  const rows = within(list).getAllByRole("listitem");
+
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toHaveTextContent("Ana");
+  expect(rows[0]).toHaveTextContent("4");
+  expect(rows[1]).toHaveTextContent("Caro");
+  expect(screen.getByText("Palabras que su equipo adivinó mientras describían.")).toBeVisible();
+});
+
+it("no muestra la sección de descripciones cuando nadie describió", () => {
+  context.state = finishedState("p1");
+  context.finish = {
+    winnerTeamId: "t1",
+    standings: [{ teamId: "t1", name: "Equipo 1", score: 1 }],
+    mvp: null,
+    ranking: [],
+    descriptorRanking: [],
+  };
+
+  render(
+    <SoundProvider>
+      <ResultScreen />
+    </SoundProvider>,
+  );
+
+  expect(screen.queryByRole("list", { name: "Mejores descripciones" })).not.toBeInTheDocument();
+});

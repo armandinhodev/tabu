@@ -161,6 +161,16 @@ export interface GameFinishedView {
   } | null;
   /** Every player in the match, ordered by words guessed. */
   readonly ranking: readonly PlayerRankingView[];
+  /** Players who described, ordered by the cards their team solved. */
+  readonly descriptorRanking: readonly DescriptorRankingView[];
+}
+
+export interface DescriptorRankingView {
+  readonly playerId: string;
+  readonly name: string;
+  readonly teamId: string;
+  readonly teamName: string;
+  readonly solved: number;
 }
 
 export interface PlayerRankingView {

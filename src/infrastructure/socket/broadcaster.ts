@@ -162,6 +162,13 @@ export class Broadcaster {
             teamName: row.teamName,
             guessed: row.guessed,
           })),
+          descriptorRanking: event.descriptorRanking.map((row) => ({
+            playerId: row.playerId,
+            name: row.name,
+            teamId: row.teamId,
+            teamName: row.teamName,
+            solved: row.solved,
+          })),
         });
         return;
       default: {

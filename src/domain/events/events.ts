@@ -25,6 +25,15 @@ export interface PlayerRanking {
   readonly guessed: number;
 }
 
+/** Cards the team solved while the player was describing. */
+export interface DescriptorRanking {
+  readonly playerId: PlayerId;
+  readonly name: string;
+  readonly teamId: TeamId;
+  readonly teamName: string;
+  readonly solved: number;
+}
+
 /**
  * Eventos de dominio: hechos ya ocurridos, sin I/O. La capa de socket los
  * traduce a eventos públicos (game:*, turn:*).
@@ -118,4 +127,6 @@ export type DomainEvent =
       readonly mvp: Mvp | null;
       /** Every player in the match, ordered by words guessed. */
       readonly ranking: readonly PlayerRanking[];
+      /** Players who described, ordered by the cards their team solved. */
+      readonly descriptorRanking: readonly DescriptorRanking[];
     };
