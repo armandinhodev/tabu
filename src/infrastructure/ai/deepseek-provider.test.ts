@@ -8,13 +8,17 @@ import {
   type AdminFetch,
 } from "./deepseek-provider";
 
-function completion(content: string, usage?: { prompt_tokens: number; completion_tokens: number }) {
+function completion(
+  content: string,
+  usage?: { prompt_tokens: number; completion_tokens: number },
+  finishReason = "stop",
+) {
   return {
     id: "chatcmpl-1",
     object: "chat.completion",
     created: 1,
     model: DEEPSEEK_MODEL,
-    choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+    choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finishReason }],
     usage: usage ?? { prompt_tokens: 11, completion_tokens: 13, total_tokens: 24 },
   };
 }
@@ -563,5 +567,85 @@ describe("createDeepSeekProvider", () => {
     await expect(
       provider.proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] }),
     ).rejects.toMatchObject({ status: 503, code: "provider_invalid_response" });
+  });
+
+  it("reads the objectives when the answer comes inside a markdown fence", async () => {
+    const { fetch } = fakeFetch(completion('```json\n{"objectives":["fuego","agua"]}\n```'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    const result = await provider.proposeObjectives({
+      theme: "Objetos",
+      count: 2,
+      excludedObjectives: [],
+    });
+
+    expect(result.data.objectives).toEqual(["fuego", "agua"]);
+  });
+
+  it("reads the objectives when the answer is a list separated by commas", async () => {
+    const { fetch } = fakeFetch(completion('{"objectives":"fuego, agua"}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    const result = await provider.proposeObjectives({
+      theme: "Objetos",
+      count: 2,
+      excludedObjectives: [],
+    });
+
+    expect(result.data.objectives).toEqual(["fuego", "agua"]);
+  });
+
+  it("reads the objectives when the answer wraps them in objects", async () => {
+    const { fetch } = fakeFetch(
+      completion('{"objectives":[{"objective":"fuego"},{"word":"agua"}]}'),
+    );
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    const result = await provider.proposeObjectives({
+      theme: "Objetos",
+      count: 2,
+      excludedObjectives: [],
+    });
+
+    expect(result.data.objectives).toEqual(["fuego", "agua"]);
+  });
+
+  it("reports a cut answer instead of an unusable one", async () => {
+    const { fetch } = fakeFetch(completion('{"objectives":["fuego"', undefined, "length"));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    await expect(
+      provider.proposeObjectives({ theme: "Objetos", count: 1, excludedObjectives: [] }),
+    ).rejects.toMatchObject({ status: 503, code: "provider_response_truncated" });
+  });
+
+  it("gives the objectives call room to answer a long list of used objectives", async () => {
+    const { fetch, calls } = fakeFetch(completion('{"objectives":["fuego"]}'));
+    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
+
+    await provider.proposeObjectives({
+      theme: "Objetos",
+      count: 2,
+      excludedObjectives: Array.from({ length: 300 }, (_, index) => `objetivo${index}`),
+    });
+
+    expect(bodyOf(calls).max_tokens).toBeGreaterThanOrEqual(4000);
+  });
+
+  it("reports a safe diagnostic when the answer cannot be read", async () => {
+    const diagnostics: unknown[] = [];
+    const { fetch } = fakeFetch(completion("respuesta que no es json"));
+    const provider = createDeepSeekProvider({
+      apiKey: "secret-key",
+      fetchImpl: fetch,
+      onInvalidResponse: (detail) => diagnostics.push(detail),
+    });
+
+    await expect(
+      provider.proposeObjectives({ theme: "Objetos", count: 1, excludedObjectives: [] }),
+    ).rejects.toMatchObject({ status: 503, code: "provider_invalid_response" });
+
+    expect(diagnostics).toHaveLength(1);
+    expect(JSON.stringify(diagnostics)).not.toContain("respuesta que no es json");
   });
 });

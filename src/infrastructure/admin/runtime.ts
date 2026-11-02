@@ -142,7 +142,14 @@ function runtime(): AdminRuntime {
   const limits = options.limits ?? DEFAULT_ADMIN_LIMITS;
   const decks = new MongoAdminDeckStore();
   const jobs = createJobStore();
-  const provider = createDeepSeekProvider({ apiKey });
+  const provider = createDeepSeekProvider({
+    apiKey,
+    // Diagnóstico de una respuesta que el proveedor no pudo entregar: sólo
+    // viaja la FORMA de la respuesta, nunca su contenido.
+    onInvalidResponse: (detail) => {
+      logger.warn("admin provider answer was unusable", { ...detail });
+    },
+  });
   const clock = { now: (): Date => new Date() };
   const ids = { next: (): string => new Types.ObjectId().toString() };
 

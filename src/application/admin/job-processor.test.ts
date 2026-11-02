@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { processClaimedJob } from "./job-processor";
 import { DEFAULT_LEASE_MS, jobLimitsFor } from "./admin-service";
+import { AdminError } from "./errors";
 import {
   DEEPSEEK_BATCH_TIMEOUT_MS,
   DEEPSEEK_OBJECTIVES_TIMEOUT_MS,
@@ -434,7 +435,61 @@ describe("processClaimedJob (batch flow)", () => {
     expect(provider.objectiveCalls).toHaveLength(2);
     expect(jobs.completed).toEqual([]);
     expect(jobs.failed[0]?.error).toContain("Only 0 of 5 cards");
+    expect(jobs.failed[0]?.error).toContain("no new objectives left");
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(0);
+  });
+
+  it("retries the objectives call when the provider answers with an unusable response", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    decks.seed({
+      id: "deck-1",
+      name: "General",
+      theme: "Objetos",
+      usedObjectives: Array.from({ length: 400 }, (_, index) => `usado${index}`),
+    });
+
+    const answer = provider.proposeObjectives.bind(provider);
+    let attempts = 0;
+    provider.proposeObjectives = async (input) => {
+      attempts += 1;
+
+      if (attempts === 1) {
+        throw new AdminError(
+          503,
+          "provider_invalid_response",
+          "The generation provider returned an invalid response",
+        );
+      }
+
+      return answer(input);
+    };
+
+    queueCards(provider, [{ objective: "fuego", candidates: SIX_WORDS }]);
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    expect(attempts).toBe(2);
+    expect(jobs.failed).toEqual([]);
+    expect(jobs.completed).toHaveLength(1);
+    expect(decks.decks.get("deck-1")?.cards).toHaveLength(1);
+    // El reintento recorta la lista que se le recuerda al proveedor.
+    expect(provider.objectiveCalls[0]?.excludedObjectives).toHaveLength(200);
+  });
+
+  it("does not retry when the provider itself is unavailable", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+
+    let attempts = 0;
+    provider.proposeObjectives = async () => {
+      attempts += 1;
+      throw new AdminError(503, "provider_unavailable", "The generation provider is unavailable");
+    };
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    expect(attempts).toBe(1);
+    expect(jobs.failed).toHaveLength(1);
   });
 
   it("keeps a forbidden word that another card already used", async () => {

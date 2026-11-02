@@ -40,6 +40,16 @@ export const DEEPSEEK_BATCH_TIMEOUT_MS = 45_000;
  */
 export const DEEPSEEK_OBJECTIVES_TIMEOUT_MS = 50_000;
 
+/**
+ * Output budget of the objectives call.
+ *
+ * The answer is a short list of words, but the request carries every objective
+ * the deck already has: the model has to reason against a long list before it
+ * answers. With the generic budget the reasoning used it all and the answer
+ * came back cut, which the panel reported as an invalid provider response.
+ */
+export const DEEPSEEK_OBJECTIVES_MAX_OUTPUT_TOKENS = 8_000;
+
 /** Candidatos máximos por carta (S5). */
 export const MAX_CANDIDATES_PER_CARD = 12;
 
@@ -54,6 +64,26 @@ export interface DeepSeekProviderOptions {
   readonly fetchImpl?: AdminFetch;
   readonly timeoutMs?: number;
   readonly maxOutputTokens?: number;
+  /**
+   * Avisa que una respuesta del proveedor no se pudo leer.
+   *
+   * Sólo viaja la FORMA de la respuesta (la fase, el motivo, la longitud y las
+   * claves de primer nivel): nunca el contenido, nunca un secreto. Sirve para
+   * diagnosticar una repetición sin exponer lo que dijo el proveedor.
+   */
+  readonly onInvalidResponse?: (detail: InvalidResponseDetail) => void;
+}
+
+/** Diagnóstico seguro de una respuesta que el proveedor no pudo entregar. */
+export interface InvalidResponseDetail {
+  /** Fase de la llamada: "objectives", "cards", "batch" o "candidates". */
+  readonly phase: string;
+  /** Motivo: "schema", "truncated", "not_json" o "shape". */
+  readonly reason: string;
+  /** Longitud del contenido recibido: nunca el contenido. */
+  readonly contentLength: number;
+  /** Claves de primer nivel del payload: nunca los valores. */
+  readonly payloadKeys: readonly string[];
 }
 
 const completionSchema = z.object({
@@ -61,6 +91,7 @@ const completionSchema = z.object({
     .array(
       z.object({
         message: z.object({ content: z.string() }),
+        finish_reason: z.string().nullish(),
       }),
     )
     .min(1),
@@ -72,16 +103,155 @@ const completionSchema = z.object({
     .optional(),
 });
 
-const candidatesSchema = z.object({ candidates: z.array(z.string()) });
-const objectivesSchema = z.object({ objectives: z.array(z.string()) });
-const cardsSchema = z.object({
-  cards: z.array(
-    z.object({
-      objective: z.string(),
-      candidates: z.array(z.string()),
-    }),
-  ),
-});
+/** Claves que el proveedor puede usar para nombrar el objetivo de una carta. */
+const OBJECTIVE_KEYS = ["objective", "objetivo", "word", "palabra", "text"] as const;
+
+/** Claves que el proveedor puede usar para nombrar las palabras prohibidas. */
+const CANDIDATE_KEYS = ["candidates", "proposals", "palabras", "words"] as const;
+
+/** Lee el primer valor presente entre las claves candidatas. */
+function pick(record: Record<string, unknown>, keys: readonly string[]): unknown {
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+/** Las claves de primer nivel de un payload: la forma, nunca los valores. */
+function payloadKeysOf(payload: unknown): string[] {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return [];
+  }
+
+  return Object.keys(payload as Record<string, unknown>);
+}
+
+/**
+ * Lee una lista de textos de una respuesta del proveedor.
+ *
+ * El modelo no siempre contesta con la forma exacta que pide el prompt: la
+ * lista puede venir separada por comas, envuelta en objetos o con otra clave.
+ * Todo eso es la misma respuesta y se lee sin perder palabras.
+ */
+function readTextList(value: unknown, keys: readonly string[]): string[] | null {
+  if (typeof value === "string") {
+    return value
+      .split(/[,;\n]/u)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+  }
+
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const items: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry === "string") {
+      const trimmed = entry.trim();
+      if (trimmed.length > 0) {
+        items.push(trimmed);
+      }
+      continue;
+    }
+
+    if (typeof entry === "object" && entry !== null) {
+      const found = pick(entry as Record<string, unknown>, keys);
+      if (typeof found === "string" && found.trim().length > 0) {
+        items.push(found.trim());
+      }
+    }
+  }
+
+  return items;
+}
+
+/** Lee las cartas de una respuesta del proveedor. */
+function readCards(value: unknown): { objective: string; candidates: string[] }[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const cards: { objective: string; candidates: string[] }[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+
+    const record = entry as Record<string, unknown>;
+    const objective = pick(record, OBJECTIVE_KEYS);
+
+    if (typeof objective !== "string" || objective.trim().length === 0) {
+      continue;
+    }
+
+    cards.push({
+      objective: objective.trim(),
+      candidates: readTextList(pick(record, CANDIDATE_KEYS), CANDIDATE_KEYS) ?? [],
+    });
+  }
+
+  return cards;
+}
+
+/** Lee los objetivos de una respuesta del proveedor. */
+function readObjectives(payload: unknown): string[] | null {
+  if (Array.isArray(payload)) {
+    return readTextList(payload, OBJECTIVE_KEYS);
+  }
+
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+
+  const value = pick(payload as Record<string, unknown>, ["objectives", "objetivos"]);
+
+  return value === undefined ? null : readTextList(value, OBJECTIVE_KEYS);
+}
+
+/** Lee las cartas propuestas de una respuesta del proveedor. */
+function readProposedCards(payload: unknown): { objective: string; candidates: string[] }[] | null {
+  if (Array.isArray(payload)) {
+    return readCards(payload);
+  }
+
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+
+  const value = pick(payload as Record<string, unknown>, ["cards", "cartas"]);
+
+  return value === undefined ? null : readCards(value);
+}
+
+/** Lee las palabras prohibidas de una respuesta del proveedor. */
+function readCandidates(payload: unknown): string[] | null {
+  if (Array.isArray(payload)) {
+    return readTextList(payload, CANDIDATE_KEYS);
+  }
+
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+
+  const value = pick(payload as Record<string, unknown>, ["candidates", "palabras"]);
+
+  return value === undefined ? null : readTextList(value, CANDIDATE_KEYS);
+}
+
+/** Saca el JSON del contenido: el proveedor a veces lo envuelve en un bloque. */
+function parseContent(content: string): unknown {
+  const trimmed = content.trim();
+  const fenced = /^```[a-zA-Z]*\s*([\s\S]*?)\s*```$/u.exec(trimmed);
+
+  return JSON.parse(fenced?.[1] ?? trimmed);
+}
 
 const SYSTEM_PROMPT = [
   "Generas contenido para un juego de taboo en español.",
@@ -102,13 +272,34 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
   const apiKey = options.apiKey.trim();
   const fetchImpl: AdminFetch = options.fetchImpl ?? ((input, init) => fetch(input, init));
 
-  async function request(
-    userPrompt: string,
-    signal: AbortSignal | undefined,
-    requestedCards = 1,
-    model: DeepSeekModel = DEFAULT_DEEPSEEK_MODEL,
-    timeoutMs?: number,
-  ): Promise<{ payload: unknown; usage: ProviderUsage }> {
+  /** Avisa una respuesta ilegible sin exponer su contenido. */
+  function reportInvalid(detail: InvalidResponseDetail): void {
+    try {
+      options.onInvalidResponse?.(detail);
+    } catch {
+      /* Un diagnóstico fallido nunca rompe la generación. */
+    }
+  }
+
+  interface ProviderRequest {
+    readonly prompt: string;
+    /** Fase de la llamada: sirve para el diagnóstico. */
+    readonly phase: string;
+    readonly signal?: AbortSignal | undefined;
+    readonly requestedCards?: number | undefined;
+    readonly model?: DeepSeekModel | undefined;
+    readonly timeoutMs?: number | undefined;
+    readonly maxOutputTokens?: number | undefined;
+  }
+
+  async function request(input: ProviderRequest): Promise<{
+    payload: unknown;
+    usage: ProviderUsage;
+    contentLength: number;
+  }> {
+    const requestedCards = input.requestedCards ?? 1;
+    const model = input.model ?? DEFAULT_DEEPSEEK_MODEL;
+
     if (!DEEPSEEK_MODELS.includes(model)) {
       throw new AdminError(400, "invalid_model", "Unsupported DeepSeek model");
     }
@@ -118,14 +309,14 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         controller.abort();
       },
       options.timeoutMs ??
-        timeoutMs ??
+        input.timeoutMs ??
         (requestedCards > 5 ? DEEPSEEK_BATCH_TIMEOUT_MS : DEEPSEEK_TIMEOUT_MS),
     );
     const onAbort = (): void => {
       controller.abort();
     };
 
-    signal?.addEventListener("abort", onAbort);
+    input.signal?.addEventListener("abort", onAbort);
 
     try {
       const response = await fetchImpl(DEEPSEEK_ENDPOINT, {
@@ -140,6 +331,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           response_format: { type: "json_object" },
           max_tokens:
             options.maxOutputTokens ??
+            input.maxOutputTokens ??
             Math.max(
               DEEPSEEK_MAX_OUTPUT_TOKENS,
               Math.min(DEFAULT_BATCH_SIZE, requestedCards) * 400,
@@ -147,7 +339,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           stream: false,
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
+            { role: "user", content: input.prompt },
           ],
         }),
         signal: controller.signal,
@@ -165,6 +357,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       const parsed = completionSchema.safeParse(raw);
 
       if (!parsed.success) {
+        reportInvalid({ phase: input.phase, reason: "schema", contentLength: 0, payloadKeys: [] });
         throw new AdminError(
           503,
           "provider_invalid_response",
@@ -172,13 +365,36 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         );
       }
 
-      const content = parsed.data.choices[0]?.message.content ?? "";
+      const choice = parsed.data.choices[0];
+      const content = choice?.message.content ?? "";
+
+      // Una respuesta cortada no es una respuesta inválida: se distingue para
+      // poder reintentar con más presupuesto y para explicarlo en el panel.
+      if (choice?.finish_reason === "length") {
+        reportInvalid({
+          phase: input.phase,
+          reason: "truncated",
+          contentLength: content.length,
+          payloadKeys: [],
+        });
+        throw new AdminError(
+          503,
+          "provider_response_truncated",
+          "The generation provider's answer was cut off",
+        );
+      }
 
       let payload: unknown;
 
       try {
-        payload = JSON.parse(content);
+        payload = parseContent(content);
       } catch {
+        reportInvalid({
+          phase: input.phase,
+          reason: "not_json",
+          contentLength: content.length,
+          payloadKeys: [],
+        });
         throw new AdminError(
           503,
           "provider_invalid_response",
@@ -192,6 +408,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           inputTokens: parsed.data.usage?.prompt_tokens ?? 0,
           outputTokens: parsed.data.usage?.completion_tokens ?? 0,
         },
+        contentLength: content.length,
       };
     } catch (error) {
       if (error instanceof AdminError) {
@@ -201,7 +418,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       throw new AdminError(503, "provider_unavailable", "The generation provider is unavailable");
     } finally {
       clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
+      input.signal?.removeEventListener("abort", onAbort);
     }
   }
 
@@ -214,8 +431,9 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       const excluded = input.excludedObjectives;
       const avoid = excluded.length > 0 ? excluded.join(", ") : "ninguno";
 
-      const { payload, usage } = await request(
-        [
+      const { payload, usage, contentLength } = await request({
+        phase: "cards",
+        prompt: [
           `Tema: "${input.theme}".`,
           `Genera ${input.count} cartas de taboo. Para cada carta:`,
           input.allowProperNames
@@ -239,14 +457,20 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
             : []),
           'Responde con {"cards":[{"objective":"...","candidates":["..."]}]}.',
         ].join(" "),
-        input.signal,
-        input.count,
-        input.model,
-      );
+        signal: input.signal,
+        requestedCards: input.count,
+        model: input.model,
+      });
 
-      const parsed = cardsSchema.safeParse(payload);
+      const parsed = readProposedCards(payload);
 
-      if (!parsed.success) {
+      if (parsed === null) {
+        reportInvalid({
+          phase: "cards",
+          reason: "shape",
+          contentLength,
+          payloadKeys: payloadKeysOf(payload),
+        });
         throw new AdminError(
           503,
           "provider_invalid_response",
@@ -256,7 +480,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
 
       return {
         data: {
-          cards: parsed.data.cards.slice(0, input.count).map((card) => ({
+          cards: parsed.slice(0, input.count).map((card) => ({
             objective: card.objective,
             candidates: card.candidates.slice(0, MAX_CANDIDATES_PER_CARD),
           })),
@@ -271,8 +495,9 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       const excluded = input.excludedObjectives.slice(-MAX_GENERATION_COUNT);
       const avoid = excluded.length > 0 ? excluded.join(", ") : "ninguno";
 
-      const { payload, usage } = await request(
-        [
+      const { payload, usage, contentLength } = await request({
+        phase: "objectives",
+        prompt: [
           `Tema: "${input.theme}".`,
           `Propone ${input.count} objetivos distintos de cartas de taboo para ese tema.`,
           input.allowProperNames
@@ -285,15 +510,22 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           `No repitas ninguno de estos objetivos ya usados en el mazo: ${avoid}.`,
           'Responde con {"objectives":["...","..."]}.',
         ].join(" "),
-        input.signal,
-        input.count,
-        input.model,
-        DEEPSEEK_OBJECTIVES_TIMEOUT_MS,
-      );
+        signal: input.signal,
+        requestedCards: input.count,
+        model: input.model,
+        timeoutMs: DEEPSEEK_OBJECTIVES_TIMEOUT_MS,
+        maxOutputTokens: DEEPSEEK_OBJECTIVES_MAX_OUTPUT_TOKENS,
+      });
 
-      const parsed = objectivesSchema.safeParse(payload);
+      const parsed = readObjectives(payload);
 
-      if (!parsed.success) {
+      if (parsed === null) {
+        reportInvalid({
+          phase: "objectives",
+          reason: "shape",
+          contentLength,
+          payloadKeys: payloadKeysOf(payload),
+        });
         throw new AdminError(
           503,
           "provider_invalid_response",
@@ -302,7 +534,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       }
 
       return {
-        data: { objectives: parsed.data.objectives.slice(0, input.count) },
+        data: { objectives: parsed.slice(0, input.count) },
         usage,
       };
     },
@@ -312,8 +544,9 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
     ): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
       const objectives = input.objectives.map((objective, index) => `${index + 1}) "${objective}"`);
 
-      const { payload, usage } = await request(
-        [
+      const { payload, usage, contentLength } = await request({
+        phase: "batch",
+        prompt: [
           `Tema: "${input.theme}".`,
           `Para cada uno de estos ${input.objectives.length} objetivos, da hasta 12 palabras prohibidas`,
           input.allowProperNames
@@ -332,15 +565,21 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
             : []),
           'Responde con {"cards":[{"objective":"...","candidates":["..."]}]}.',
         ].join(" "),
-        input.signal,
-        input.objectives.length,
-        input.model,
-        DEEPSEEK_BATCH_TIMEOUT_MS,
-      );
+        signal: input.signal,
+        requestedCards: input.objectives.length,
+        model: input.model,
+        timeoutMs: DEEPSEEK_BATCH_TIMEOUT_MS,
+      });
 
-      const parsed = cardsSchema.safeParse(payload);
+      const parsed = readProposedCards(payload);
 
-      if (!parsed.success) {
+      if (parsed === null) {
+        reportInvalid({
+          phase: "batch",
+          reason: "shape",
+          contentLength,
+          payloadKeys: payloadKeysOf(payload),
+        });
         throw new AdminError(
           503,
           "provider_invalid_response",
@@ -350,7 +589,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
 
       return {
         data: {
-          cards: parsed.data.cards.slice(0, input.objectives.length).map((card) => ({
+          cards: parsed.slice(0, input.objectives.length).map((card) => ({
             objective: card.objective,
             candidates: card.candidates.slice(0, MAX_CANDIDATES_PER_CARD),
           })),
@@ -366,8 +605,9 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       const list = (values: readonly string[]): string =>
         values.length > 0 ? values.join(", ") : "ninguna";
 
-      const { payload, usage } = await request(
-        [
+      const { payload, usage, contentLength } = await request({
+        phase: "candidates",
+        prompt: [
           `Tema: "${input.theme}".`,
           `Objetivo de la carta: "${input.objective}".`,
           `Palabras ya propuestas para esta carta: ${list(previous)}.`,
@@ -391,14 +631,20 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
             : []),
           'Responde con {"candidates":["..."]}.',
         ].join(" "),
-        input.signal,
-        1,
-        input.model,
-      );
+        signal: input.signal,
+        requestedCards: 1,
+        model: input.model,
+      });
 
-      const parsed = candidatesSchema.safeParse(payload);
+      const parsed = readCandidates(payload);
 
-      if (!parsed.success) {
+      if (parsed === null) {
+        reportInvalid({
+          phase: "candidates",
+          reason: "shape",
+          contentLength,
+          payloadKeys: payloadKeysOf(payload),
+        });
         throw new AdminError(
           503,
           "provider_invalid_response",
@@ -407,7 +653,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       }
 
       return {
-        data: { candidates: parsed.data.candidates.slice(0, MAX_CANDIDATES_PER_CARD) },
+        data: { candidates: parsed.slice(0, MAX_CANDIDATES_PER_CARD) },
         usage,
       };
     },

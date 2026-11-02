@@ -5,7 +5,7 @@ import {
   selectedCandidates,
   SELECTED_TABOO_WORDS,
 } from "./candidates";
-import { AdminError } from "./errors";
+import { AdminError, isAdminError } from "./errors";
 import { DEFAULT_DEEPSEEK_MODEL } from "./settings";
 import type {
   AdminClock,
@@ -28,6 +28,28 @@ export class LeaseLostError extends Error {
     super("The job lost its lease");
     this.name = "LeaseLostError";
   }
+}
+
+/**
+ * Cuántos objetivos ya usados se le recuerdan al proveedor en el reintento.
+ *
+ * El primer intento manda la lista entera; si la respuesta llega ilegible, el
+ * segundo manda sólo los últimos: el modelo recibe menos ruido y la unicidad la
+ * sigue asegurando el filtro local (`acceptObjectives`).
+ */
+const RETRY_EXCLUDED_OBJECTIVES = 200;
+
+/**
+ * `true` cuando el fallo del proveedor se puede reintentar.
+ *
+ * Sólo una respuesta ilegible o cortada vale el reintento: el proveedor caído
+ * o la clave vencida no se arreglan preguntando otra vez.
+ */
+function isRetryableProviderError(error: unknown): boolean {
+  return (
+    isAdminError(error) &&
+    (error.code === "provider_invalid_response" || error.code === "provider_response_truncated")
+  );
 }
 
 export interface ProcessJobDeps {
@@ -218,7 +240,7 @@ async function runGeneration(
 
       await renewLease(deps, job, fence);
 
-      const collected = await requestObjectives(deps, job, fence, state, {
+      const collected = await requestObjectivesWithRetry(deps, job, fence, state, {
         theme: current.theme,
         ...(current.allowProperNames ? { allowProperNames: true } : {}),
         count: missing,
@@ -332,7 +354,9 @@ async function runGeneration(
     throw new AdminError(
       503,
       "incomplete_batch",
-      `Only ${state.processed} of ${job.requested} cards could be generated`,
+      emptyObjectiveRuns >= 2
+        ? `The theme has no new objectives left. Only ${state.processed} of ${job.requested} cards could be generated`
+        : `Only ${state.processed} of ${job.requested} cards could be generated`,
     );
   }
 
@@ -600,6 +624,47 @@ async function requestObjectives(
   });
 
   return { objectives: result.data.objectives, usage: result.usage };
+}
+
+/**
+ * Pide objetivos al proveedor y reintenta una vez si la respuesta llega
+ * ilegible.
+ *
+ * Agregar cartas a un mazo que ya tiene muchas manda al modelo una lista
+ * larguísima de objetivos ya usados: una respuesta mal formada (o cortada)
+ * dejaba el trabajo muerto sin generar ni una carta. El segundo intento recorta
+ * la lista que se le recuerda — la unicidad la sigue asegurando el filtro
+ * local — y consume su llamada del presupuesto como cualquier otra.
+ */
+async function requestObjectivesWithRetry(
+  deps: ProcessJobDeps,
+  job: AdminJob,
+  fence: JobFence,
+  state: JobState,
+  input: {
+    theme: string;
+    count: number;
+    allowProperNames?: boolean;
+    excludedObjectives: readonly string[];
+    signal?: AbortSignal;
+  },
+): Promise<{ objectives: readonly string[]; usage: ProviderUsage }> {
+  try {
+    return await requestObjectives(deps, job, fence, state, input);
+  } catch (error) {
+    if (!isRetryableProviderError(error)) {
+      throw error;
+    }
+
+    deps.log.warn("admin provider answer was unusable, retrying with a shorter list", {
+      jobId: job.id,
+    });
+
+    return requestObjectives(deps, job, fence, state, {
+      ...input,
+      excludedObjectives: input.excludedObjectives.slice(-RETRY_EXCLUDED_OBJECTIVES),
+    });
+  }
 }
 
 /** Fase 2: las prohibidas de un lote de objetivos, en una sola llamada. */

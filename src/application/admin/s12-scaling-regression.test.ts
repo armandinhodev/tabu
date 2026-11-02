@@ -143,7 +143,12 @@ describe("S12 scaled generation boundaries", () => {
     await processClaimedJob(deps, claim(buildJob({ requested: 60, ...jobLimitsFor(60) })));
 
     expect(jobs.completed).toEqual([]);
-    expect(jobs.failed).toEqual([{ id: "job-1", error: "Only 50 of 60 cards could be generated" }]);
+    expect(jobs.failed).toEqual([
+      {
+        id: "job-1",
+        error: "The theme has no new objectives left. Only 50 of 60 cards could be generated",
+      },
+    ]);
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(50);
     expect(decks.projections.at(-1)?.cards).toHaveLength(50);
     expect(await jobs.findById("job-1")).toMatchObject({ status: "failed", processed: 50 });

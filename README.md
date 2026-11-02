@@ -143,6 +143,9 @@ Al crear, generar más cartas o reemplazar una carta, el progreso muestra de inm
 cartas. Al completar el trabajo, la barra desaparece y queda una confirmación breve;
 si falla, el error permanece visible. El resumen de un trabajo finalizado se descarta al cambiar
 de pestaña y no reaparece al volver; un trabajo en curso mantiene su progreso visible.
+Una respuesta del proveedor que llega ilegible o cortada no deja el trabajo muerto a la primera:
+la fase de objetivos reintenta una vez con una lista más corta de objetivos ya usados. Si la
+temática del mazo ya no tiene objetivos nuevos, el error lo dice.
 
 En **Mazos**, el catálogo identifica el mazo seleccionado con texto e icono. Cada mazo abre
 **Cartas** por defecto; allí se revisan las cartas y **Generar más cartas** despliega la cantidad
