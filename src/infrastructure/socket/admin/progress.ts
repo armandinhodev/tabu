@@ -390,8 +390,15 @@ export function attachAdminProgress(
     }
 
     // Lo publicado durante la lectura es más nuevo que el snapshot leído.
+    // El atajo sólo vale para el MISMO trabajo: la respuesta a una
+    // suscripción es siempre el trabajo pedido, nunca el anterior. Con el
+    // atajo entre trabajos, un panel que cambia de trabajo recibía el estado
+    // del viejo y se quedaba sin progreso del nuevo.
     const delivered = current.delivered;
-    const snapshot = delivered !== null && delivered.updatedAt >= job.updatedAt ? delivered : job;
+    const snapshot =
+      delivered !== null && delivered.id === job.id && delivered.updatedAt >= job.updatedAt
+        ? delivered
+        : job;
 
     current.delivered = snapshot;
     respond({ ok: true, job: snapshot, seq: nextSeq(current) });

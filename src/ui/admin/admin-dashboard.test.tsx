@@ -66,6 +66,7 @@ let deferJobResponse: boolean;
 let resolveJobResponse: ((response: Response) => void) | null;
 let catalog: CatalogDeck[];
 let globalModel: string;
+let generateJobPayload: Record<string, unknown>;
 let deferGenerateResponse: boolean;
 let resolveGenerateResponse: ((response: Response) => void) | null;
 let deferCatalogResponse: boolean;
@@ -84,6 +85,13 @@ beforeEach(() => {
   resolveJobResponse = null;
   catalog = [deck];
   globalModel = "deepseek-flash";
+  generateJobPayload = {
+    id: "job-1",
+    deckId: deck.id,
+    status: "completed",
+    processed: 5,
+    requested: 5,
+  };
   deferGenerateResponse = false;
   resolveGenerateResponse = null;
   deferCatalogResponse = false;
@@ -108,9 +116,7 @@ beforeEach(() => {
             resolveGenerateResponse = resolve;
           });
         }
-        return Response.json({
-          data: { id: "job-1", deckId: deck.id, status: "completed", processed: 5, requested: 5 },
-        });
+        return Response.json({ data: generateJobPayload });
       }
       if (url === "/api/admin/decks" && method === "POST")
         return Response.json({ data: { ...deck, id: "deck-2", name: "Sports" } });
@@ -709,6 +715,35 @@ describe("AdminDashboard", () => {
       within(progress).getByRole("status", { name: "Solicitud en cola para DeepSeek…" }),
     ).toBeVisible();
     expect(within(progress).queryByText(/Progreso en vivo/)).toBeNull();
+  });
+
+  it("shows the live progress while adding cards to an existing deck", async () => {
+    generateJobPayload = {
+      id: "job-2",
+      deckId: "deck-1",
+      status: "queued",
+      processed: 0,
+      requested: 5,
+    };
+    jobPayload = { id: "job-2", status: "queued", processed: 0, requested: 5 };
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generar 5 cartas más" }));
+
+    const progress = await screen.findByRole("region", { name: "Progreso de generación" });
+    expect(progress).toHaveTextContent("0/5 cartas");
+    await waitFor(() => expect(socketMock.subscribe).toHaveBeenCalledWith("job-2"));
+
+    socketMock.handlers?.onJob({
+      id: "job-2",
+      status: "running",
+      processed: 2,
+      requested: 5,
+      updatedAt: "2026-11-02T20:00:00.000Z",
+    });
+
+    expect(await screen.findByText(/2\/5 cartas/)).toBeVisible();
   });
 
   it("shows the connection legend only when the progress channel degrades", async () => {

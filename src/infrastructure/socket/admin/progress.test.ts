@@ -335,6 +335,47 @@ describe("admin progress socket", () => {
     expect(playerEvents).toEqual([]);
   }, 30_000);
 
+  it("answers the subscription of a new job with that job, never with the previous one", async () => {
+    const config = readAdminConfig(process.env);
+    const token = createAdminSession(config!, harness.clock.now).token;
+    const admin = adminClient(harness, { token });
+
+    await waitForConnect(admin);
+
+    // El socket sigue un trabajo que acaba de terminar.
+    const first = await emitAck<AdminSubscribeAck>(admin, ADMIN_SUBSCRIBE_EVENT, {
+      jobId: "job-1",
+    });
+    expect(first).toMatchObject({ ok: true, job: { id: "job-1" } });
+
+    harness.attachment.publish(
+      job({
+        id: "job-1",
+        status: "completed",
+        processed: 5,
+        updatedAt: "2026-10-29T12:05:00.000Z",
+      }),
+    );
+    await delay(50);
+
+    // El administrador pide otro trabajo: la respuesta tiene que ser del nuevo.
+    harness.jobs.set(
+      "job-2",
+      job({
+        id: "job-2",
+        status: "queued",
+        processed: 0,
+        updatedAt: "2026-10-29T12:04:00.000Z",
+      }),
+    );
+
+    const second = await emitAck<AdminSubscribeAck>(admin, ADMIN_SUBSCRIBE_EVENT, {
+      jobId: "job-2",
+    });
+
+    expect(second).toMatchObject({ ok: true, job: { id: "job-2" } });
+  }, 30_000);
+
   it("does not deliver a progress event for a job the socket did not subscribe to", async () => {
     const config = readAdminConfig(process.env);
     const token = createAdminSession(config!, harness.clock.now).token;
