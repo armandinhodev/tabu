@@ -187,6 +187,18 @@ pertenencia a un equipo. `:hover` sube a `--bg-raised-hover` con sombra `--eleva
 **Chip de equipo / puntaje** — alto 40px, radio 12px, fondo del color de equipo al 18% + borde del
 color de equipo, cifra en el color del equipo (tabular, 800).
 
+**Menú del rail de partida** — el rail derecho de ≥1280px cierra con un grupo de controles
+("Acciones") y, separado por una línea, la salida de la partida.
+
+- Los controles del grupo usan el patrón de **control sobre panel** (fondo elevado + borde de
+  control): "Ajustar puntaje" (solo host), "Reglas de la casa" y el silencio.
+- Ícono a la izquierda y **texto alineado al mismo lado en todos** (nunca una mezcla de centrado
+  y alineado a la izquierda dentro del mismo menú).
+- El silencio va **con texto visible** ("Silenciar sonido" / "Activar sonido"), no como ícono
+  suelto: su estado se lee sin hover, y el nombre accesible es el texto que se ve.
+- "Salir de la partida" queda **fuera del grupo**, con línea de separación y peso visual bajo:
+  es la acción destructiva con confirmación (§1.7) y no compite con los controles de cada turno.
+
 **Tarjeta de palabra** — radio 24px, fondo `--bg-surface-2`, borde `--border-subtle`, min-height 38vh
 en mobile; el padding interior nunca menos de 24px.
 

@@ -347,3 +347,105 @@ it("con mazo entero la ronda no inventa un total", () => {
   expect(screen.getAllByText(/Ronda 4/)).toHaveLength(2);
   expect(screen.queryByText(/Ronda 4 de 1/)).not.toBeInTheDocument();
 });
+
+it("agrupa las acciones de la partida y deja la salida de la sala aparte", () => {
+  context.state = toGameState(
+    makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  const sidebar = screen.getByRole("complementary", { name: "Información del turno" });
+  const actions = within(sidebar).getByRole("group", { name: "Acciones" });
+
+  expect(within(actions).getByRole("button", { name: "Ajustar puntaje" })).toBeInTheDocument();
+  expect(within(actions).getByRole("button", { name: "Reglas de la casa" })).toBeInTheDocument();
+  expect(
+    within(actions).getByRole("button", { name: /silenciar sonido|activar sonido/i }),
+  ).toBeInTheDocument();
+
+  // Salir no compite con los controles de uso frecuente: vive fuera del grupo.
+  const leave = within(sidebar).getByRole("button", { name: "Salir de la partida" });
+  expect(actions).not.toContainElement(leave);
+});
+
+it("alinea el texto de todos los controles del menú al mismo lado", () => {
+  context.state = toGameState(
+    makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  const sidebar = screen.getByRole("complementary", { name: "Información del turno" });
+  const actions = within(sidebar).getByRole("group", { name: "Acciones" });
+  const controls = [
+    within(actions).getByRole("button", { name: "Ajustar puntaje" }),
+    within(actions).getByRole("button", { name: "Reglas de la casa" }),
+    within(actions).getByRole("button", { name: /silenciar sonido|activar sonido/i }),
+    within(sidebar).getByRole("button", { name: "Salir de la partida" }),
+  ];
+
+  for (const control of controls) {
+    expect(control).toHaveClass("w-full");
+    expect(control).toHaveClass("justify-start");
+  }
+});
+
+it("da peso visual a los controles del menú y deja la salida en segundo plano", () => {
+  context.state = toGameState(
+    makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  const sidebar = screen.getByRole("complementary", { name: "Información del turno" });
+  const actions = within(sidebar).getByRole("group", { name: "Acciones" });
+
+  // Control sobre panel (§6): fondo elevado y borde de control.
+  for (const control of [
+    within(actions).getByRole("button", { name: "Ajustar puntaje" }),
+    within(actions).getByRole("button", { name: "Reglas de la casa" }),
+    within(actions).getByRole("button", { name: /silenciar sonido|activar sonido/i }),
+  ]) {
+    expect(control).toHaveClass("bg-raised");
+    expect(control).toHaveClass("border-line-control");
+  }
+
+  const leave = within(sidebar).getByRole("button", { name: "Salir de la partida" });
+  expect(leave).not.toHaveClass("bg-raised");
+});
+
+it("el silencio del menú muestra su estado con texto, no solo con el ícono", () => {
+  context.state = toGameState(
+    makeGame({ status: "playing", currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }) }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  const sidebar = screen.getByRole("complementary", { name: "Información del turno" });
+  const actions = within(sidebar).getByRole("group", { name: "Acciones" });
+  const mute = within(actions).getByRole("button", { name: /silenciar sonido|activar sonido/i });
+
+  expect(mute.textContent).toMatch(/silenciar sonido|activar sonido/i);
+  expect(mute).toHaveAccessibleName(mute.textContent ?? "");
+  // El texto dice la acción disponible: el estado se lee sin hover ni ícono.
+  expect(mute.textContent).toBe(
+    mute.getAttribute("aria-pressed") === "true" ? "Activar sonido" : "Silenciar sonido",
+  );
+});

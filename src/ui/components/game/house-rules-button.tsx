@@ -25,16 +25,17 @@ interface HouseRulesButtonProps {
 export function HouseRulesButton({ rules, variant = "icon", className }: HouseRulesButtonProps) {
   const [open, setOpen] = useState(false);
   const isIcon = variant === "icon";
+  const isBlock = variant === "block";
 
   return (
     <>
       <Button
-        variant="quiet"
+        variant={isBlock ? "tinted" : "quiet"}
         size={isIcon ? "icon" : "md"}
         aria-label={isIcon ? "Reglas" : "Reglas de la casa"}
         title="Reglas de la casa"
         className={cn(
-          variant === "block" && "w-full justify-start",
+          isBlock && "w-full justify-start",
           variant === "fab" &&
             "fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 rounded-full border border-line bg-surface-2 px-4 shadow-float hover:bg-surface-3",
           className,

@@ -192,10 +192,7 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
             </section>
           </>
         ) : null}
-        <div className="hidden items-center justify-between gap-2 xl:flex">
-          <h2 className="text-caption text-fg-subtle uppercase">Tu rol</h2>
-          <MuteButton />
-        </div>
+        <h2 className="hidden text-caption text-fg-subtle uppercase xl:block">Tu rol</h2>
         <div className="hidden rounded-lg border border-line bg-surface p-4 xl:block">
           <p className="text-h3 font-semibold text-fg">
             {role === "DESCRIBER"
@@ -207,27 +204,46 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
                   : "Mirás"}
           </p>
         </div>
-        {state.me.isHost ? (
+        {/*
+          Menú del rail: los controles de uso frecuente van juntos, sobre el patrón
+          de control elevado (§6), con el ícono a la izquierda y el texto alineado
+          al mismo lado en todos. Salir de la partida queda fuera del grupo, con
+          una línea de separación y peso visual bajo: es la acción destructiva con
+          confirmación (§1.7) y no compite con lo que se usa en cada turno.
+        */}
+        <div
+          role="group"
+          aria-labelledby="game-actions-heading"
+          className="hidden xl:flex xl:flex-col xl:gap-2"
+        >
+          <h2 id="game-actions-heading" className="text-caption text-fg-subtle uppercase">
+            Acciones
+          </h2>
+          {state.me.isHost ? (
+            <Button
+              variant="tinted"
+              block
+              className="justify-start"
+              onClick={() => setAdjustOpen(true)}
+            >
+              <Scale aria-hidden="true" className="size-4" />
+              Ajustar puntaje
+            </Button>
+          ) : null}
+          <HouseRulesButton rules={rules} variant="block" />
+          <MuteButton variant="block" />
+        </div>
+        <div className="hidden border-t border-line pt-3 xl:block">
           <Button
             variant="quiet"
             block
-            className="hidden xl:inline-flex"
-            onClick={() => setAdjustOpen(true)}
+            className="justify-start"
+            onClick={() => setConfirmLeave(true)}
           >
-            <Scale aria-hidden="true" className="size-4" />
-            Ajustar puntaje
+            <LogOut aria-hidden="true" className="size-4" />
+            Salir de la partida
           </Button>
-        ) : null}
-        <HouseRulesButton rules={rules} variant="block" className="hidden xl:inline-flex" />
-        <Button
-          variant="quiet"
-          block
-          className="hidden xl:inline-flex"
-          onClick={() => setConfirmLeave(true)}
-        >
-          <LogOut aria-hidden="true" className="size-4" />
-          Salir de la partida
-        </Button>
+        </div>
       </aside>
 
       <ScoreAdjustDialog
