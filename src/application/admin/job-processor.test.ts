@@ -492,6 +492,65 @@ describe("processClaimedJob (batch flow)", () => {
     expect(jobs.failed).toHaveLength(1);
   });
 
+  it("retries the candidates batch when the provider answers with an unusable response", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    queueCards(provider, [{ objective: "fuego", candidates: SIX_WORDS }]);
+
+    const answer = provider.proposeCandidatesBatch.bind(provider);
+    let attempts = 0;
+    provider.proposeCandidatesBatch = async (input) => {
+      attempts += 1;
+
+      if (attempts === 1) {
+        throw new AdminError(
+          503,
+          "provider_invalid_response",
+          "The generation provider returned an invalid response",
+        );
+      }
+
+      return answer(input);
+    };
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    expect(attempts).toBe(2);
+    expect(jobs.failed).toEqual([]);
+    expect(jobs.completed).toHaveLength(1);
+    expect(decks.decks.get("deck-1")?.cards).toHaveLength(1);
+  });
+
+  it("retries the completion of a card when the provider answers with an unusable response", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    queueCards(provider, [{ objective: "fuego", candidates: SIX_WORDS.slice(0, 5) }]);
+    provider.completionQueue.push([SIX_WORDS[5]!]);
+
+    const answer = provider.proposeCandidates.bind(provider);
+    let attempts = 0;
+    provider.proposeCandidates = async (input) => {
+      attempts += 1;
+
+      if (attempts === 1) {
+        throw new AdminError(
+          503,
+          "provider_response_truncated",
+          "The generation provider's answer was cut off",
+        );
+      }
+
+      return answer(input);
+    };
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    expect(attempts).toBe(2);
+    expect(jobs.failed).toEqual([]);
+    expect(jobs.completed).toHaveLength(1);
+    expect(decks.decks.get("deck-1")?.cards).toHaveLength(1);
+  });
+
   it("keeps a forbidden word that another card already used", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });

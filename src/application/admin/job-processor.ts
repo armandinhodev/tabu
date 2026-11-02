@@ -52,6 +52,36 @@ function isRetryableProviderError(error: unknown): boolean {
   );
 }
 
+/**
+ * Ejecuta una llamada al proveedor y la reintenta una vez si la respuesta
+ * llega ilegible o cortada.
+ *
+ * Una respuesta que no se puede leer no es un fallo del trabajo: el proveedor
+ * contesta una vez con una forma inesperada y la siguiente con una buena. El
+ * reintento consume su llamada del presupuesto como cualquier otra (la reserva
+ * vive dentro de la llamada) y no repite ninguna escritura: la carta se
+ * agrega recién después de tener sus palabras.
+ */
+async function withProviderRetry<T>(
+  deps: ProcessJobDeps,
+  job: AdminJob,
+  phase: string,
+  call: () => Promise<T>,
+  retry?: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    if (!isRetryableProviderError(error)) {
+      throw error;
+    }
+
+    deps.log.warn("admin provider answer was unusable, retrying", { jobId: job.id, phase });
+
+    return (retry ?? call)();
+  }
+}
+
 export interface ProcessJobDeps {
   readonly decks: AdminDeckStore;
   readonly jobs: AdminJobStore;
@@ -278,13 +308,15 @@ async function runGeneration(
 
     await renewLease(deps, job, fence);
 
-    const batch = await requestCandidatesBatch(deps, job, fence, state, {
-      ...(current.rules ? { rules: current.rules } : {}),
-      theme: current.theme,
-      ...(current.allowProperNames ? { allowProperNames: true } : {}),
-      objectives: chunk,
-      ...(signal === undefined ? {} : { signal }),
-    });
+    const batch = await withProviderRetry(deps, job, "candidates-batch", () =>
+      requestCandidatesBatch(deps, job, fence, state, {
+        ...(current.rules ? { rules: current.rules } : {}),
+        theme: current.theme,
+        ...(current.allowProperNames ? { allowProperNames: true } : {}),
+        objectives: chunk,
+        ...(signal === undefined ? {} : { signal }),
+      }),
+    );
 
     state.usage = addUsage(state.usage, batch.usage);
 
@@ -518,16 +550,18 @@ async function buildCard(
 
     await renewLease(deps, job, fence);
 
-    const completion = await requestCompletion(deps, job, fence, state, {
-      ...(input.rules ? { rules: input.rules } : {}),
-      ...(input.allowProperNames ? { allowProperNames: true } : {}),
-      objective: input.objective,
-      theme: input.theme,
-      previousWords: previous,
-      selected: evaluated.recognizedWords,
-      rejected,
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-    });
+    const completion = await withProviderRetry(deps, job, "candidates", () =>
+      requestCompletion(deps, job, fence, state, {
+        ...(input.rules ? { rules: input.rules } : {}),
+        ...(input.allowProperNames ? { allowProperNames: true } : {}),
+        objective: input.objective,
+        theme: input.theme,
+        previousWords: previous,
+        selected: evaluated.recognizedWords,
+        rejected,
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+      }),
+    );
 
     state.usage = addUsage(state.usage, completion.usage);
 
@@ -649,22 +683,17 @@ async function requestObjectivesWithRetry(
     signal?: AbortSignal;
   },
 ): Promise<{ objectives: readonly string[]; usage: ProviderUsage }> {
-  try {
-    return await requestObjectives(deps, job, fence, state, input);
-  } catch (error) {
-    if (!isRetryableProviderError(error)) {
-      throw error;
-    }
-
-    deps.log.warn("admin provider answer was unusable, retrying with a shorter list", {
-      jobId: job.id,
-    });
-
-    return requestObjectives(deps, job, fence, state, {
-      ...input,
-      excludedObjectives: input.excludedObjectives.slice(-RETRY_EXCLUDED_OBJECTIVES),
-    });
-  }
+  return withProviderRetry(
+    deps,
+    job,
+    "objectives",
+    () => requestObjectives(deps, job, fence, state, input),
+    () =>
+      requestObjectives(deps, job, fence, state, {
+        ...input,
+        excludedObjectives: input.excludedObjectives.slice(-RETRY_EXCLUDED_OBJECTIVES),
+      }),
+  );
 }
 
 /** Fase 2: las prohibidas de un lote de objetivos, en una sola llamada. */
