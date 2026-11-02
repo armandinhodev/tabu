@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import type { GameStateView } from "@/application/dto/game-state";
 import { toGameState } from "@/application/dto/game-state";
-import { makeGame, makeTurn } from "@/domain/__fixtures__/game";
+import { makeGame, makeSettings, makeTurn } from "@/domain/__fixtures__/game";
 import { PlayerId } from "@/domain/value-objects/PlayerId";
 import { SoundProvider } from "@/ui/providers/sound-provider";
 import { TEST_HOUSE_RULES } from "@/ui/__fixtures__/house-rules";
@@ -308,3 +308,42 @@ it.each(["p1", "p2", "p3"])(
     }
   },
 );
+it("muestra la ronda actual en el encabezado y en el rail de equipos", () => {
+  context.state = toGameState(
+    makeGame({
+      status: "playing",
+      round: 2,
+      settings: makeSettings({ rounds: 3 }),
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+    }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  // Encabezado móvil y rail de escritorio: los dos nombran la misma ronda.
+  expect(screen.getAllByText(/Ronda 2 de 3/)).toHaveLength(2);
+});
+
+it("con mazo entero la ronda no inventa un total", () => {
+  context.state = toGameState(
+    makeGame({
+      status: "playing",
+      round: 4,
+      settings: makeSettings({ rounds: 1 }),
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+    }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+
+  expect(screen.getAllByText(/Ronda 4/)).toHaveLength(2);
+  expect(screen.queryByText(/Ronda 4 de 1/)).not.toBeInTheDocument();
+});

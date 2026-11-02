@@ -78,12 +78,13 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
   const isRival = role === "RIVAL";
   const isGuesser = role === "ACTIVE";
   const activeTeam = state.teams.find((team) => team.id === turn.teamId) ?? null;
+  const round = roundLabel(state.round, state.settings.rounds);
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col gap-4 px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 xl:grid xl:grid-cols-[240px_minmax(0,1fr)_256px] xl:items-start xl:gap-6 xl:pt-8">
       <div className="mb-2 flex items-center justify-between xl:hidden">
         <span className="text-caption text-fg-muted uppercase">
-          {state.code} · ronda {state.round}
+          {state.code} · {round}
         </span>
         <div role="group" aria-label="Controles de la partida" className="flex items-center gap-2">
           {state.me.isHost ? (
@@ -111,7 +112,10 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
       </div>
 
       <aside className="hidden xl:flex xl:flex-col xl:gap-3">
-        <h2 className="text-caption text-fg-subtle uppercase">Equipos</h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-caption text-fg-subtle uppercase">Equipos</h2>
+          <span className="text-caption text-fg-muted uppercase">{round}</span>
+        </div>
         {state.teams.map((team) => (
           <TeamPanel
             key={team.id}
@@ -243,4 +247,12 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
       />
     </main>
   );
+}
+
+/**
+ * Ronda actual. El tope solo se nombra cuando la partida tiene más de una:
+ * con `rounds = 1` se juega el mazo entero y no hay "de N" que mostrar.
+ */
+function roundLabel(round: number, rounds: number): string {
+  return rounds > 1 ? `Ronda ${round} de ${rounds}` : `Ronda ${round}`;
 }
