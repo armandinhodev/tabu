@@ -123,6 +123,7 @@ function appearanceFor(message: GuessMessage): MessageAppearance {
 export function GuessChat({ active, messages, onGuess, disabled = false }: GuessChatProps) {
   const [answer, setAnswer] = useState("");
   const logRef = useRef<HTMLUListElement>(null);
+  const answerRef = useRef<HTMLInputElement>(null);
   const visibleMessages = messages
     .filter((message) => message.kind !== "turn" && (active || isPublicMessage(message)))
     .slice(-5);
@@ -136,12 +137,18 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
   const submit = (): void => {
     const trimmed = answer.trim();
 
+    // Se ignora el envío mientras hay uno en vuelo, pero la caja NO se
+    // deshabilita: un input deshabilitado pierde el foco y el que adivina tenía
+    // que volver a hacer click después de cada respuesta.
     if (!active || trimmed === "" || disabled) {
       return;
     }
 
     onGuess(trimmed);
     setAnswer("");
+    // Con el mouse el foco queda en "Enviar": se devuelve a la caja para poder
+    // escribir la próxima palabra sin volver a hacer click.
+    answerRef.current?.focus();
   };
 
   return (
@@ -172,8 +179,8 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
           </label>
           <Input
             id="guess-answer"
+            ref={answerRef}
             value={answer}
-            disabled={disabled}
             placeholder="Escribí tu respuesta"
             onChange={(event) => setAnswer(event.target.value)}
             onKeyDown={(event) => {

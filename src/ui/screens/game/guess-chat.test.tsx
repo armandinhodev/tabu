@@ -244,3 +244,44 @@ it("marks a written answer that hit the card in green and a failed one in amber"
   expect(screen.getByText("Mika escribió:").closest("li")).toHaveClass("border-success/30");
   expect(screen.getByText("Beto escribió:").closest("li")).toHaveClass("border-warning/30");
 });
+it("no deshabilita la caja de respuesta mientras la jugada está en vuelo", () => {
+  // Un input deshabilitado pierde el foco: el que adivina tenía que volver a
+  // hacer click después de cada respuesta, justo cuando cambia la carta.
+  const onGuess = vi.fn();
+  const messages = [{ id: 1, kind: "score" as const, text: "Acierto." }];
+  const { rerender } = render(
+    <GuessChat active messages={messages} onGuess={onGuess} disabled={false} />,
+  );
+
+  const input = screen.getByLabelText("Tu respuesta");
+  input.focus();
+  fireEvent.change(input, { target: { value: "fuego" } });
+
+  rerender(<GuessChat active messages={messages} onGuess={onGuess} disabled />);
+
+  expect(input).toBeEnabled();
+  expect(document.activeElement).toBe(input);
+  expect(input).toHaveValue("fuego");
+});
+
+it("ignora un segundo envío mientras la jugada anterior sigue en vuelo", () => {
+  const onGuess = vi.fn();
+  render(<GuessChat active messages={[]} onGuess={onGuess} disabled />);
+
+  const input = screen.getByLabelText("Tu respuesta");
+  fireEvent.change(input, { target: { value: "fuego" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+
+  expect(onGuess).not.toHaveBeenCalled();
+});
+it("devuelve el foco a la caja después de enviar con el botón", () => {
+  const onGuess = vi.fn();
+  render(<GuessChat active messages={[]} onGuess={onGuess} />);
+
+  const input = screen.getByLabelText("Tu respuesta");
+  fireEvent.change(input, { target: { value: "fuego" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+  expect(onGuess).toHaveBeenCalledWith("fuego");
+  expect(document.activeElement).toBe(input);
+});
