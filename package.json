@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.9.0",
+    "pnpm": ">=11"
   },
   "scripts": {
     "dev": "tsx watch server.ts --dev",
