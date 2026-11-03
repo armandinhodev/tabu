@@ -349,6 +349,7 @@ Los saltos se configuran de 0 a 5 por turno: saltar no resta puntos y 0 desactiv
 | `MONGODB_DB`           | `tabu`                  | Base de datos                                       |
 | `PORT`                 | `3000`                  | Puerto HTTP y de Socket.IO (comparten)              |
 | `HOST`                 | `0.0.0.0`               | Interfaz de escucha (la LAN necesita `0.0.0.0`)     |
+| `PUBLIC_SITE_URL`      | `http://localhost:3000` | URL pública del sitio: la vista previa al compartir    |
 | `SOCKET_CORS_ORIGIN`   | `http://localhost:3000` | Origen permitido por Socket.IO                      |
 | `TURN_SECONDS_DEFAULT` | `60`                    | Duración cuando el host no elige (30, 60, 90 o 120) |
 | `MAX_TEAMS`            | `4`                     | Tope de equipos                                     |
@@ -468,9 +469,18 @@ que más afectan el uso:
   estado de la partida, así el socket y el `playerToken` sobreviven (D44). La única excepción es la
   landing pública: `/` explica el juego y su botón **Jugar** lleva a `/jugar`, donde vive el cliente
   con esa navegación interna.
-- **Vista previa animada con Motion.** La carta de la landing rota entre tres ejemplos y su reloj
-  corre, con la barra de tiempo sincronizada; con `prefers-reduced-motion` la carta y el reloj quedan
-  quietos. El temporizador vive en un hook aparte (`use-turn-preview`) para probarlo sin animaciones.
+- **Vista previa de un turno real.** La landing muestra el juego con sus propios componentes: las
+  palabras prohibidas en columna y el anillo del reloj. El turno está comprimido a 15 segundos para
+  que se vea el estado urgente y **la carta cambia cuando el turno se acaba**, como en la partida.
+  La carta inicial se sirve en el HTML y la animación la mejora al hidratar. Con
+  `prefers-reduced-motion` la carta y el reloj quedan quietos; el temporizador vive en un hook aparte
+  (`use-turn-preview`) para probarlo sin animaciones.
+- **El movimiento ocurre donde se mira.** Cada bloque de la landing se revela cuando entra en la
+  ventana (no cuando carga la página) y la flotación de la carta se detiene si el bloque no está a la
+  vista o la pestaña está en segundo plano. Sin JavaScript el contenido se ve igual: la mejora es
+  progresiva.
+- **Vista previa al compartir.** `/` declara `openGraph` y `twitter` con la imagen del juego
+  (`public/og-game.jpg`). `PUBLIC_SITE_URL` define la URL pública con la que se arman esos enlaces.
 - **Mongo caído no bloquea.** El servidor arranca en modo memoria con un warning (D41).
 - **Sonido sintetizado.** Web Audio sin archivos ni dependencias adicionales: timbres suaves con
   armónicos, transiciones progresivas, ruido filtrado y mezcla con compresión ligera y ambiente corto.
