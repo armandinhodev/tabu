@@ -78,8 +78,10 @@ export interface DeepSeekProviderOptions {
 export interface InvalidResponseDetail {
   /** Fase de la llamada: "objectives", "cards", "batch" o "candidates". */
   readonly phase: string;
-  /** Motivo: "schema", "truncated", "not_json" o "shape". */
+  /** Motivo: "schema", "truncated", "no_answer" o "not_json". */
   readonly reason: string;
+  /** Por qué terminó la respuesta del proveedor ("stop", "length", ...). */
+  readonly finishReason: string | null;
   /** Longitud del contenido recibido: nunca el contenido. */
   readonly contentLength: number;
   /** Claves de primer nivel del payload: nunca los valores. */
@@ -357,7 +359,13 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
       const parsed = completionSchema.safeParse(raw);
 
       if (!parsed.success) {
-        reportInvalid({ phase: input.phase, reason: "schema", contentLength: 0, payloadKeys: [] });
+        reportInvalid({
+          phase: input.phase,
+          reason: "schema",
+          finishReason: null,
+          contentLength: 0,
+          payloadKeys: [],
+        });
         throw new AdminError(
           503,
           "provider_invalid_response",
@@ -367,13 +375,15 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
 
       const choice = parsed.data.choices[0];
       const content = choice?.message.content ?? "";
+      const finishReason = choice?.finish_reason ?? null;
 
       // Una respuesta cortada no es una respuesta inválida: se distingue para
       // poder reintentar con más presupuesto y para explicarlo en el panel.
-      if (choice?.finish_reason === "length") {
+      if (finishReason === "length") {
         reportInvalid({
           phase: input.phase,
           reason: "truncated",
+          finishReason,
           contentLength: content.length,
           payloadKeys: [],
         });
@@ -381,6 +391,23 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           503,
           "provider_response_truncated",
           "The generation provider's answer was cut off",
+        );
+      }
+
+      // El servicio saturado responde con un turno vacío: no es un problema de
+      // la respuesta, es del proveedor y se resuelve preguntando de nuevo.
+      if (finishReason === "insufficient_system_resource") {
+        reportInvalid({
+          phase: input.phase,
+          reason: "no_answer",
+          finishReason,
+          contentLength: content.length,
+          payloadKeys: [],
+        });
+        throw new AdminError(
+          503,
+          "provider_no_answer",
+          "The generation provider could not answer right now",
         );
       }
 
@@ -392,6 +419,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         reportInvalid({
           phase: input.phase,
           reason: "not_json",
+          finishReason,
           contentLength: content.length,
           payloadKeys: [],
         });
@@ -468,6 +496,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         reportInvalid({
           phase: "cards",
           reason: "shape",
+          finishReason: null,
           contentLength,
           payloadKeys: payloadKeysOf(payload),
         });
@@ -523,6 +552,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         reportInvalid({
           phase: "objectives",
           reason: "shape",
+          finishReason: null,
           contentLength,
           payloadKeys: payloadKeysOf(payload),
         });
@@ -577,6 +607,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         reportInvalid({
           phase: "batch",
           reason: "shape",
+          finishReason: null,
           contentLength,
           payloadKeys: payloadKeysOf(payload),
         });
@@ -642,6 +673,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         reportInvalid({
           phase: "candidates",
           reason: "shape",
+          finishReason: null,
           contentLength,
           payloadKeys: payloadKeysOf(payload),
         });

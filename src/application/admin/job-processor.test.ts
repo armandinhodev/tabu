@@ -551,6 +551,35 @@ describe("processClaimedJob (batch flow)", () => {
     expect(decks.decks.get("deck-1")?.cards).toHaveLength(1);
   });
 
+  it("retries when the provider answers nothing because its service is saturated", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    queueCards(provider, [{ objective: "fuego", candidates: SIX_WORDS }]);
+
+    const answer = provider.proposeCandidatesBatch.bind(provider);
+    let attempts = 0;
+    provider.proposeCandidatesBatch = async (input) => {
+      attempts += 1;
+
+      if (attempts === 1) {
+        throw new AdminError(
+          503,
+          "provider_no_answer",
+          "The generation provider could not answer right now",
+        );
+      }
+
+      return answer(input);
+    };
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    expect(attempts).toBe(2);
+    expect(jobs.failed).toEqual([]);
+    expect(jobs.completed).toHaveLength(1);
+    expect(decks.decks.get("deck-1")?.cards).toHaveLength(1);
+  });
+
   it("keeps a forbidden word that another card already used", async () => {
     const { decks, provider, deps, claim } = build();
     decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });

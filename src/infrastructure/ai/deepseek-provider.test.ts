@@ -619,6 +619,28 @@ describe("createDeepSeekProvider", () => {
     ).rejects.toMatchObject({ status: 503, code: "provider_response_truncated" });
   });
 
+  it("tells an empty answer apart from an unusable one", async () => {
+    const diagnostics: { reason: string; finishReason: string | null; contentLength: number }[] =
+      [];
+    const { fetch } = fakeFetch(completion("", undefined, "insufficient_system_resource"));
+    const provider = createDeepSeekProvider({
+      apiKey: "secret-key",
+      fetchImpl: fetch,
+      onInvalidResponse: (detail) => diagnostics.push(detail),
+    });
+
+    await expect(
+      provider.proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] }),
+    ).rejects.toMatchObject({ status: 503, code: "provider_no_answer" });
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      reason: "no_answer",
+      finishReason: "insufficient_system_resource",
+      contentLength: 0,
+    });
+  });
+
   it("gives the objectives call room to answer a long list of used objectives", async () => {
     const { fetch, calls } = fakeFetch(completion('{"objectives":["fuego"]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });

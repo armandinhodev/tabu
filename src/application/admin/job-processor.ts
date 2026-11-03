@@ -42,13 +42,16 @@ const RETRY_EXCLUDED_OBJECTIVES = 200;
 /**
  * `true` cuando el fallo del proveedor se puede reintentar.
  *
- * Sólo una respuesta ilegible o cortada vale el reintento: el proveedor caído
- * o la clave vencida no se arreglan preguntando otra vez.
+ * Vale una respuesta ilegible, una cortada y un turno vacío (el servicio
+ * saturado responde así y se resuelve preguntando de nuevo). No vale el
+ * proveedor caído ni la clave vencida: esos no se arreglan preguntando otra vez.
  */
 function isRetryableProviderError(error: unknown): boolean {
   return (
     isAdminError(error) &&
-    (error.code === "provider_invalid_response" || error.code === "provider_response_truncated")
+    (error.code === "provider_invalid_response" ||
+      error.code === "provider_response_truncated" ||
+      error.code === "provider_no_answer")
   );
 }
 
