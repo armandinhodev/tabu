@@ -140,31 +140,8 @@
   }
 }
 
-/* Entrada de la landing y flotación de la carta de muestra (S7, §7).
-   El movimiento se apaga entero cuando el sistema pide menos animación. */
-@keyframes landing-rise {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes landing-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-/* Entrada escalonada de las reglas de la casa (§7): opacidad + 8px hacia
-   arriba, una fila después de la otra. */
+/* Entrada de las reglas de la casa (§7): opacidad + 8px hacia arriba, una fila
+   después de la otra. */
 @keyframes rules-rise {
   from {
     opacity: 0;
@@ -186,39 +163,59 @@
   }
 }
 
+/* Flotación ambiental de la carta de muestra (§7). */
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
 @layer utilities {
-  .landing-rise {
-    animation: landing-rise var(--dur-panel) var(--ease-standard) both;
+  .rules-rise {
+    animation: rules-rise var(--dur-panel) var(--ease-standard) both;
   }
 
-  .landing-rise--2 {
-    animation-delay: var(--dur-instant);
-  }
+  /* La landing se revela cuando el bloque entra en la ventana: el movimiento
+     ocurre donde está mirando la persona y no cuando carga la página. Sin
+     JavaScript (o sin soporte para `scripting`) el contenido se ve igual: la
+     mejora es progresiva y la página nunca queda en blanco. */
+  @media (scripting: enabled) {
+    .landing-reveal {
+      opacity: 0;
+      transform: translateY(12px);
+      transition:
+        opacity var(--dur-panel) var(--ease-standard),
+        transform var(--dur-panel) var(--ease-standard);
+    }
 
-  .landing-rise--3 {
-    animation-delay: var(--dur-base);
-  }
-
-  .landing-rise--4 {
-    animation-delay: var(--dur-panel);
-  }
-
-  .landing-rise--5 {
-    animation-delay: calc(var(--dur-panel) + var(--dur-instant));
+    .landing-reveal.is-visible {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   .landing-float {
     animation: landing-float 6s var(--ease-standard) infinite;
   }
 
-  .rules-rise {
-    animation: rules-rise var(--dur-panel) var(--ease-standard) both;
+  /* La flotación se detiene cuando el bloque no está a la vista o la pestaña
+     está en segundo plano: no hay razón para gastar cuadro si nadie mira. */
+  .landing-float.is-paused {
+    animation-play-state: paused;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .landing-rise,
     .landing-float {
       animation: none;
+    }
+
+    .landing-reveal {
+      transform: none;
+      transition: opacity var(--dur-base) var(--ease-standard);
     }
 
     .rules-rise {
