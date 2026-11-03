@@ -8,9 +8,10 @@ import { Button } from "@/ui/components/ui/button";
 import type { HouseRules } from "@/infrastructure/content/house-rules";
 import { cn } from "@/ui/lib/cn";
 
-/** `icon` para el control chico de la cabecera, `block` para el panel lateral y
- *  `fab` para el botón flotante de las pantallas sin cabecera propia. */
-export type HouseRulesVariant = "icon" | "block" | "fab";
+/** `icon` para el control chico de la cabecera, `block` para el panel lateral,
+ *  `text` para un enlace de texto en una página pública y `fab` para el botón
+ *  flotante de las pantallas sin cabecera propia. */
+export type HouseRulesVariant = "icon" | "block" | "text" | "fab";
 
 interface HouseRulesButtonProps {
   readonly rules: HouseRules;
@@ -26,24 +27,26 @@ export function HouseRulesButton({ rules, variant = "icon", className }: HouseRu
   const [open, setOpen] = useState(false);
   const isIcon = variant === "icon";
   const isBlock = variant === "block";
+  const isText = variant === "text";
 
   return (
     <>
       <Button
         variant={isBlock ? "tinted" : "quiet"}
-        size={isIcon ? "icon" : "md"}
+        size={isIcon ? "icon" : isText ? "sm" : "md"}
         aria-label={isIcon ? "Reglas" : "Reglas de la casa"}
         title="Reglas de la casa"
         className={cn(
           isBlock && "w-full justify-start",
           variant === "fab" &&
             "fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-30 rounded-full border border-line bg-surface-2 px-4 shadow-float hover:bg-surface-3",
+          isText && "gap-1.5 px-2",
           className,
         )}
         onClick={() => setOpen(true)}
       >
         <ScrollText aria-hidden="true" className={isIcon ? "size-5" : "size-4"} />
-        {isIcon ? null : variant === "fab" ? "Reglas" : "Reglas de la casa"}
+        {isIcon ? null : variant === "fab" || isText ? "Reglas" : "Reglas de la casa"}
       </Button>
       <HouseRulesDialog open={open} onOpenChange={setOpen} rules={rules} />
     </>

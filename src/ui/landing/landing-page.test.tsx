@@ -14,8 +14,15 @@ vi.mock("react", async () => {
 vi.mock("next/link", async () => {
   const React = (await import("react")).default;
   return {
-    default: ({ href, children }: { href: string; children?: React.ReactNode }) =>
-      React.createElement("a", { href }, children),
+    default: ({
+      href,
+      children,
+      className,
+    }: {
+      href: string;
+      children?: React.ReactNode;
+      className?: string;
+    }) => React.createElement("a", { href, className }, children),
   };
 });
 
@@ -84,11 +91,66 @@ describe("LandingPage", () => {
   it("keeps its motion safe for people who ask for less of it", () => {
     const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
 
-    expect(css).toContain(".landing-rise");
+    expect(css).toContain(".landing-reveal");
     expect(css).toContain(".landing-float");
-    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*landing-rise/);
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*landing-float[\s\S]*landing-reveal/,
+    );
 
     render(<LandingPage />);
     expect(screen.getByTestId("landing-preview")).toHaveClass("landing-float");
+  });
+
+  it("revela cada bloque cuando entra en la ventana y no al cargar", () => {
+    render(<LandingPage />);
+
+    const sections = document.querySelectorAll(".landing-reveal");
+    expect(sections.length).toBeGreaterThan(1);
+
+    // La mejora es progresiva: sin JavaScript el bloque se ve igual.
+    const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+    expect(css).toContain("@media (scripting: enabled)");
+  });
+
+  it("takes the call to action styles from the shared button", () => {
+    render(<LandingPage />);
+
+    const cta = screen.getAllByRole("link", { name: /^jugar$/i })[0]!;
+    expect(cta.className).toContain("bg-accent");
+    expect(cta.className).toContain("text-on-accent");
+    expect(cta.className).toContain("min-h-14");
+  });
+
+  it("moves the focus with the anchor and leaves the rules out of a floating button", () => {
+    render(<LandingPage />);
+
+    const anchor = screen.getByRole("link", { name: /cómo se juega/i });
+    expect(anchor).toHaveAttribute("href", "#como-se-juega");
+
+    const target = document.getElementById("como-se-juega");
+    expect(target).not.toBeNull();
+    expect(target?.className).toContain("scroll-mt-24");
+    expect(screen.getByRole("heading", { name: "Cómo se juega" })).toHaveAttribute(
+      "tabindex",
+      "-1",
+    );
+
+    // Las reglas de la casa viven en el encabezado y en el pie, no flotando.
+    expect(screen.getAllByRole("button", { name: /reglas/i })).toHaveLength(2);
+    expect(document.querySelector(".fixed")).toBeNull();
+  });
+
+  it("closes the page with a footer that offers the rules and the game", () => {
+    render(<LandingPage />);
+
+    const footer = document.querySelector("footer");
+    expect(footer).not.toBeNull();
+    expect(within(footer as HTMLElement).getByRole("link", { name: /^jugar$/i })).toHaveAttribute(
+      "href",
+      "/jugar",
+    );
+    expect(
+      within(footer as HTMLElement).getByRole("button", { name: /reglas/i }),
+    ).toBeInTheDocument();
   });
 });
