@@ -18,56 +18,53 @@ afterEach(() => {
 });
 
 describe("useTurnPreview", () => {
-  it("starts on the first card with the full turn and advances when the card time ends", () => {
+  it("starts paused so the first render is the same on the server and on the client", () => {
     const { result } = renderHook(() =>
-      useTurnPreview({ cardCount: 3, cardMs: 3_000, seconds: 30 }),
+      useTurnPreview({ cardCount: 3, turnMs: 15_000, enabled: false }),
     );
 
     expect(result.current.cardIndex).toBe(0);
-    expect(result.current.secondsLeft).toBe(30);
-
-    act(() => {
-      vi.advanceTimersByTime(1_000);
-    });
-    expect(result.current.secondsLeft).toBe(29);
-
-    act(() => {
-      vi.advanceTimersByTime(2_000);
-    });
-    expect(result.current.cardIndex).toBe(1);
-    expect(result.current.secondsLeft).toBe(27);
+    expect(result.current.deadlineAt).toBe(0);
+    expect(result.current.started).toBe(false);
   });
 
-  it("wraps the clock back to a full turn instead of showing zero", () => {
-    const { result } = renderHook(() =>
-      useTurnPreview({ cardCount: 2, cardMs: 60_000, seconds: 3 }),
-    );
+  it("runs a turn and changes the card when the turn ends", () => {
+    const { result } = renderHook(() => useTurnPreview({ cardCount: 3, turnMs: 15_000 }));
+
+    expect(result.current.cardIndex).toBe(0);
+    expect(result.current.started).toBe(true);
+    const firstDeadline = result.current.deadlineAt;
 
     act(() => {
-      vi.advanceTimersByTime(3_000);
+      vi.advanceTimersByTime(14_000);
     });
-    expect(result.current.secondsLeft).toBe(3);
+    expect(result.current.cardIndex).toBe(0);
+    expect(result.current.deadlineAt).toBe(firstDeadline);
+
+    act(() => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(result.current.cardIndex).toBe(1);
+    expect(result.current.deadlineAt).toBeGreaterThan(firstDeadline);
   });
 
   it("cycles back to the first card and never leaves the given range", () => {
-    const { result } = renderHook(() =>
-      useTurnPreview({ cardCount: 2, cardMs: 2_000, seconds: 10 }),
-    );
+    const { result } = renderHook(() => useTurnPreview({ cardCount: 2, turnMs: 2_000 }));
 
     act(() => {
-      vi.advanceTimersByTime(2_000);
+      vi.advanceTimersByTime(2_500);
     });
     expect(result.current.cardIndex).toBe(1);
 
     act(() => {
-      vi.advanceTimersByTime(2_000);
+      vi.advanceTimersByTime(2_500);
     });
     expect(result.current.cardIndex).toBe(0);
   });
 
   it("stands still when the person asked for less motion", () => {
     const { result } = renderHook(() =>
-      useTurnPreview({ cardCount: 3, cardMs: 1_000, seconds: 30, reduced: true }),
+      useTurnPreview({ cardCount: 3, turnMs: 1_000, reduced: true }),
     );
 
     act(() => {
@@ -75,6 +72,7 @@ describe("useTurnPreview", () => {
     });
 
     expect(result.current.cardIndex).toBe(0);
-    expect(result.current.secondsLeft).toBe(30);
+    expect(result.current.deadlineAt).toBe(0);
+    expect(result.current.started).toBe(false);
   });
 });

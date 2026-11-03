@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CardShowcase } from "./card-showcase";
@@ -42,27 +42,46 @@ afterEach(() => {
 });
 
 describe("CardShowcase", () => {
-  it("rotates the sample cards while the turn clock runs", () => {
+  it("muestra el juego real: la palabra, sus prohibidas en columna y el reloj del turno", () => {
     render(<CardShowcase />);
 
     expect(screen.getByText("fuego")).toBeInTheDocument();
-    expect(screen.getByText("30 s")).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(3_400);
-    });
-
-    expect(screen.getByText("playa")).toBeInTheDocument();
-    expect(screen.getByText("27 s")).toBeInTheDocument();
-  });
-
-  it("muestra las palabras prohibidas en mayúscula, como en la partida", () => {
-    render(<CardShowcase />);
 
     const taboo = screen.getByText("LLAMA");
-
-    expect(taboo).toHaveClass("uppercase");
+    expect(taboo.closest("ul")).toHaveClass("uppercase");
     expect(screen.queryByText("llama")).not.toBeInTheDocument();
+
+    // Las prohibidas se muestran en columna, como en la partida.
+    expect(taboo.closest("ul")).toHaveClass("flex-col");
+
+    expect(screen.getByRole("timer")).toHaveAttribute("aria-label", "Quedan 15 segundos");
+  });
+
+  it("cambia la carta cuando se acaba el turno", () => {
+    render(<CardShowcase />);
+
+    act(() => {
+      vi.advanceTimersByTime(14_000);
+    });
+    expect(screen.getByText("fuego")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(screen.getByText("playa")).toBeInTheDocument();
+    expect(screen.queryByText("fuego")).not.toBeInTheDocument();
+  });
+
+  it("el reloj del turno corre mientras la carta está en pantalla", () => {
+    render(<CardShowcase />);
+
+    act(() => {
+      vi.advanceTimersByTime(6_000);
+    });
+
+    const timer = screen.getByRole("timer");
+    expect(timer).toHaveAttribute("aria-label", "Quedan 9 segundos");
+    expect(within(timer).getByText("9")).toBeInTheDocument();
   });
 
   it("keeps the card and the clock still when motion is reduced", () => {
@@ -70,11 +89,11 @@ describe("CardShowcase", () => {
     render(<CardShowcase />);
 
     act(() => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(30_000);
     });
 
     expect(screen.getByText("fuego")).toBeInTheDocument();
     expect(screen.queryByText("playa")).not.toBeInTheDocument();
-    expect(screen.getByText("30 s")).toBeInTheDocument();
+    expect(screen.getByRole("timer")).toHaveAttribute("aria-label", "Quedan 15 segundos");
   });
 });

@@ -7,7 +7,12 @@ import { remainingFraction, secondsRemaining } from "@/ui/lib/countdown";
 import { cn } from "@/ui/lib/cn";
 
 interface TimerRingProps {
-  readonly deadlineAt: number;
+  /**
+   * Deadline absoluto del turno. Sin deadline el anillo queda **en reposo**:
+   * pinta el turno completo y no corre el reloj. Lo usa la landing, que sirve
+   * la carta en el HTML y recién después de hidratar arranca el turno.
+   */
+  readonly deadlineAt: number | undefined;
   readonly turnSeconds: number;
   /** Diferencia entre el reloj del servidor y el del dispositivo, en ms. */
   readonly clockOffsetMs?: number;
@@ -32,9 +37,17 @@ export function TimerRing({
   className,
 }: TimerRingProps) {
   const now = useCallback(() => Date.now() + clockOffsetMs, [clockOffsetMs]);
-  const [remaining, setRemaining] = useState(() => secondsRemaining(deadlineAt, now()));
+  const live = deadlineAt !== undefined;
+  const [remaining, setRemaining] = useState(() =>
+    live ? secondsRemaining(deadlineAt, now()) : turnSeconds,
+  );
 
   useEffect(() => {
+    if (!live) {
+      setRemaining(turnSeconds);
+      return;
+    }
+
     setRemaining(secondsRemaining(deadlineAt, now()));
 
     const timer = setInterval(() => {
@@ -44,9 +57,9 @@ export function TimerRing({
     return () => {
       clearInterval(timer);
     };
-  }, [deadlineAt, now]);
+  }, [deadlineAt, now, live, turnSeconds]);
 
-  const fraction = remainingFraction(deadlineAt, turnSeconds, now());
+  const fraction = live ? remainingFraction(deadlineAt, turnSeconds, now()) : 1;
   const urgent = remaining <= 10;
   const Icon = urgent ? AlarmClock : Timer;
 

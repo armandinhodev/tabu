@@ -1,7 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useEffect, useState } from "react";
 
+import { TabooWords } from "@/ui/components/game/taboo-words";
+import { TimerRing } from "@/ui/components/game/timer-ring";
 import { useTurnPreview } from "./use-turn-preview";
 
 const CARDS = [
@@ -10,110 +13,66 @@ const CARDS = [
   { word: "reloj", taboo: ["hora", "aguja", "tiempo", "pulsera"] },
 ] as const;
 
-type SampleCard = (typeof CARDS)[number];
+/**
+ * The preview plays a compressed turn: long enough for the clock to reach its
+ * urgent state (under ten seconds, §9) and short enough to see a whole turn.
+ */
+const TURN_SECONDS = 15;
+const TURN_MS = TURN_SECONDS * 1_000;
 
-const TURN_SECONDS = 30;
-const CARD_MS = 3_400;
+const WORD_CLASS = "font-display text-h1 font-extrabold break-words text-fg uppercase";
 
-const WORD_CLASS =
-  "font-display text-[2rem] leading-none font-extrabold break-words text-fg uppercase";
-const CHIP_CLASS =
-  "rounded-pill border border-danger bg-danger-soft px-3 py-1.5 text-body-sm text-fg uppercase";
-
-function CardFace({ card }: { readonly card: SampleCard }) {
-  return (
-    <>
-      <p className={WORD_CLASS} data-testid="preview-word">
-        {card.word}
-      </p>
-      <ul className="flex flex-wrap items-start gap-2">
-        {card.taboo.map((word) => (
-          <li key={word} className={CHIP_CLASS}>
-            {word.toUpperCase()}
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
-function AnimatedCard({ card }: { readonly card: SampleCard }) {
-  return (
-    <motion.div
-      key={card.word}
-      className="flex flex-col gap-3"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.28, ease: "easeOut" }}
-    >
-      <motion.p
-        className={WORD_CLASS}
-        data-testid="preview-word"
-        initial={{ opacity: 0, filter: "blur(4px)" }}
-        animate={{ opacity: 1, filter: "blur(0px)" }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-      >
-        {card.word}
-      </motion.p>
-      <ul className="flex flex-wrap items-start gap-2">
-        {card.taboo.map((word, index) => (
-          <motion.li
-            key={word}
-            className={CHIP_CLASS}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.24, delay: 0.05 * index, ease: "easeOut" }}
-          >
-            {word.toUpperCase()}
-          </motion.li>
-        ))}
-      </ul>
-    </motion.div>
-  );
-}
-
-/** Decorative preview: cards rotate while the turn clock runs. */
+/**
+ * Decorative preview of a real turn.
+ *
+ * It uses the game's own components — the forbidden words and the timer ring —
+ * so the landing shows the game as it is, and it changes when the turn ends,
+ * the way a turn does.
+ */
 export function CardShowcase() {
   const reduced = useReducedMotion() ?? false;
-  const { cardIndex, secondsLeft } = useTurnPreview({
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const { cardIndex, deadlineAt, started } = useTurnPreview({
     cardCount: CARDS.length,
-    cardMs: CARD_MS,
-    seconds: TURN_SECONDS,
+    turnMs: TURN_MS,
     reduced,
+    enabled: mounted,
   });
+
   const card = CARDS[cardIndex] ?? CARDS[0];
-  const fraction = secondsLeft / TURN_SECONDS;
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line-strong bg-surface-2 p-5 shadow-float">
       <div className="flex items-center justify-between gap-2">
         <span className="text-caption text-fg-subtle uppercase">Tu carta</span>
-        <span
-          className="rounded-pill bg-warning-soft px-2 py-1 font-mono text-caption font-semibold text-warning tabular-nums"
-          data-testid="preview-clock"
-        >
-          {secondsLeft} s
-        </span>
-      </div>
-
-      <div className="h-1 overflow-hidden rounded-pill bg-surface-3">
-        <motion.div
-          className="h-full origin-left rounded-pill bg-warning"
-          initial={false}
-          animate={{ scaleX: fraction }}
-          transition={reduced ? { duration: 0 } : { duration: 1, ease: "linear" }}
+        <TimerRing
+          deadlineAt={started ? deadlineAt : undefined}
+          turnSeconds={TURN_SECONDS}
+          className="size-28"
         />
       </div>
 
-      <div className="flex min-h-[9.5rem] flex-col gap-3">
-        {reduced ? (
-          <CardFace card={card} />
-        ) : (
-          <AnimatePresence mode="wait" initial={false}>
-            <AnimatedCard key={card.word} card={card} />
-          </AnimatePresence>
-        )}
+      <div className="min-h-[9.5rem]">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={card.word}
+            className="flex flex-col gap-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+          >
+            <p className={WORD_CLASS} data-testid="preview-word">
+              {card.word}
+            </p>
+            <TabooWords words={card.taboo} variant="informative" />
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       <p className="text-body-sm text-fg-muted">Si decís una de estas, tu equipo pierde 1 punto.</p>
