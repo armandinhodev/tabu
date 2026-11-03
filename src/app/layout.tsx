@@ -26,9 +26,43 @@ const jetBrainsMono = localFont({
   display: "swap",
 });
 
+/**
+ * La URL pública del sitio. Sin ella la vista previa al compartir se arma con
+ * `localhost`; en producción conviene definir `PUBLIC_SITE_URL`.
+ */
+const SITE_URL = process.env.PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+const DESCRIPTION =
+  "Juego de Tabú multijugador en tiempo real para grupos de amigos: sin registro y sin instalar nada.";
+
 export const metadata: Metadata = {
-  title: "Tabú",
-  description: "Juego de Tabú multijugador en tiempo real para grupos de amigos.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Tabú — juego de fiesta en tiempo real",
+    template: "%s · Tabú",
+  },
+  description: DESCRIPTION,
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    siteName: "Tabú",
+    title: "Tabú — juego de fiesta en tiempo real",
+    description: DESCRIPTION,
+    images: [
+      {
+        url: "/og-game.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Una partida de Tabú en curso: la palabra, sus prohibidas y el reloj del turno",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Tabú — juego de fiesta en tiempo real",
+    description: DESCRIPTION,
+    images: ["/og-game.jpg"],
+  },
 };
 
 export default function RootLayout({
