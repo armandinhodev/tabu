@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // `dictionary-es` lee sus archivos `.aff` y `.dic` con
+  // `fs.readFile(new URL("index.aff", import.meta.url))`. Webpack convierte esa
+  // expresión en un "asset" y la reemplaza por un objeto con forma de URL que
+  // no es una URL: la lectura falla y el diccionario nunca se carga. En el
+  // build de producción eso rompe toda edición de carta (y toda generación)
+  // con un 503 sin explicación. Como paquete externo, Node lo carga tal cual.
+  serverExternalPackages: ["dictionary-es"],
   // Lint runs as its own gate (`pnpm lint`); keeping it out of the build avoids
   // duplicated output and the deprecated build-time linting path.
   eslint: {
