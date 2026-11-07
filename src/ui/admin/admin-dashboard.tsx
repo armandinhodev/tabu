@@ -296,7 +296,9 @@ export function AdminDashboard() {
    *
    * El fallo se avisa con un toast desde acá: es el único canal de errores
    * del panel, así una acción no puede avisar lo mismo dos veces. `context`
-   * dice qué operación falló, para que el motivo no vuelva solo.
+   * dice qué operación falló, para que el motivo no vuelva solo. `success`
+   * avisa que la operación se completó: sin ese texto la acción termina en
+   * silencio y el administrador no sabe si su cambio se guardó.
    */
   async function act(action: () => Promise<void>, options?: AdminActionOptions): Promise<boolean> {
     if (busy) {
@@ -306,6 +308,7 @@ export function AdminDashboard() {
     setBusy(true);
     try {
       await action();
+      if (options?.success !== undefined) toast.success(options.success);
       return true;
     } catch (failure) {
       reportError(failure, options?.context);
@@ -417,36 +420,39 @@ export function AdminDashboard() {
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    await act(async () => {
-      const amount = parseGenerationAmount(count);
+    await act(
+      async () => {
+        const amount = parseGenerationAmount(count);
 
-      // El panel de progreso aparece con el primer clic: el usuario ve que el
-      // mazo se está creando y que la generación se está encolando.
-      setCreating(amount);
+        // El panel de progreso aparece con el primer clic: el usuario ve que el
+        // mazo se está creando y que la generación se está encolando.
+        setCreating(amount);
 
-      try {
-        const created = await api<DeckView>("/api/admin/decks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: name.trim(),
-            theme: theme.trim(),
-            ...(rules.trim() ? { rules: rules.trim() } : {}),
-            ...(allowProperNames ? { allowProperNames: true } : {}),
-          }),
-        });
-        setSelectedId(created.id);
-        setDeck(created);
-        selectTab("decks");
-        setName("");
-        setTheme("");
-        setRules("");
-        setAllowProperNames(false);
-        trackJob(await requestDeckGeneration(created.id, amount));
-      } finally {
-        setCreating(null);
-      }
-    });
+        try {
+          const created = await api<DeckView>("/api/admin/decks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: name.trim(),
+              theme: theme.trim(),
+              ...(rules.trim() ? { rules: rules.trim() } : {}),
+              ...(allowProperNames ? { allowProperNames: true } : {}),
+            }),
+          });
+          setSelectedId(created.id);
+          setDeck(created);
+          selectTab("decks");
+          setName("");
+          setTheme("");
+          setRules("");
+          setAllowProperNames(false);
+          trackJob(await requestDeckGeneration(created.id, amount));
+        } finally {
+          setCreating(null);
+        }
+      },
+      { context: "No se pudo crear el mazo", success: "Mazo creado" },
+    );
   }
 
   /** Encola más cartas para el mazo abierto. */

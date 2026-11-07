@@ -108,6 +108,7 @@ beforeEach(() => {
   socketMock.subscribe.mockClear();
   socketMock.disconnect.mockClear();
   toastMock.error.mockClear();
+  toastMock.success.mockClear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -238,7 +239,9 @@ describe("AdminDashboard", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "Eliminar carta" }),
     );
     await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
-    expect(toastMock.error).toHaveBeenCalledWith("El mazo cambió. Reintenta.");
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "No se pudo eliminar la carta: El mazo cambió. Reintenta.",
+    );
     expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
     expect(socketMock.disconnect).not.toHaveBeenCalled();
   });
@@ -372,6 +375,20 @@ describe("AdminDashboard", () => {
     expect(screen.getByText("mar")).toBeInTheDocument();
     // La edición se cierra: la carta guardada ya no se está editando.
     expect(screen.queryByLabelText("Palabra objetivo")).not.toBeInTheDocument();
+  });
+
+  it("avisa con un toast que la carta se guardó", async () => {
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+    fireEvent.change(screen.getByLabelText("Palabra objetivo"), { target: { value: "agua" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar carta" }));
+
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalled());
+    expect(toastMock.success).toHaveBeenCalledWith("Carta guardada");
+    // Un cambio hecho no se avisa como si fuera un error.
+    expect(toastMock.error).not.toHaveBeenCalled();
   });
 
   it("avisa con un toast que una edición fue rechazada", async () => {
@@ -1027,7 +1044,9 @@ describe("AdminDashboard", () => {
     fireEvent.change(screen.getByLabelText("Cantidad de cartas"), { target: { value: "601" } });
     fireEvent.submit(screen.getByRole("button", { name: "Crear y generar" }).closest("form")!);
     await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
-    expect(toastMock.error).toHaveBeenCalledWith("La cantidad debe ser un entero entre 1 y 600.");
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "No se pudo crear el mazo: La cantidad debe ser un entero entre 1 y 600.",
+    );
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 

@@ -68,6 +68,11 @@ export type AdminActionOptions = {
    * "No se pudo guardar la carta: ese objetivo ya existe".
    */
   readonly context?: string;
+  /**
+   * Aviso de que la operación se completó: "Carta guardada". Sin este texto
+   * la acción termina en silencio: el panel sólo avisa cuando algo falla.
+   */
+  readonly success?: string;
 };
 
 /**

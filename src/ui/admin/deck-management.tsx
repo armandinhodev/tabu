@@ -99,47 +99,59 @@ export function DeckManagement({
   async function save(event: FormEvent) {
     event.preventDefault();
 
-    await act(async () => {
-      await api(`/api/admin/decks/${encodeURIComponent(current.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          theme: theme.trim(),
-          ...(rules.trim() !== (current.rules ?? "") ? { rules: rules.trim() } : {}),
-          ...(allowProperNames || current.allowProperNames !== undefined
-            ? { allowProperNames }
-            : {}),
-        }),
-      });
-    });
+    await act(
+      async () => {
+        await api(`/api/admin/decks/${encodeURIComponent(current.id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(),
+            theme: theme.trim(),
+            ...(rules.trim() !== (current.rules ?? "") ? { rules: rules.trim() } : {}),
+            ...(allowProperNames || current.allowProperNames !== undefined
+              ? { allowProperNames }
+              : {}),
+          }),
+        });
+      },
+      { context: "No se pudo actualizar el mazo", success: "Mazo actualizado" },
+    );
   }
 
   async function archive() {
-    await act(async () => {
-      const updated = await api<AdminDeckView>(
-        `/api/admin/decks/${encodeURIComponent(current.id)}`,
-        { method: "DELETE" },
-      );
-      setConfirming(false);
-      onArchived(updated.id);
-    });
+    await act(
+      async () => {
+        const updated = await api<AdminDeckView>(
+          `/api/admin/decks/${encodeURIComponent(current.id)}`,
+          { method: "DELETE" },
+        );
+        setConfirming(false);
+        onArchived(updated.id);
+      },
+      { context: "No se pudo archivar el mazo", success: "Mazo archivado" },
+    );
   }
 
   async function restore() {
-    await act(async () => {
-      await api(`/api/admin/decks/${encodeURIComponent(current.id)}/restore`, { method: "POST" });
-    });
+    await act(
+      async () => {
+        await api(`/api/admin/decks/${encodeURIComponent(current.id)}/restore`, { method: "POST" });
+      },
+      { context: "No se pudo restaurar el mazo", success: "Mazo restaurado" },
+    );
   }
 
   async function remove() {
-    await act(async () => {
-      await api(`/api/admin/decks/${encodeURIComponent(current.id)}/permanent`, {
-        method: "DELETE",
-      });
-      setConfirmingDeletion(false);
-      onDeleted(current.id);
-    });
+    await act(
+      async () => {
+        await api(`/api/admin/decks/${encodeURIComponent(current.id)}/permanent`, {
+          method: "DELETE",
+        });
+        setConfirmingDeletion(false);
+        onDeleted(current.id);
+      },
+      { context: "No se pudo eliminar el mazo", success: "Mazo eliminado" },
+    );
   }
 
   return (

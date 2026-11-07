@@ -111,7 +111,7 @@ export function ManagedCard({
             },
             // El panel avisa el fallo con un toast; el contexto dice qué
             // operación falló, para que el motivo no vuelva solo.
-            { context: "No se pudo guardar la carta" },
+            { context: "No se pudo guardar la carta", success: "Carta guardada" },
           )
         }
       />
@@ -129,13 +129,19 @@ export function ManagedCard({
           }
           disabled={disabled || (card.excluded && card.taboo.length !== 6)}
           onClick={() =>
-            void act(async () => {
-              await api(cardUrl, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ excluded: !card.excluded }),
-              });
-            })
+            void act(
+              async () => {
+                await api(cardUrl, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ excluded: !card.excluded }),
+                });
+              },
+              {
+                context: "No se pudo cambiar la carta",
+                success: card.excluded ? "Carta incluida" : "Carta excluida",
+              },
+            )
           }
         >
           {card.excluded ? "Habilitar de todos modos" : "Excluir"}
@@ -153,9 +159,12 @@ export function ManagedCard({
           word={card.word}
           disabled={disabled}
           onDelete={async () => {
-            await act(async () => {
-              await api(cardUrl, { method: "DELETE" });
-            });
+            await act(
+              async () => {
+                await api(cardUrl, { method: "DELETE" });
+              },
+              { context: "No se pudo eliminar la carta", success: "Carta eliminada" },
+            );
           }}
         />
       </div>
