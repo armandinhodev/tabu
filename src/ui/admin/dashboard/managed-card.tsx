@@ -11,6 +11,8 @@ import type { AdminAction, CardView } from "./types";
 export interface ManagedCardProps {
   /** Carta que se está revisando. */
   readonly card: CardView;
+  /** Las cartas del mazo: el objetivo no puede repetir el de otra carta. */
+  readonly cards: readonly CardView[];
   /** Mazo al que pertenece la carta. */
   readonly deckId: string;
   /** Los controles están bloqueados por trabajo en curso o mazo archivado. */
@@ -30,7 +32,15 @@ export interface ManagedCardProps {
  * borrado viajan por el cliente HTTP del panel y la envoltura de acciones,
  * igual que la gestión del mazo.
  */
-export function ManagedCard({ card, deckId, disabled, api, act, onReplace }: ManagedCardProps) {
+export function ManagedCard({
+  card,
+  cards,
+  deckId,
+  disabled,
+  api,
+  act,
+  onReplace,
+}: ManagedCardProps) {
   const cardUrl = `/api/admin/decks/${encodeURIComponent(deckId)}/cards/${encodeURIComponent(card.id)}`;
 
   return (
@@ -86,19 +96,22 @@ export function ManagedCard({ card, deckId, disabled, api, act, onReplace }: Man
       )}
       <CardEditor
         card={card}
+        cards={cards}
         disabled={disabled}
-        onSave={async (input) => {
-          let saved = false;
-          await act(async () => {
-            await api(cardUrl, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(input),
-            });
-            saved = true;
-          });
-          return saved;
-        }}
+        onSave={async (input) =>
+          act(
+            async () => {
+              await api(cardUrl, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(input),
+              });
+            },
+            // El panel avisa el fallo con un toast; el contexto dice qué
+            // operación falló, para que el motivo no vuelva solo.
+            { context: "No se pudo guardar la carta" },
+          )
+        }
       />
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
         <Button

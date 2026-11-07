@@ -11,6 +11,7 @@ import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
 import { Textarea } from "@/ui/components/ui/textarea";
 import { AdminConfirmDialog } from "./admin-confirm-dialog";
+import type { AdminAction } from "./dashboard/types";
 
 /** Carta administrada tal como la ve el panel. */
 export type AdminCardView = {
@@ -48,7 +49,7 @@ export interface DeckManagementProps {
   /** Cliente HTTP del tablero. */
   readonly api: AdminApi;
   /** Envoltura de acciones del tablero: informa errores y refresca el panel. */
-  readonly act: (action: () => Promise<void>) => Promise<void>;
+  readonly act: AdminAction;
   /** Avisa que el mazo quedó archivado: el tablero puede limpiar la selección. */
   readonly onArchived: (deckId: string) => void;
   readonly onDeleted: (deckId: string) => void;

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { requireAdmin } from "../auth/admin-auth";
+import { logger } from "../config/logger";
 
 const MAX_BODY_BYTES = 8192;
 
@@ -68,8 +69,20 @@ export async function adminResponse(
       409: "El mazo tiene una operación en curso o cambió. Actualiza e intenta nuevamente.",
       413: "La solicitud es demasiado grande.",
       429: "Se alcanzó el límite de solicitudes. Intenta más tarde.",
-      503: "El servicio no está disponible. Revisa MongoDB y la configuración del servidor.",
+      503: "No se pudo completar la operación en el servidor.",
     };
+
+    if (code === undefined) {
+      // Un fallo que no es del dominio se registra: sin esto el error se perdía
+      // y el panel sólo mostraba un 503 genérico, sin forma de saber qué pasó.
+      logger.error("admin request failed unexpectedly", {
+        status: failureStatus,
+        name: error instanceof Error ? error.name : typeof error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    }
+
     return Response.json(
       { error: code ? knownCodes[code] : messages[failureStatus], ...(code ? { code } : {}) },
       {

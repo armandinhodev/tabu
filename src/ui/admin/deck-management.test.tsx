@@ -27,6 +27,7 @@ function renderManagement(overrides: Partial<DeckManagementProps> = {}) {
   const api = vi.fn(async () => ({ id: "deck-1" }));
   const act = vi.fn(async (action: () => Promise<void>) => {
     await action();
+    return true;
   });
   const onArchived = vi.fn();
   const onDeleted = vi.fn();

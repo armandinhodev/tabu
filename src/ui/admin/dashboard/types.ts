@@ -61,10 +61,25 @@ export type CardListView = {
   page: number;
 };
 
+/** Contexto del aviso de una acción del tablero. */
+export type AdminActionOptions = {
+  /**
+   * Dice qué operación falló, para que el motivo no vuelva solo:
+   * "No se pudo guardar la carta: ese objetivo ya existe".
+   */
+  readonly context?: string;
+};
+
 /**
  * Envoltura de acciones del tablero: informa errores y refresca el catálogo.
  *
  * La comparten las piezas que necesitan hablar con la API: informa el fallo
- * y deja el panel en un estado coherente sin duplicar ese contrato.
+ * y deja el panel en un estado coherente sin duplicar ese contrato. El error
+ * se avisa con un toast desde acá, que es el único canal de errores del
+ * panel: así una acción no puede avisar lo mismo dos veces. Devuelve `true`
+ * cuando la acción se completó.
  */
-export type AdminAction = (action: () => Promise<void>) => Promise<void>;
+export type AdminAction = (
+  action: () => Promise<void>,
+  options?: AdminActionOptions,
+) => Promise<boolean>;

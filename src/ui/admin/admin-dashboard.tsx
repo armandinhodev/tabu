@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Layers } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/ui/components/ui/button";
 import { Spinner } from "@/ui/components/ui/spinner";
@@ -29,6 +30,7 @@ import {
 } from "./dashboard/generation-request";
 import {
   ADMIN_TABS,
+  type AdminActionOptions,
   type AdminTab,
   type CardListView,
   type DeckTab,
@@ -73,7 +75,6 @@ export function AdminDashboard() {
   // Show pending feedback before the server has returned a generation job.
   const [creating, setCreating] = useState<number | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
-  const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
   const [rules, setRules] = useState("");
@@ -133,15 +134,21 @@ export function AdminDashboard() {
     return true;
   }, []);
 
-  const reportError = useCallback((failure: unknown) => {
+  /**
+   * Los errores del panel se avisan con un toast (§13): se ven estés donde
+   * estés, que es lo que un aviso arriba del panel no lograba.
+   *
+   * `context` dice qué operación falló, para que el motivo no vuelva solo.
+   */
+  const reportError = useCallback((failure: unknown, context?: string) => {
     if (failure instanceof RequestFailure && failure.status === 401) {
       setAuth("login");
       setDeck(null);
       setDecks([]);
     }
-    setError(
-      failure instanceof RequestFailure ? failure.message : "No se pudo conectar con el servidor.",
-    );
+    const message =
+      failure instanceof RequestFailure ? failure.message : "No se pudo conectar con el servidor.";
+    toast.error(context === undefined ? message : `${context}: ${message}`);
   }, []);
 
   useEffect(() => {
@@ -161,7 +168,7 @@ export function AdminDashboard() {
       })
       .catch(() => {
         if (!controller.signal.aborted) {
-          setError("No se pudo verificar la sesión. Actualiza la página para reintentar.");
+          toast.error("No se pudo verificar la sesión. Actualiza la página para reintentar.");
           setAuth("login");
         }
       });
@@ -267,7 +274,7 @@ export function AdminDashboard() {
           setRefresh((value) => value + 1);
         }
       },
-      onError: (message) => setError(message),
+      onError: (message) => toast.error(message),
     });
 
     socketRef.current = client;
@@ -284,14 +291,25 @@ export function AdminDashboard() {
     client.subscribe(jobId);
   }, [auth, jobId]);
 
-  async function act(action: () => Promise<void>) {
-    if (busy) return;
+  /**
+   * Ejecuta una acción del panel y devuelve si se completó.
+   *
+   * El fallo se avisa con un toast desde acá: es el único canal de errores
+   * del panel, así una acción no puede avisar lo mismo dos veces. `context`
+   * dice qué operación falló, para que el motivo no vuelva solo.
+   */
+  async function act(action: () => Promise<void>, options?: AdminActionOptions): Promise<boolean> {
+    if (busy) {
+      toast.error("Esperá a que termine la operación en curso.");
+      return false;
+    }
     setBusy(true);
-    setError("");
     try {
       await action();
+      return true;
     } catch (failure) {
-      reportError(failure);
+      reportError(failure, options?.context);
+      return false;
     } finally {
       setBusy(false);
       setRefresh((value) => value + 1);
@@ -467,15 +485,9 @@ export function AdminDashboard() {
           configured={configured}
           onAuthenticated={() => {
             setAuth("authorized");
-            setError("");
             setJobId(savedJob());
           }}
         />
-        {error && (
-          <p role="alert" className="mt-4 text-warning">
-            {error}
-          </p>
-        )}
       </main>
     );
 
@@ -516,14 +528,6 @@ export function AdminDashboard() {
           </Button>
         </div>
       </header>
-      {error && (
-        <p
-          role="alert"
-          className="rounded-md border border-warning bg-warning-soft p-4 text-warning"
-        >
-          {error}
-        </p>
-      )}
 
       <div
         role="tablist"

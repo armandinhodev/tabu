@@ -141,6 +141,7 @@ export function CardList({
           <ManagedCard
             key={card.id}
             card={card}
+            cards={cards}
             deckId={deckId}
             disabled={disabled}
             api={api}

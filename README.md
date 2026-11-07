@@ -257,8 +257,14 @@ si la carta es dudosa o incompleta queda excluida. Editar no habilita una carta 
 excluida: se usa la acción de habilitación existente, que requiere seis prohibidas.
 No se admiten objetivos duplicados ni objetivos ya usados por otras versiones de cartas;
 se conservan los identificadores, el origen y el historial de palabras usadas para evitar que
-una generación posterior vuelva a proponerlos. El archivado y los trabajos activos bloquean
-la edición. Una revisión atómica impide pisar cambios concurrentes; si el mazo cambió, hay que
+una generación posterior vuelva a proponerlos. El objetivo se compara normalizado (sin tildes
+ni mayúsculas), como en el dominio: «águila» y «aguila» son la misma palabra y no pueden convivir
+en el mazo; corregir la ortografía de la propia carta sí se puede. Antes de guardar, el panel
+avisa qué palabra choca y con qué carta. Los errores del panel —un guardado rechazado, una
+sesión caducada, un fallo del servidor— se avisan con un **toast**, que se ve desde cualquier
+punto del panel sin tapar el formulario que el administrador está usando; el formulario conserva
+lo escrito cuando el guardado falla. El archivado y los trabajos activos bloquean la edición.
+Una revisión atómica impide pisar cambios concurrentes; si el mazo cambió, hay que
 revisar la versión actual antes de reintentar. Las partidas existentes mantienen su copia.
 El endpoint administrativo `PUT /api/admin/decks/:deckId/cards/:cardId` recibe `{word, taboo}`;
 cada término admite hasta 200 caracteres. El `PATCH {excluded}` existente no cambia.

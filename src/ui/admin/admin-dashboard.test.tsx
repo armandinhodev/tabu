@@ -25,6 +25,11 @@ const socketMock = vi.hoisted(() => ({
   disconnect: vi.fn(),
 }));
 
+/** Los errores del panel se avisan con un toast (§13): se afirma la llamada. */
+const toastMock = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+
+vi.mock("sonner", () => ({ toast: toastMock }));
+
 vi.mock("@/ui/lib/admin-socket", () => ({
   createAdminSocket: vi.fn((handlers: AdminSocketHandlersMock) => {
     socketMock.handlers = handlers;
@@ -71,6 +76,7 @@ let deferGenerateResponse: boolean;
 let resolveGenerateResponse: ((response: Response) => void) | null;
 let deferCatalogResponse: boolean;
 let resolveCatalogResponse: ((response: Response) => void) | null;
+let failCardUpdate: boolean;
 
 function jobRequests(): number {
   return requests.filter((request) => request.url.includes("/api/admin/jobs/")).length;
@@ -96,10 +102,12 @@ beforeEach(() => {
   resolveGenerateResponse = null;
   deferCatalogResponse = false;
   resolveCatalogResponse = null;
+  failCardUpdate = false;
   sessionStorage.clear();
   socketMock.handlers = null;
   socketMock.subscribe.mockClear();
   socketMock.disconnect.mockClear();
+  toastMock.error.mockClear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -138,6 +146,33 @@ beforeEach(() => {
           });
         }
         return Response.json({ data: jobPayload });
+      }
+      if (method === "PUT" && url.includes("/cards/")) {
+        if (failCardUpdate) {
+          return Response.json(
+            { error: "Ese objetivo ya existe o ya se usó en este mazo.", code: "objective_taken" },
+            { status: 409 },
+          );
+        }
+        // El servidor real guarda la carta: el mock la persiste para que la
+        // prueba pueda comprobar que el cambio QUEDÓ, no sólo que salió.
+        // Se copia el mazo: el fixture compartido no se toca.
+        const parts = url.split("/");
+        const body = JSON.parse(String(init?.body)) as { word: string; taboo: string[] };
+        catalog = catalog.map((item) =>
+          item.id === parts[4]
+            ? {
+                ...item,
+                cards: item.cards.map((card) =>
+                  card.id === parts[6] ? { ...card, word: body.word, taboo: body.taboo } : card,
+                ),
+              }
+            : item,
+        );
+        const saved = catalog
+          .find((item) => item.id === parts[4])
+          ?.cards.find((item) => item.id === parts[6]);
+        return Response.json({ data: saved ?? card });
       }
       const detail = /^\/api\/admin\/decks\/([^/?]+)$/.exec(url);
       if (detail) {
@@ -202,11 +237,11 @@ describe("AdminDashboard", () => {
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", { name: "Eliminar carta" }),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent("El mazo cambió. Reintenta.");
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+    expect(toastMock.error).toHaveBeenCalledWith("El mazo cambió. Reintenta.");
     expect(screen.getByRole("heading", { name: "jaula" })).toBeVisible();
     expect(socketMock.disconnect).not.toHaveBeenCalled();
   });
-
   it("live-searches objectives and forbidden terms before pagination and the excluded filter", async () => {
     const cards = Array.from({ length: 41 }, (_, index) => ({
       ...card,
@@ -322,6 +357,41 @@ describe("AdminDashboard", () => {
         body: { word: "agua", taboo: card.taboo },
       }),
     );
+  });
+
+  it("keeps the edited card after saving it", async () => {
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+    fireEvent.change(screen.getByLabelText("Palabra objetivo"), { target: { value: "agua" } });
+    fireEvent.change(screen.getByLabelText("Palabra prohibida 1"), { target: { value: "mar" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar carta" }));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "agua" })).toBeInTheDocument());
+    expect(screen.getByText("mar")).toBeInTheDocument();
+    // La edición se cierra: la carta guardada ya no se está editando.
+    expect(screen.queryByLabelText("Palabra objetivo")).not.toBeInTheDocument();
+  });
+
+  it("avisa con un toast que una edición fue rechazada", async () => {
+    failCardUpdate = true;
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+    fireEvent.change(screen.getByLabelText("Palabra objetivo"), { target: { value: "agua" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar carta" }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "No se pudo guardar la carta: Ese objetivo ya existe o ya se usó en este mazo.",
+    );
+    // Un solo aviso: el toast del panel no se duplica con otro del editor.
+    expect(toastMock.error).toHaveBeenCalledTimes(1);
+    // El formulario sigue abierto con lo escrito: el motivo va en un toast, que
+    // se ve desde cualquier punto del panel, y el formulario no se pierde.
+    expect(screen.getByLabelText("Palabra objetivo")).toHaveValue("agua");
   });
 
   it("explains the six-hundred-card limit for creation and additional generation", async () => {
@@ -956,9 +1026,8 @@ describe("AdminDashboard", () => {
     });
     fireEvent.change(screen.getByLabelText("Cantidad de cartas"), { target: { value: "601" } });
     fireEvent.submit(screen.getByRole("button", { name: "Crear y generar" }).closest("form")!);
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "La cantidad debe ser un entero entre 1 y 600.",
-    );
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+    expect(toastMock.error).toHaveBeenCalledWith("La cantidad debe ser un entero entre 1 y 600.");
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 
@@ -968,9 +1037,8 @@ describe("AdminDashboard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
     fireEvent.change(screen.getByLabelText("Cantidad para generar"), { target: { value: "601" } });
     fireEvent.click(screen.getByRole("button", { name: "Generar 601 cartas más" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "La cantidad debe ser un entero entre 1 y 600.",
-    );
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+    expect(toastMock.error).toHaveBeenCalledWith("La cantidad debe ser un entero entre 1 y 600.");
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 

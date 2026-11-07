@@ -6,6 +6,7 @@ import {
   adminUnavailable,
 } from "../../../../application/admin/errors";
 import { buildProjection } from "../../../../application/admin/admin-service";
+import { logger } from "../../../config/logger";
 import type {
   AdminDeckStore,
   CreateDeckInput,
@@ -18,6 +19,7 @@ import { DeckModel } from "../../mongoose/models/DeckModel";
 import { toCardDocument, toManagedDeck } from "../mappers";
 import { assertMongoAvailable, isDuplicateKeyError } from "../mongo-available";
 import { AdminDeckModel, AdminDeckProjectionModel, AdminJobModel } from "../models/AdminModels";
+import type { AdminDeckDocument } from "../schemas/admin-deck.schema";
 
 /**
  * Persistencia de los mazos administrables.
@@ -509,28 +511,47 @@ export class MongoAdminDeckStore implements AdminDeckStore {
     assertMongoAvailable();
     const key = normalizeWord(input.card.word);
     const previousKey = normalizeWord(input.previousWord);
-    const document = await AdminDeckModel.findOneAndUpdate(
-      {
-        _id: input.deckId,
-        revision: input.expectedRevision,
-        "cards.id": input.cardId,
-        "activeJob.jobId": { $exists: false },
-        archivedAt: { $exists: false },
-        deletionPending: { $ne: true },
-        ...(key === previousKey ? {} : { usedObjectives: { $ne: key } }),
-      },
-      {
-        $set: { "cards.$[card]": toCardDocument(input.card), updatedAt: new Date(input.now) },
-        $inc: { revision: 1 },
-        $addToSet: {
-          usedObjectives: { $each: [previousKey, key] },
-          proposedWords: {
-            $each: input.card.candidates.map((candidate) => normalizeWord(candidate.word)),
+    // Una lista vacía en `$each` es un error de Mongo: se filtra antes.
+    const proposedWords = input.card.candidates
+      .map((candidate) => normalizeWord(candidate.word))
+      .filter((word) => word.length > 0);
+
+    let document: AdminDeckDocument | null = null;
+
+    try {
+      document = await AdminDeckModel.findOneAndUpdate(
+        {
+          _id: input.deckId,
+          revision: input.expectedRevision,
+          "cards.id": input.cardId,
+          "activeJob.jobId": { $exists: false },
+          archivedAt: { $exists: false },
+          deletionPending: { $ne: true },
+          ...(key === previousKey ? {} : { usedObjectives: { $ne: key } }),
+        },
+        {
+          $set: { "cards.$[card]": toCardDocument(input.card), updatedAt: new Date(input.now) },
+          $inc: { revision: 1 },
+          $addToSet: {
+            usedObjectives: { $each: [previousKey, key] },
+            ...(proposedWords.length > 0 ? { proposedWords: { $each: proposedWords } } : {}),
           },
         },
-      },
-      { new: true, arrayFilters: [{ "card.id": input.cardId }] },
-    ).exec();
+        { new: true, arrayFilters: [{ "card.id": input.cardId }] },
+      ).exec();
+    } catch (error) {
+      // Mongo lanza cuando el filtro de arrays no encuentra la carta que se
+      // quiere actualizar. Sin este margen, el error salía como un 503 sin
+      // explicación ("revisá MongoDB") y el panel no decía qué pasó.
+      logger.error("admin card update failed", {
+        deckId: input.deckId,
+        cardId: input.cardId,
+        name: error instanceof Error ? error.name : typeof error,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw adminConflict("card_changed", "The deck changed during the edit");
+    }
+
     if (document !== null) return toManagedDeck(document);
     const current = await AdminDeckModel.findById(input.deckId).exec();
     if (current === null || !current.cards.some((card) => card.id === input.cardId))
