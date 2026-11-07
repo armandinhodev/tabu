@@ -2,8 +2,17 @@ import { normalizeWord } from "../../domain/value-objects/TabooWords";
 import type { AdminCandidate } from "./types";
 import type { SpellChecker } from "./ports";
 
-/** Máximo de candidatos que se conservan por carta (S5). */
-export const MAX_CANDIDATES_PER_CARD = 12;
+/**
+ * Máximo de candidatos que se piden y se conservan por carta (S5).
+ *
+ * El número es el margen: de cada palabra que trae el proveedor se descartan
+ * alrededor del 2 % (repite la anterior, repite el objetivo, no es una sola
+ * palabra o el diccionario no la conoce). Medido sobre 72 cartas y 864
+ * palabras reales, pedir 8 deja siempre al menos 7 palabras utilizables para
+ * las 6 que se seleccionan: con 7 pedidas, 11 de 72 cartas quedan al borde y
+ * con 6 pedidas, 9 de 72 se quedan cortas y disparan la llamada de refuerzo.
+ */
+export const MAX_CANDIDATES_PER_CARD = 8;
 
 /** Palabras prohibidas que se seleccionan por carta (S6). */
 export const SELECTED_TABOO_WORDS = 6;

@@ -10,6 +10,7 @@ import {
   DEFAULT_BATCH_SIZE,
   MAX_GENERATION_COUNT,
 } from "../../application/admin/generation-limits";
+import { MAX_CANDIDATES_PER_CARD } from "../../application/admin/candidates";
 import type {
   CandidatesPayload,
   GenerationProvider,
@@ -51,7 +52,7 @@ export const DEEPSEEK_OBJECTIVES_TIMEOUT_MS = 50_000;
 export const DEEPSEEK_OBJECTIVES_MAX_OUTPUT_TOKENS = 8_000;
 
 /** Candidatos máximos por carta (S5). */
-export const MAX_CANDIDATES_PER_CARD = 12;
+export { MAX_CANDIDATES_PER_CARD } from "../../application/admin/candidates";
 
 /** Cuántas palabras ya usadas se le recuerdan al modelo. */
 const MAX_EXCLUDED_IN_PROMPT = 200;
@@ -469,8 +470,8 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
             : '- "objective": una sola palabra en español, de cuatro a doce letras,',
           "que cualquiera pueda describir sin decirla.",
           input.allowProperNames
-            ? '- "candidates": hasta 12 términos prohibidos'
-            : '- "candidates": hasta 12 palabras prohibidas, cada una de una sola palabra',
+            ? `- "candidates": hasta ${MAX_CANDIDATES_PER_CARD} términos prohibidos`
+            : `- "candidates": hasta ${MAX_CANDIDATES_PER_CARD} palabras prohibidas, cada una de una sola palabra`,
           "en español, ordenadas de la mejor a la peor para que no las adivine quien ve el objetivo.",
           ...(input.allowProperNames
             ? [
@@ -578,7 +579,7 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
         phase: "batch",
         prompt: [
           `Tema: "${input.theme}".`,
-          `Para cada uno de estos ${input.objectives.length} objetivos, da hasta 12 palabras prohibidas`,
+          `Para cada uno de estos ${input.objectives.length} objetivos, da hasta ${MAX_CANDIDATES_PER_CARD} palabras prohibidas`,
           input.allowProperNames
             ? "en español, que pueden ser nombres propios y títulos de varias palabras,"
             : "en español, cada una de una sola palabra,",
@@ -645,8 +646,8 @@ export function createDeepSeekProvider(options: DeepSeekProviderOptions): Genera
           `Palabras ya seleccionadas: ${list(selected)}.`,
           `Palabras descartadas: ${list(rejected)}.`,
           input.allowProperNames
-            ? "Da hasta 12 términos prohibidos nuevos en español,"
-            : "Da hasta 12 palabras prohibidas nuevas, cada una de una sola palabra en español,",
+            ? `Da hasta ${MAX_CANDIDATES_PER_CARD} términos prohibidos nuevos en español,`
+            : `Da hasta ${MAX_CANDIDATES_PER_CARD} palabras prohibidas nuevas, cada una de una sola palabra en español,`,
           "ordenadas de la mejor a la peor para que no las adivine quien ve el objetivo.",
           "No repitas ninguna de las palabras ya propuestas.",
           ...(input.allowProperNames

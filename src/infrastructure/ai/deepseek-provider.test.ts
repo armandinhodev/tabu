@@ -327,7 +327,7 @@ describe("createDeepSeekProvider", () => {
     expect(prompt).toContain("fuego");
     expect(prompt).toContain("objective");
     expect(prompt).toContain("candidates");
-    expect(prompt).toContain("12");
+    expect(prompt).toContain("8");
   });
 
   it("reads the cards with their objective and candidates", async () => {
@@ -350,7 +350,7 @@ describe("createDeepSeekProvider", () => {
     expect(result.usage).toEqual({ inputTokens: 11, outputTokens: 13 });
   });
 
-  it("keeps at most twelve candidates per card", async () => {
+  it("keeps at most eight candidates per card", async () => {
     const candidates = Array.from({ length: 20 }, (_, index) => `llama${index}`);
     const { fetch } = fakeFetch(
       completion(JSON.stringify({ cards: [{ objective: "fuego", candidates }] })),
@@ -363,7 +363,7 @@ describe("createDeepSeekProvider", () => {
       excludedObjectives: [],
     });
 
-    expect(result.data.cards[0]?.candidates).toHaveLength(12);
+    expect(result.data.cards[0]?.candidates).toHaveLength(8);
   });
 
   it("keeps at most the requested amount of cards", async () => {
@@ -547,7 +547,7 @@ describe("createDeepSeekProvider", () => {
     expect(promptOf(calls)).toContain('1) "fuego"');
     expect(promptOf(calls)).toContain('2) "agua"');
     expect(promptOf(calls)).toContain("Para cada uno de estos 2 objetivos");
-    expect(result.data.cards[0]?.candidates).toHaveLength(12);
+    expect(result.data.cards[0]?.candidates).toHaveLength(8);
     expect(result.data.cards[1]).toEqual({ objective: "agua", candidates: ["rio"] });
   });
 

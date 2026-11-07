@@ -160,7 +160,7 @@ export interface GenerationProvider {
     readonly signal?: AbortSignal;
   }): Promise<ProviderResult<{ objectives: readonly string[] }>>;
   /**
-   * Fase 2 de la generación: para cada objetivo pedido devuelve hasta doce
+   * Fase 2 de la generación: para cada objetivo pedido devuelve hasta ocho
    * candidatas ordenadas. Los objetivos devueltos que no fueron pedidos se
    * descartan.
    */
@@ -188,7 +188,7 @@ export interface GenerationProvider {
     readonly signal?: AbortSignal;
   }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>>;
   /**
-   * Completion de UNA carta: devuelve hasta doce candidatas nuevas. Sólo se
+   * Completion de UNA carta: devuelve hasta ocho candidatas nuevas. Sólo se
    * usa cuando la carta todavía no tiene seis palabras válidas.
    */
   proposeCandidates(input: {

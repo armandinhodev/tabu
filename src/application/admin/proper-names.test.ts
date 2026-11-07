@@ -70,24 +70,10 @@ describe("proper-name objectives", () => {
         objective: "Juego de tronos",
         allowProperNames: true,
         previouslyProposed: ["Bran", "anterior"],
-        candidates: [
-          "tronos",
-          "dos\npalabras",
-          "",
-          "Arya",
-          "Árya",
-          "Ned",
-          "Sansa",
-          "Tyrion",
-          "Cersei",
-          "Jaime",
-          "Bran",
-          "anterior",
-        ],
+        candidates: ["tronos", "dos\npalabras", "", "Arya", "Árya", "Ned", "Bran", "Sansa"],
       },
       { isRecognized },
     );
-    expect(result.taboo).toEqual(["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"]);
     expect(result.candidates.map((candidate) => candidate.reason)).toEqual([
       "equals_objective",
       "not_single_word",
@@ -95,13 +81,27 @@ describe("proper-name objectives", () => {
       undefined,
       "duplicate",
       undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
       "previously_proposed",
-      "previously_proposed",
+      undefined,
     ]);
+    expect(result.taboo).toEqual(["Arya", "Ned", "Sansa"]);
+    // Con menos de seis palabras válidas la carta queda dudosa: el mismo
+    // margen que con el diccionario.
+    expect(result.doubtful).toBe(true);
+    expect(isRecognized.mock.calls).toEqual([["Juego de tronos"]]);
+  });
+
+  it("selects six proper names for the card", () => {
+    const isRecognized = vi.fn(() => true);
+    const result = evaluateCard(
+      {
+        objective: "Juego de tronos",
+        allowProperNames: true,
+        candidates: ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"],
+      },
+      { isRecognized },
+    );
+    expect(result.taboo).toEqual(["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"]);
     expect(result.doubtful).toBe(false);
     expect(isRecognized.mock.calls).toEqual([["Juego de tronos"]]);
   });
@@ -162,7 +162,7 @@ describe("proper-name objectives", () => {
     const result = evaluateCard(
       {
         objective: "Juego de tronos",
-        candidates: ["Juégo", "de", "TRONOS", "dos\npalabras", "Daenerys", ...words],
+        candidates: ["Juégo", "de", "TRONOS", "dos\npalabras", "Daenerys", ...words.slice(0, 3)],
         ...{ allowProperNames: true },
       },
       spell,
@@ -174,8 +174,17 @@ describe("proper-name objectives", () => {
       "not_single_word",
       undefined,
     ]);
-    expect(result.taboo).toEqual(["Daenerys", ...words.slice(0, 5)]);
-    expect(result.doubtful).toBe(false);
+    expect(result.taboo).toEqual(["Daenerys", ...words.slice(0, 3)]);
+    // Con menos de seis palabras válidas la carta queda dudosa.
+    expect(result.doubtful).toBe(true);
+
+    const complete = evaluateCard(
+      { objective: "Juego de tronos", candidates: words, ...{ allowProperNames: true } },
+      spell,
+    );
+    expect(complete.taboo).toEqual(words);
+    expect(complete.doubtful).toBe(false);
+
     const incomplete = evaluateCard(
       {
         objective: "Daenerys",

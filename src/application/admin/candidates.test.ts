@@ -96,6 +96,7 @@ describe("evaluateCard", () => {
       checker(),
     );
 
+    // Sólo se evalúan las ocho primeras: el resto ni se mira.
     expect(evaluated.candidates.map((candidate) => candidate.reason)).toEqual([
       "not_single_word",
       "empty",
@@ -105,10 +106,8 @@ describe("evaluateCard", () => {
       undefined,
       "duplicate",
       "duplicate",
-      "not_in_dictionary",
-      undefined,
     ]);
-    expect(evaluated.recognizedWords).toEqual(["llama", "brasa"]);
+    expect(evaluated.recognizedWords).toEqual(["llama"]);
   });
 
   it("keeps the original spelling of the objective and of the words", () => {
@@ -202,12 +201,12 @@ describe("evaluateCard", () => {
     expect(evaluated.recognizedWords).toEqual(["rio", "chimenea", "brasa"]);
   });
 
-  it("keeps at most twelve candidates per card", () => {
+  it("keeps at most eight candidates per card", () => {
     const candidates = Array.from({ length: 20 }, (_, index) => `llama${index}`);
 
     const evaluated = evaluateCard({ objective: "fuego", candidates }, checker());
 
-    expect(evaluated.candidates).toHaveLength(12);
+    expect(evaluated.candidates).toHaveLength(8);
   });
 
   it("offers the structurally valid words for a manual override", () => {
