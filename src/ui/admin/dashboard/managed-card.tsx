@@ -62,17 +62,19 @@ export function ManagedCard({
               : "Disponible"}
         </span>
       </div>
-      <p className="mt-4 text-caption text-fg-muted">Palabras prohibidas</p>
-      <ol className="mt-2 grid grid-cols-2 gap-2">
-        {card.taboo.map((word, index) => (
-          <li
-            key={`${index}-${word}`}
-            className="rounded-md border border-line bg-surface px-3 py-2 text-body-sm break-words"
-          >
-            {word}
-          </li>
-        ))}
-      </ol>
+      <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <p className="text-caption text-fg-muted">Palabras prohibidas</p>
+        <ol className="flex flex-wrap gap-2">
+          {card.taboo.map((word, index) => (
+            <li
+              key={`${index}-${word}`}
+              className="rounded-md border border-line bg-surface px-3 py-1 text-body-sm break-words"
+            >
+              {word}
+            </li>
+          ))}
+        </ol>
+      </div>
       {card.taboo.length < 6 && (
         <p id={`card-${card.id}-incomplete`} className="mt-3 text-body-sm text-warning">
           Faltan prohibidas para completar las seis.

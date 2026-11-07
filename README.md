@@ -260,7 +260,10 @@ se conservan los identificadores, el origen y el historial de palabras usadas pa
 una generación posterior vuelva a proponerlos. El objetivo se compara normalizado (sin tildes
 ni mayúsculas), como en el dominio: «águila» y «aguila» son la misma palabra y no pueden convivir
 en el mazo; corregir la ortografía de la propia carta sí se puede. Antes de guardar, el panel
-avisa qué palabra choca y con qué carta. Los errores del panel —un guardado rechazado, una
+avisa qué palabra choca y con qué carta. Las seis prohibidas se editan en una tabla horizontal
+—una columna por palabra— que dice bajo cada una si el diccionario la reconoce, con la
+última evaluación guardada: una palabra recién escrita figura como «sin evaluar», no como
+un veredicto inventado. Los errores del panel —un guardado rechazado, una
 sesión caducada, un fallo del servidor— se avisan con un **toast**, que se ve desde cualquier
 punto del panel sin tapar el formulario que el administrador está usando; el formulario conserva
 lo escrito cuando el guardado falla. El archivado y los trabajos activos bloquean la edición.

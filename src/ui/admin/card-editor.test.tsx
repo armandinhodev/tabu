@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async () => {
@@ -28,6 +28,15 @@ const other = {
 };
 
 afterEach(cleanup);
+
+/** La fila de estados de la tabla de prohibidas: una celda por palabra. */
+function stateCells(): HTMLElement[] {
+  const table = screen.getByRole("table", { name: "Palabras prohibidas de la carta" });
+  const rows = within(table).getAllByRole("row");
+  const states = rows.at(-1);
+  if (states === undefined) throw new Error("the table has no state row");
+  return within(states).getAllByRole("cell");
+}
 
 describe("CardEditor", () => {
   it("refuses a stale draft after the visible card content changes", () => {
@@ -80,6 +89,67 @@ describe("CardEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar carta" }));
     await waitFor(() => expect(screen.getByLabelText("Palabra objetivo")).toHaveValue("llama"));
     expect(screen.getByRole("button", { name: "Guardar carta" })).toBeEnabled();
+  });
+
+  it("lays the six forbidden words out as one horizontal table", () => {
+    render(
+      <CardEditor card={card} cards={[card, other]} disabled={false} onSave={async () => true} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+
+    const table = screen.getByRole("table", { name: "Palabras prohibidas de la carta" });
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(6);
+    expect(within(table).getAllByRole("textbox")).toHaveLength(6);
+    expect(screen.getByLabelText("Palabra prohibida 1")).toHaveValue("calor");
+    expect(screen.getByLabelText("Palabra prohibida 3")).toHaveValue("");
+  });
+
+  it("says per word whether the dictionary knows it", () => {
+    const evaluated = {
+      ...card,
+      candidates: [
+        { word: "calor", recognized: true, valid: true },
+        { word: "humo", recognized: false, valid: false, reason: "not_in_dictionary" },
+      ],
+    };
+    render(
+      <CardEditor
+        card={evaluated}
+        cards={[evaluated, other]}
+        disabled={false}
+        onSave={async () => true}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+
+    const states = stateCells();
+    expect(states[0]).toHaveTextContent("en el diccionario");
+    expect(states[1]).toHaveTextContent("no reconocida");
+    // Las cuatro que faltan están vacías: se dice, no se evalúa de mentira.
+    expect(states.slice(2)).toHaveLength(4);
+    for (const cell of states.slice(2)) expect(cell).toHaveTextContent("vacía");
+  });
+
+  it("does not invent a dictionary verdict for a word that was just typed", () => {
+    const evaluated = {
+      ...card,
+      candidates: [{ word: "calor", recognized: true, valid: true }],
+    };
+    render(
+      <CardEditor
+        card={evaluated}
+        cards={[evaluated, other]}
+        disabled={false}
+        onSave={async () => true}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Editar carta" }));
+    fireEvent.change(screen.getByLabelText("Palabra prohibida 1"), {
+      target: { value: "hoguera" },
+    });
+
+    expect(stateCells()[0]).toHaveTextContent("sin evaluar");
+    expect(stateCells()[0]).not.toHaveTextContent("en el diccionario");
   });
 
   it("avisa que el objetivo ya lo usa otra carta antes de guardar", () => {

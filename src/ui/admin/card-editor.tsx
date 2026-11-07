@@ -17,6 +17,20 @@ export interface CardConflict {
   readonly card: string;
 }
 
+/** Estado del diccionario para una palabra prohibida. */
+type WordState = "empty" | "pending" | "recognized" | "unrecognized";
+
+/** Cómo se muestra cada estado en la tabla de prohibidas. */
+const WORD_STATE_VIEW: Record<
+  WordState,
+  { readonly mark: string; readonly text: string; readonly tone: string }
+> = {
+  empty: { mark: "", text: "vacía", tone: "text-fg-muted" },
+  pending: { mark: "", text: "sin evaluar", tone: "text-fg-muted" },
+  recognized: { mark: "✓", text: "en el diccionario", tone: "text-success" },
+  unrecognized: { mark: "!", text: "no reconocida", tone: "text-warning" },
+};
+
 export function CardEditor({
   card,
   cards,
@@ -54,6 +68,27 @@ export function CardEditor({
     const clash = cards.find((other) => other.id !== card.id && normalizeWord(other.word) === key);
     return clash === undefined ? null : { word: word.trim(), card: clash.word };
   })();
+
+  /**
+   * Estado del diccionario por palabra, de la última evaluación guardada: el
+   * panel ya recibe los candidatos evaluados de cada carta, así que saber qué
+   * palabras no reconoce el diccionario no cuesta una consulta. Una palabra
+   * recién escrita todavía no fue evaluada: se dice, no se inventa.
+   */
+  const evaluated = new Map(
+    (card.candidates ?? []).map((candidate) => [normalizeWord(candidate.word), candidate]),
+  );
+
+  const stateOf = (term: string): WordState => {
+    if (term.trim().length === 0) {
+      return "empty";
+    }
+    const candidate = evaluated.get(normalizeWord(term));
+    if (candidate === undefined || candidate.recognized === undefined) {
+      return "pending";
+    }
+    return candidate.recognized ? "recognized" : "unrecognized";
+  };
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -114,23 +149,63 @@ export function CardEditor({
           palabra.
         </p>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {taboo.map((term, index) => (
-          <label key={index} className="block space-y-2">
-            <span className="text-body-sm">Palabra prohibida {index + 1}</span>
-            <Input
-              value={term}
-              maxLength={MAX_CARD_TEXT_LENGTH}
-              disabled={locked}
-              aria-describedby={hintId}
-              onChange={(event) =>
-                setTaboo((words) =>
-                  words.map((value, position) => (position === index ? event.target.value : value)),
-                )
-              }
-            />
-          </label>
-        ))}
+      {/*
+        Las seis prohibidas en una tabla horizontal: se leen de un vistazo y
+        cada palabra dice si el diccionario la reconoce, que es lo que el
+        administrador tiene que corregir antes de guardar.
+      */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[36rem] table-fixed border-collapse">
+          <caption className="sr-only">Palabras prohibidas de la carta</caption>
+          <thead>
+            <tr>
+              {taboo.map((_, index) => (
+                <th
+                  key={index}
+                  scope="col"
+                  className="pb-1 text-left text-caption font-normal text-fg-muted"
+                >
+                  {index + 1}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {taboo.map((term, index) => (
+                <td key={index} className="pr-2 align-top last:pr-0">
+                  <label className="block">
+                    <span className="sr-only">Palabra prohibida {index + 1}</span>
+                    <Input
+                      value={term}
+                      maxLength={MAX_CARD_TEXT_LENGTH}
+                      disabled={locked}
+                      aria-describedby={hintId}
+                      onChange={(event) =>
+                        setTaboo((words) =>
+                          words.map((value, position) =>
+                            position === index ? event.target.value : value,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                </td>
+              ))}
+            </tr>
+            <tr>
+              {taboo.map((term, index) => {
+                const state = WORD_STATE_VIEW[stateOf(term)];
+                return (
+                  <td key={index} className={`pt-1 align-top text-caption ${state.tone}`}>
+                    {state.mark !== "" && <span aria-hidden="true">{state.mark} </span>}
+                    {state.text}
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
       </div>
       <p id={hintId} className="text-body-sm text-fg-muted">
         Puedes guardar entre una y seis prohibidas. Las cartas dudosas o incompletas quedan

@@ -136,7 +136,7 @@ export function CardList({
           )}
         </div>
       )}
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-3">
         {visibleCards.map((card) => (
           <ManagedCard
             key={card.id}
