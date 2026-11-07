@@ -34,11 +34,3 @@ export function requestDeckGeneration(deckId: string, count: number): Promise<Jo
     body: JSON.stringify({ count }),
   });
 }
-
-/** Encola el reemplazo automático de una carta. */
-export function requestCardReplacement(deckId: string, cardId: string): Promise<JobView> {
-  return api<JobView>(
-    `/api/admin/decks/${encodeURIComponent(deckId)}/cards/${encodeURIComponent(cardId)}/replace`,
-    { method: "POST" },
-  );
-}

@@ -175,14 +175,9 @@ describe("processClaimedJob (batch flow)", () => {
       issues: [],
     });
   });
-  it.each([
-    ["generate", true],
-    ["replace", true],
-    ["generate", false],
-    ["replace", false],
-  ] as const)(
-    "threads proper-name mode through %s and completion when enabled=%s",
-    async (kind, allowProperNames) => {
+  it.each([true, false])(
+    "threads proper-name mode through the batch and completion when enabled=%s",
+    async (allowProperNames) => {
       const { decks, provider, deps, claim } = build();
       const candidates = allowProperNames
         ? ["Arya", "Ned", "Sansa", "Tyrion", "Cersei", "Jaime"]
@@ -196,35 +191,10 @@ describe("processClaimedJob (batch flow)", () => {
         allowProperNames,
         ...{ rules: "Prefer familiar associations." },
       });
-      deck.cards.push({
-        id: "old-card",
-        word: "fuego",
-        taboo: SIX_WORDS,
-        excluded: false,
-        manualOverride: false,
-        issues: [],
-        candidates: [],
-        createdAt: deck.createdAt,
-        updatedAt: deck.updatedAt,
-      });
-      if (kind === "replace") {
-        provider.batchQueue.push([{ objective, candidates: candidates.slice(0, 3) }]);
-      } else {
-        queueCards(provider, [{ objective, candidates: candidates.slice(0, 3) }]);
-      }
+      queueCards(provider, [{ objective, candidates: candidates.slice(0, 3) }]);
       provider.completionQueue.push(candidates.slice(3));
-      await processClaimedJob(
-        deps,
-        claim(
-          buildJob({
-            kind,
-            requested: 1,
-            ...(kind === "replace" ? { targetCardId: "old-card" } : {}),
-          }),
-        ),
-      );
-      const batchCall =
-        kind === "replace" ? provider.batchCalls[0] : provider.candidateBatchCalls[0];
+      await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+      const batchCall = provider.candidateBatchCalls[0];
       expect(batchCall).toHaveProperty("rules", "Prefer familiar associations.");
       expect(provider.completionCalls[0]).toHaveProperty("rules", "Prefer familiar associations.");
       if (allowProperNames) {
@@ -747,173 +717,29 @@ describe("processClaimedJob (budget and recovery)", () => {
     expect(cards).toHaveLength(2);
     expect(new Set(cards.map((card) => card.id)).size).toBe(2);
   });
-
-  it("does not replace a card twice when the replacement was already stored", async () => {
-    const { decks, jobs, provider, deps, claim } = build();
-    const stored = decks.seed({
-      id: "deck-1",
-      name: "General",
-      theme: "Objetos",
-      usedObjectives: ["fuego"],
-      cards: [
-        {
-          id: "card-1",
-          word: "agua",
-          taboo: [...SIX_WORDS],
-          excluded: false,
-          manualOverride: false,
-          issues: [],
-          candidates: [],
-          sourceJobId: "job-1",
-          createdAt: "2026-10-29T00:00:00.000Z",
-          updatedAt: "2026-10-29T00:00:00.000Z",
-        },
-      ],
-    });
-
-    provider.batchQueue = [[{ objective: "arbol", candidates: [...SIX_WORDS] }]];
-
-    const job = buildJob({ kind: "replace", requested: 1, targetCardId: "card-1" });
-
-    await processClaimedJob(deps, claim(job));
-
-    expect(provider.batchCalls).toHaveLength(0);
-    expect(stored.cards[0]?.word).toBe("agua");
-    expect(jobs.completed).toEqual(["job-1"]);
-  });
 });
-
-describe("processClaimedJob replacement retries", () => {
-  function setup() {
-    const context = build();
-    context.decks.seed({
-      id: "deck-1",
-      name: "General",
-      theme: "Objetos",
-      usedObjectives: ["fuego"],
-      cards: [
-        {
-          id: "card-1",
-          word: "fuego",
-          taboo: [...SIX_WORDS],
-          excluded: false,
-          manualOverride: false,
-          issues: [],
-          candidates: [],
-          sourceJobId: "previous-job",
-          createdAt: "2026-10-29T00:00:00.000Z",
-          updatedAt: "2026-10-29T00:00:00.000Z",
-        },
-      ],
-    });
-    return context;
-  }
-
-  const replacement = (overrides: Partial<AdminJob> = {}) =>
-    buildJob({
-      ...jobLimitsFor(1),
-      kind: "replace",
-      requested: 1,
-      targetCardId: "card-1",
-      ...overrides,
-    });
-
-  it.each([
-    ["empty response", []],
-    ["blank objective", [{ objective: "  ", candidates: [...SIX_WORDS] }]],
-    ["repeated normalized objective", [{ objective: " FÚEGO ", candidates: [...SIX_WORDS] }]],
-  ] as const)(
-    "retries a %s and replaces only after receiving a new objective",
-    async (_, rejected) => {
-      const { decks, jobs, provider, deps, claim } = setup();
-      const originalCards = JSON.stringify(decks.decks.get("deck-1")?.cards);
-      const original = provider.proposeCards.bind(provider);
-      provider.batchQueue = [[...rejected], [{ objective: "arbol", candidates: [...SIX_WORDS] }]];
-      provider.proposeCards = async (input) => {
-        expect(JSON.stringify(decks.decks.get("deck-1")?.cards)).toBe(originalCards);
-        return original(input);
-      };
-      await processClaimedJob(deps, claim(replacement()));
-      expect(provider.batchCalls).toHaveLength(2);
-      expect(
-        provider.batchCalls.every(
-          (call) => call.count === 1 && call.excludedObjectives.includes("fuego"),
-        ),
-      ).toBe(true);
-      expect(decks.decks.get("deck-1")?.cards).toMatchObject([
-        {
-          id: "card-1",
-          word: "arbol",
-          sourceJobId: "job-1",
-          createdAt: "2026-10-29T00:00:00.000Z",
-        },
-      ]);
-      expect(decks.decks.get("deck-1")?.usedObjectives).toEqual(["fuego", "arbol"]);
-      expect(jobs.completed).toEqual(["job-1"]);
-      expect(jobs.failed).toEqual([]);
-      expect(await jobs.findById("job-1")).toMatchObject({
-        calls: 2,
-        attempts: 2,
-        processed: 1,
-        inputTokens: 6,
-        outputTokens: 10,
-      });
-    },
-  );
-
-  it.each([
-    ["attempts", { maxAttempts: 3, maxCalls: 5 }, 3],
-    ["calls", { maxAttempts: 3, maxCalls: 2 }, 2],
-    ["persisted attempts", { attempts: 2, calls: 2, maxAttempts: 3, maxCalls: 5 }, 1],
-  ] as const)(
-    "stops at the remaining %s budget without changing the card or history",
-    async (_, limits, calls) => {
-      const { decks, jobs, provider, deps, claim } = setup();
-      const before = decks.decks.get("deck-1")!;
-      const originalData = JSON.stringify({
-        cards: before.cards,
-        usedObjectives: before.usedObjectives,
-        proposedWords: before.proposedWords,
-        revision: before.revision,
-      });
-      await processClaimedJob(deps, claim(replacement(limits)));
-      const after = decks.decks.get("deck-1")!;
-      expect(
-        JSON.stringify({
-          cards: after.cards,
-          usedObjectives: after.usedObjectives,
-          proposedWords: after.proposedWords,
-          revision: after.revision,
-        }),
-      ).toBe(originalData);
-      expect(provider.batchCalls).toHaveLength(calls);
-      expect(provider.completionCalls).toHaveLength(0);
-      expect(jobs.completed).toEqual([]);
-      expect(jobs.failed).toHaveLength(1);
-      expect(jobs.failed[0]?.error).toContain(
-        "The provider did not return a new objective for the replacement",
-      );
-      expect(await jobs.findById("job-1")).toMatchObject({
-        calls: ("calls" in limits ? limits.calls : 0) + calls,
-        attempts: ("attempts" in limits ? limits.attempts : 0) + calls,
-        inputTokens: 3 * calls,
-        outputTokens: 5 * calls,
-      });
-    },
-  );
-
-  it("keeps the single-call replacement path for a valid first response", async () => {
-    const { decks, jobs, provider, deps, claim } = setup();
-    provider.batchQueue = [[{ objective: "arbol", candidates: [...SIX_WORDS] }]];
-    await processClaimedJob(deps, claim(replacement()));
-    expect(provider.batchCalls).toHaveLength(1);
-    expect(provider.completionCalls).toHaveLength(0);
-    expect(decks.decks.get("deck-1")?.cards[0]?.word).toBe("arbol");
-    expect(jobs.completed).toEqual(["job-1"]);
-  });
-});
-
 describe("processClaimedJob (guards)", () => {
+  it("rejects a retired replacement job without generating cards or changing history", async () => {
+    const { decks, jobs, provider, deps, claim } = build();
+    const deck = decks.seed({ id: "deck-1", name: "General", theme: "Objetos" });
+    const before = JSON.stringify([
+      deck.cards,
+      deck.usedObjectives,
+      deck.proposedWords,
+      deck.revision,
+    ]);
+    await processClaimedJob(deps, claim(buildJob({ kind: "replace" as never, requested: 1 })));
+    expect(provider.objectiveCalls).toHaveLength(0);
+    expect(provider.candidateBatchCalls).toHaveLength(0);
+    expect(provider.completionCalls).toHaveLength(0);
+    expect(jobs.completed).toEqual([]);
+    expect(jobs.failed).toEqual([{ id: "job-1", error: "This job type is no longer supported" }]);
+    expect(
+      JSON.stringify([deck.cards, deck.usedObjectives, deck.proposedWords, deck.revision]),
+    ).toBe(before);
+    expect(deck.activeJob).toBeUndefined();
+  });
+
   it("fails a legacy job of an archived deck without calling the provider", async () => {
     const { decks, jobs, provider, deps, claim } = build();
     decks.seed({
@@ -928,7 +754,6 @@ describe("processClaimedJob (guards)", () => {
     // Falla terminal: no vuelve a la cola y no llama al proveedor.
     expect(provider.objectiveCalls).toHaveLength(0);
     expect(provider.candidateBatchCalls).toHaveLength(0);
-    expect(provider.batchCalls).toHaveLength(0);
     expect(jobs.released).toEqual([]);
     expect(jobs.completed).toEqual([]);
     expect(jobs.failed).toHaveLength(1);

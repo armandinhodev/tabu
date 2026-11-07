@@ -17,7 +17,6 @@ import type {
   GenerationProvider,
   JobFence,
   ProviderUsage,
-  ProposedCard,
   SpellChecker,
 } from "./ports";
 import type { AdminJob, ManagedCard, ManagedDeck } from "./types";
@@ -195,11 +194,11 @@ export async function processClaimedJob(
   }
 
   try {
-    if (job.kind === "replace") {
-      await runReplacement(deps, job, fence, signal);
-    } else {
-      await runGeneration(deps, job, fence, signal);
+    // Persisted jobs can outlive the feature that created them.
+    if (job.kind !== "generate") {
+      throw new AdminError(400, "unsupported_job_kind", "This job type is no longer supported");
     }
+    await runGeneration(deps, job, fence, signal);
   } catch (error) {
     if (error instanceof LeaseLostError) {
       deps.log.warn("admin job stopped", { jobId: job.id, reason: "lease_lost" });
@@ -395,117 +394,6 @@ async function runGeneration(
     );
   }
 
-  await deps.jobs.complete({
-    jobId: job.id,
-    owner: fence.owner,
-    token: fence.token,
-    now: deps.clock.now().toISOString(),
-  });
-}
-
-/** Reemplaza una carta por un objetivo nuevo. */
-async function runReplacement(
-  deps: ProcessJobDeps,
-  job: AdminJob,
-  fence: JobFence,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  const deck = await requireDeck(deps, job.deckId);
-  const targetCardId = job.targetCardId ?? "";
-
-  const target = deck.cards.find((card) => card.id === targetCardId);
-
-  if (target === undefined) {
-    throw new AdminError(404, "not_found", "The card to replace no longer exists");
-  }
-
-  if (target.sourceJobId === job.id) {
-    // El reemplazo ya quedó guardado: no se vuelve a reemplazar.
-    await deps.jobs.complete({
-      jobId: job.id,
-      owner: fence.owner,
-      token: fence.token,
-      now: deps.clock.now().toISOString(),
-    });
-    return;
-  }
-
-  const state: JobState = {
-    attempts: job.attempts,
-    calls: job.calls,
-    processed: 0,
-    usage: { inputTokens: job.inputTokens, outputTokens: job.outputTokens },
-    objectives: [...job.objectives],
-  };
-
-  let proposed: ProposedCard | undefined;
-
-  // Reuse the persisted budget: a rejected objective must not end the job
-  // before its remaining attempts have been used, or change the stored card.
-  do {
-    await renewLease(deps, job, fence);
-    const result = await requestBatch(deps, job, fence, state, {
-      ...(deck.rules ? { rules: deck.rules } : {}),
-      theme: deck.theme,
-      ...(deck.allowProperNames ? { allowProperNames: true } : {}),
-      count: 1,
-      excludedObjectives: deck.usedObjectives,
-      ...(signal === undefined ? {} : { signal }),
-    });
-
-    state.usage = addUsage(state.usage, result.usage);
-    proposed = result.cards.find((card) => {
-      const key = normalizeWord(card.objective);
-      return key.length > 0 && !deck.usedObjectives.includes(key);
-    });
-
-    // Account for rejected responses too, including the final failed attempt.
-    await saveCheckpoint(deps, job, fence, state);
-  } while (
-    proposed === undefined &&
-    state.attempts < job.maxAttempts &&
-    state.calls < job.maxCalls
-  );
-
-  if (proposed === undefined) {
-    throw new AdminError(
-      503,
-      "no_new_objective",
-      "The provider did not return a new objective for the replacement",
-    );
-  }
-
-  const objective = proposed.objective.normalize("NFC").trim();
-
-  const card = await buildCard(deps, job, fence, state, {
-    ...(deck.rules ? { rules: deck.rules } : {}),
-    id: target.id,
-    index: 0,
-    theme: deck.theme,
-    ...(deck.allowProperNames ? { allowProperNames: true } : {}),
-    objective,
-    proposed,
-    previousWords: [],
-    signal,
-  });
-
-  const updated = await deps.decks.replaceCard({
-    deckId: job.deckId,
-    cardId: target.id,
-    card,
-    fence,
-    now: deps.clock.now().toISOString(),
-  });
-
-  if (updated === null) {
-    throw new LeaseLostError();
-  }
-
-  state.processed = 1;
-  state.objectives = [objective];
-
-  await publishSafely(deps, job.deckId, fence, deps.clock.now().toISOString());
-  await saveCheckpoint(deps, job, fence, state);
   await deps.jobs.complete({
     jobId: job.id,
     owner: fence.owner,
@@ -724,39 +612,6 @@ async function requestCandidatesBatch(
     ...(input.allowProperNames ? { allowProperNames: true } : {}),
     theme: input.theme,
     objectives: input.objectives,
-    ...(input.signal === undefined ? {} : { signal: input.signal }),
-  });
-
-  return { cards: result.data.cards, usage: result.usage };
-}
-
-/** Lote inicial: una llamada trae objetivo y prohibidas de cada carta. */
-async function requestBatch(
-  deps: ProcessJobDeps,
-  job: AdminJob,
-  fence: JobFence,
-  state: JobState,
-  input: {
-    rules?: string;
-    theme: string;
-    count: number;
-    allowProperNames?: boolean;
-    excludedObjectives: readonly string[];
-    signal?: AbortSignal;
-  },
-): Promise<{
-  cards: readonly { objective: string; candidates: readonly string[] }[];
-  usage: ProviderUsage;
-}> {
-  await reserveCall(deps, job, fence, state, true);
-
-  const result = await deps.provider.proposeCards({
-    ...(input.rules ? { rules: input.rules } : {}),
-    model: job.model ?? DEFAULT_DEEPSEEK_MODEL,
-    ...(input.allowProperNames ? { allowProperNames: true } : {}),
-    theme: input.theme,
-    count: input.count,
-    excludedObjectives: input.excludedObjectives,
     ...(input.signal === undefined ? {} : { signal: input.signal }),
   });
 

@@ -158,7 +158,7 @@ describe("AdminService.getDeck", () => {
 });
 
 describe("AdminService.queueGeneration", () => {
-  it("uses the global model for replacement admission too", async () => {
+  it("uses the global model for the admission too", async () => {
     const { decks, jobs, provider } = build();
     const service = new AdminService({
       decks,
@@ -170,10 +170,7 @@ describe("AdminService.queueGeneration", () => {
       settings: { get: async () => ({ model: "deepseek-v4-pro" }) },
     });
     decks.seed({ id: "deck-1", name: "One", theme: "General", cards: [card()] });
-    expect(await service.queueReplacement("deck-1", "card-1")).toHaveProperty(
-      "model",
-      "deepseek-v4-pro",
-    );
+    expect(await service.queueGeneration("deck-1", 1)).toHaveProperty("model", "deepseek-v4-pro");
   });
   it("snapshots global settings on admission and leaves queued jobs unchanged", async () => {
     const { decks, jobs, provider } = build();
@@ -299,26 +296,6 @@ describe("AdminService.queueGeneration", () => {
       expect(await jobs.findById(queued.id)).toEqual(queued);
     },
   );
-});
-
-describe("AdminService.queueReplacement", () => {
-  it("answers 404 for an unknown card", async () => {
-    const { service, decks } = build();
-    decks.seed({ id: "deck-1", name: "General", theme: "General" });
-
-    await expectAdminError(service.queueReplacement("deck-1", "missing"), 404, "not_found");
-  });
-
-  it("queues a replacement for the requested card", async () => {
-    const { service, decks } = build();
-    decks.seed({ id: "deck-1", name: "General", theme: "General", cards: [card()] });
-
-    const job = await service.queueReplacement("deck-1", "card-1");
-
-    expect(job.kind).toBe("replace");
-    expect(job.targetCardId).toBe("card-1");
-    expect(job.requested).toBe(1);
-  });
 });
 
 describe("AdminService.setCardExcluded", () => {

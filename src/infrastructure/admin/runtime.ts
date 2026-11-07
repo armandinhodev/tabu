@@ -264,11 +264,6 @@ export async function setCardExcluded(
   return runtime().service.setCardExcluded(deckId, cardId, excluded);
 }
 
-/** Encola el reemplazo de una carta por un objetivo nuevo. */
-export async function queueReplacement(deckId: string, cardId: string): Promise<AdminJob> {
-  return runtime().service.queueReplacement(deckId, cardId);
-}
-
 /** Devuelve el estado de un trabajo. Falla con 404 si no existe. */
 export async function getAdminJob(id: string): Promise<AdminJob> {
   return runtime().service.getJob(id);

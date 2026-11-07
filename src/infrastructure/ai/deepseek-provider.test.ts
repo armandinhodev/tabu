@@ -60,7 +60,7 @@ describe("createDeepSeekProvider", () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[],"objectives":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
     const rules = "Priorizar asociaciones comunes.\nEvitar referencias oscuras.";
-    for (const method of ["proposeCards", "proposeCandidatesBatch", "proposeCandidates"] as const) {
+    for (const method of ["proposeCandidatesBatch", "proposeCandidates"] as const) {
       const input = {
         theme: "Food",
         count: 1,
@@ -97,10 +97,9 @@ describe("createDeepSeekProvider", () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
     await expect(
-      provider.proposeCards({
+      provider.proposeCandidatesBatch({
         theme: "Series",
-        count: 1,
-        excludedObjectives: [],
+        objectives: ["fuego"],
         model: "unknown" as never,
       }),
     ).rejects.toMatchObject({ status: 400, code: "invalid_model" });
@@ -109,10 +108,9 @@ describe("createDeepSeekProvider", () => {
   it("uses the selected Pro model for batches and completion without changing the default", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
-    await provider.proposeCards({
+    await provider.proposeCandidatesBatch({
       theme: "Series",
-      count: 1,
-      excludedObjectives: [],
+      objectives: ["fuego"],
       ...{ model: "deepseek-v4-pro" as const },
     });
     expect(bodyOf(calls).model).toBe("deepseek-v4-pro");
@@ -128,20 +126,16 @@ describe("createDeepSeekProvider", () => {
     expect(bodyOf(calls).model).toBe("deepseek-v4-pro");
   });
   it("changes objective instructions only for an enabled deck and excludes title components", async () => {
-    const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
+    const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[],"objectives":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
-    await provider.proposeCards({
+    await provider.proposeObjectives({
       theme: "Series",
       count: 1,
       excludedObjectives: [],
       ...{ allowProperNames: true },
     });
-    expect(promptOf(calls)).toContain("nombres propios y títulos");
+    expect(promptOf(calls)).toContain("nombre propio o un título");
     expect(promptOf(calls)).not.toContain("de cuatro a doce letras");
-    expect(promptOf(calls)).toContain("Ned Stark");
-    expect(promptOf(calls)).not.toContain("una sola palabra");
-    expect(promptOf(calls)).toContain("partes del objetivo");
-    expect(promptOf(calls)).toContain("Las prohibidas también pueden ser nombres propios");
     calls.length = 0;
     await provider.proposeCandidates({
       theme: "Series",
@@ -159,16 +153,18 @@ describe("createDeepSeekProvider", () => {
   it.each([undefined, false])(
     "keeps single-word instructions when proper names are %s",
     async (allowProperNames) => {
-      const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
+      const { fetch, calls } = fakeFetch(
+        completion('{"cards":[],"candidates":[],"objectives":[]}'),
+      );
       const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
       const option = allowProperNames === undefined ? {} : { allowProperNames };
-      await provider.proposeCards({
+      await provider.proposeObjectives({
         theme: "Objetos",
         count: 1,
         excludedObjectives: [],
         ...option,
       });
-      expect(promptOf(calls)).toContain("cada una de una sola palabra");
+      expect(promptOf(calls)).toContain("de cuatro a doce letras");
       expect(promptOf(calls)).not.toContain("Ned Stark");
       calls.length = 0;
       await provider.proposeCandidates({
@@ -190,7 +186,10 @@ describe("createDeepSeekProvider", () => {
       fetchImpl: fetch,
       maxOutputTokens: 1234,
     });
-    await provider.proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] });
+    await provider.proposeCandidatesBatch({
+      theme: "Objetos",
+      objectives: Array.from({ length: 50 }, (_, index) => `objetivo${index}`),
+    });
     expect(bodyOf(calls).max_tokens).toBe(1234);
     calls.length = 0;
     await provider.proposeCandidates({
@@ -206,12 +205,18 @@ describe("createDeepSeekProvider", () => {
   it("scales the output budget for fifty cards without increasing small-request or completion budgets", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[],"candidates":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
-    await provider.proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] });
+    await provider.proposeCandidatesBatch({
+      theme: "Objetos",
+      objectives: ["fuego", "agua", "tierra", "viento", "fuego2"],
+    });
     expect(bodyOf(calls).max_tokens).toBe(2000);
     calls.length = 0;
-    await provider.proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] });
+    await provider.proposeCandidatesBatch({
+      theme: "Objetos",
+      objectives: Array.from({ length: 50 }, (_, index) => `objetivo${index}`),
+    });
     expect(bodyOf(calls).max_tokens).toBe(20000);
-    expect(promptOf(calls)).toContain("Genera 50 cartas");
+    expect(promptOf(calls)).toContain("Para cada uno de estos 50 objetivos");
     calls.length = 0;
     await provider.proposeCandidates({
       objective: "fuego",
@@ -221,18 +226,6 @@ describe("createDeepSeekProvider", () => {
       rejected: [],
     });
     expect(bodyOf(calls).max_tokens).toBe(2000);
-  });
-
-  it("remembers all objectives of a twelve-hundred-card job instead of only the last two hundred", async () => {
-    const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
-    const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
-    await provider.proposeCards({
-      theme: "Objetos",
-      count: 50,
-      excludedObjectives: Array.from({ length: 1200 }, (_, index) => `objetivo${index}`),
-    });
-    expect(promptOf(calls)).toContain("objetivo0,");
-    expect(promptOf(calls)).toContain("objetivo1199");
   });
 
   it("allows a larger batch its bounded deadline while retaining the explicit timeout override", async () => {
@@ -248,7 +241,10 @@ describe("createDeepSeekProvider", () => {
         });
       const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
       const pending = provider
-        .proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] })
+        .proposeCandidatesBatch({
+          theme: "Objetos",
+          objectives: Array.from({ length: 50 }, (_, index) => `objetivo${index}`),
+        })
         .catch((error: unknown) => error);
       await vi.advanceTimersByTimeAsync(20001);
       expect(aborted).toBe(false);
@@ -263,7 +259,10 @@ describe("createDeepSeekProvider", () => {
         maxOutputTokens: 1234,
       });
       const overridden = custom
-        .proposeCards({ theme: "Objetos", count: 50, excludedObjectives: [] })
+        .proposeCandidatesBatch({
+          theme: "Objetos",
+          objectives: Array.from({ length: 50 }, (_, index) => `objetivo${index}`),
+        })
         .catch((error: unknown) => error);
       await vi.advanceTimersByTimeAsync(10);
       expect(await overridden).toBeInstanceOf(AdminError);
@@ -277,7 +276,7 @@ describe("createDeepSeekProvider", () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
-    await provider.proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] });
+    await provider.proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] });
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe(DEEPSEEK_ENDPOINT);
@@ -290,7 +289,7 @@ describe("createDeepSeekProvider", () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
-    await provider.proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] });
+    await provider.proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] });
 
     const body = bodyOf(calls);
     expect(body.thinking).toEqual({ type: "disabled" });
@@ -304,28 +303,26 @@ describe("createDeepSeekProvider", () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
-    await provider.proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] });
+    await provider.proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] });
 
     const headers = calls[0]?.init.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer secret-key");
     expect(headers["content-type"]).toBe("application/json");
   });
 
-  it("asks for objectives and ranked candidates in one response", async () => {
+  it("asks for the forbidden words of every requested objective", async () => {
     const { fetch, calls } = fakeFetch(completion('{"cards":[]}'));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
-    await provider.proposeCards({
+    await provider.proposeCandidatesBatch({
       theme: "Objetos",
-      count: 5,
-      excludedObjectives: ["fuego"],
+      objectives: ["fuego", "agua"],
     });
 
     const prompt = promptOf(calls);
     expect(prompt).toContain("Objetos");
-    expect(prompt).toContain("5");
-    expect(prompt).toContain("fuego");
-    expect(prompt).toContain("objective");
+    expect(prompt).toContain('1) "fuego"');
+    expect(prompt).toContain('2) "agua"');
     expect(prompt).toContain("candidates");
     expect(prompt).toContain("8");
   });
@@ -338,10 +335,9 @@ describe("createDeepSeekProvider", () => {
     );
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
-    const result = await provider.proposeCards({
+    const result = await provider.proposeCandidatesBatch({
       theme: "Objetos",
-      count: 5,
-      excludedObjectives: [],
+      objectives: ["fuego", "agua"],
     });
 
     expect(result.data.cards).toHaveLength(2);
@@ -357,10 +353,9 @@ describe("createDeepSeekProvider", () => {
     );
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
-    const result = await provider.proposeCards({
+    const result = await provider.proposeCandidatesBatch({
       theme: "Objetos",
-      count: 1,
-      excludedObjectives: [],
+      objectives: ["fuego"],
     });
 
     expect(result.data.cards[0]?.candidates).toHaveLength(8);
@@ -374,10 +369,9 @@ describe("createDeepSeekProvider", () => {
     const { fetch } = fakeFetch(completion(JSON.stringify({ cards })));
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
-    const result = await provider.proposeCards({
+    const result = await provider.proposeCandidatesBatch({
       theme: "Objetos",
-      count: 5,
-      excludedObjectives: [],
+      objectives: ["fuego", "agua", "tierra", "viento", "fuego2"],
     });
 
     expect(result.data.cards).toHaveLength(5);
@@ -408,7 +402,7 @@ describe("createDeepSeekProvider", () => {
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
     const error = await provider
-      .proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] })
+      .proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] })
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(AdminError);
@@ -422,7 +416,7 @@ describe("createDeepSeekProvider", () => {
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
     const error = await provider
-      .proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] })
+      .proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] })
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(AdminError);
@@ -434,7 +428,7 @@ describe("createDeepSeekProvider", () => {
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
 
     const error = await provider
-      .proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] })
+      .proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] })
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(AdminError);
@@ -458,7 +452,7 @@ describe("createDeepSeekProvider", () => {
     });
 
     const error = await provider
-      .proposeCards({ theme: "Objetos", count: 5, excludedObjectives: [] })
+      .proposeCandidatesBatch({ theme: "Objetos", objectives: ["fuego"] })
       .catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(AdminError);
@@ -477,10 +471,9 @@ describe("createDeepSeekProvider", () => {
     const provider = createDeepSeekProvider({ apiKey: "secret-key", fetchImpl: fetch });
     const controller = new AbortController();
 
-    const pending = provider.proposeCards({
+    const pending = provider.proposeCandidatesBatch({
       theme: "Objetos",
-      count: 5,
-      excludedObjectives: [],
+      objectives: ["fuego"],
       signal: controller.signal,
     });
 

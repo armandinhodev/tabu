@@ -9,8 +9,8 @@
 /** Único idioma soportado por el validador de ortografía instalado. */
 export type AdminLanguage = "es";
 
-/** Tipo de trabajo: generar un lote de cartas o reemplazar una carta puntual. */
-export type AdminJobKind = "generate" | "replace";
+/** Tipo de trabajo: generar un lote de cartas. */
+export type AdminJobKind = "generate";
 
 /** Estados de un trabajo persistido. */
 export type AdminJobStatus = "queued" | "running" | "completed" | "failed";
@@ -88,8 +88,6 @@ export interface AdminJob {
   readonly deckId: string;
   readonly kind: AdminJobKind;
   readonly status: AdminJobStatus;
-  /** Carta a reemplazar (sólo en trabajos `replace`). */
-  readonly targetCardId?: string;
   /** Cantidad de cartas pedidas. */
   readonly requested: number;
   /** Cartas ya guardadas en el mazo. */

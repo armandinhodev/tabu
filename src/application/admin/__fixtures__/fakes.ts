@@ -76,14 +76,6 @@ export class FakeSpellChecker implements SpellChecker {
  */
 export class FakeProvider implements GenerationProvider {
   available = true;
-  readonly batchCalls: {
-    rules?: string;
-    model?: import("../settings").DeepSeekModel;
-    allowProperNames?: boolean;
-    theme: string;
-    count: number;
-    excludedObjectives: readonly string[];
-  }[] = [];
   readonly completionCalls: {
     rules?: string;
     model?: import("../settings").DeepSeekModel;
@@ -93,7 +85,6 @@ export class FakeProvider implements GenerationProvider {
     selected: readonly string[];
     rejected: readonly string[];
   }[] = [];
-  batchQueue: ProposedCard[][] = [];
   completionQueue: string[][] = [];
   readonly objectiveCalls: {
     model?: import("../settings").DeepSeekModel;
@@ -114,7 +105,6 @@ export class FakeProvider implements GenerationProvider {
   objectiveError: unknown = null;
   candidateBatchError: unknown = null;
   usagePerCall: ProviderUsage = { inputTokens: 3, outputTokens: 5 };
-  batchError: unknown = null;
   completionError: unknown = null;
 
   async proposeObjectives(input: {
@@ -161,33 +151,6 @@ export class FakeProvider implements GenerationProvider {
     }
 
     return { data: { cards: this.candidateBatchQueue.shift() ?? [] }, usage: this.usagePerCall };
-  }
-
-  async proposeCards(input: {
-    rules?: string;
-    model?: import("../settings").DeepSeekModel;
-    allowProperNames?: boolean;
-    theme: string;
-    count: number;
-    excludedObjectives: readonly string[];
-    signal?: AbortSignal;
-  }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
-    this.batchCalls.push({
-      ...(input.rules === undefined ? {} : { rules: input.rules }),
-      ...(input.model === undefined ? {} : { model: input.model }),
-      ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
-      theme: input.theme,
-      count: input.count,
-      excludedObjectives: [...input.excludedObjectives],
-    });
-
-    if (this.batchError !== null) {
-      throw this.batchError;
-    }
-
-    const cards = this.batchQueue.shift() ?? [];
-
-    return { data: { cards }, usage: this.usagePerCall };
   }
 
   async proposeCandidates(input: {
@@ -647,37 +610,6 @@ export class FakeDeckStore implements AdminDeckStore {
     return deck;
   }
 
-  async replaceCard(input: {
-    deckId: string;
-    cardId: string;
-    card: ManagedCard;
-    fence: JobFence;
-    now: string;
-  }): Promise<ManagedDeck | null> {
-    const deck = this.decks.get(input.deckId);
-
-    if (
-      deck === undefined ||
-      deck.archivedAt !== undefined ||
-      !ownsFence(deck, input.fence, input.now)
-    ) {
-      return null;
-    }
-
-    deck.cards = deck.cards.map((card) =>
-      card.id === input.cardId ? { ...input.card, createdAt: card.createdAt } : card,
-    );
-    deck.usedObjectives = unique([...deck.usedObjectives, normalizeWord(input.card.word)]);
-    deck.proposedWords = unique([
-      ...deck.proposedWords,
-      ...input.card.candidates.map((candidate) => normalizeWord(candidate.word)),
-    ]);
-    deck.revision += 1;
-    deck.updatedAt = input.now;
-
-    return deck;
-  }
-
   async releaseDeck(input: { deckId: string; jobId: string; token: number }): Promise<void> {
     const deck = this.decks.get(input.deckId);
 
@@ -747,7 +679,6 @@ export class FakeJobStore implements AdminJobStore {
       deckId: input.deckId,
       kind: input.kind,
       status: "queued",
-      ...(input.targetCardId === undefined ? {} : { targetCardId: input.targetCardId }),
       requested: input.requested,
       processed: 0,
       inputTokens: 0,

@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   generate: vi.fn(),
   exclude: vi.fn(),
-  replace: vi.fn(),
   editCard: vi.fn(),
   deleteCard: vi.fn(),
   job: vi.fn(),
@@ -31,7 +30,6 @@ vi.mock("@/infrastructure/admin/runtime", () => ({
   deleteAdminDeckPermanently: mocks.remove,
   queueGeneration: mocks.generate,
   setCardExcluded: mocks.exclude,
-  queueReplacement: mocks.replace,
   updateAdminCard: mocks.editCard,
   deleteAdminCard: mocks.deleteCard,
   getAdminJob: mocks.job,
@@ -47,7 +45,6 @@ import { POST as generate } from "./decks/[deckId]/generate/route";
 import { PATCH as exclude } from "./decks/[deckId]/cards/[cardId]/route";
 import { PUT as editCard } from "./decks/[deckId]/cards/[cardId]/route";
 import { DELETE as deleteCard } from "./decks/[deckId]/cards/[cardId]/route";
-import { POST as replace } from "./decks/[deckId]/cards/[cardId]/replace/route";
 import { GET as job } from "./jobs/[jobId]/route";
 import { GET as settings, PATCH as saveSettings } from "./settings/route";
 
@@ -258,7 +255,6 @@ describe("administrative HTTP boundary", () => {
       get(request(), context),
       generate(request("POST", {}), context),
       exclude(request("PATCH", {}), context),
-      replace(request("POST"), context),
       job(request(), context),
     ]);
     for (const response of results) {
@@ -271,7 +267,6 @@ describe("administrative HTTP boundary", () => {
       mocks.get,
       mocks.generate,
       mocks.exclude,
-      mocks.replace,
       mocks.job,
     ]) {
       expect(mock).not.toHaveBeenCalled();
@@ -299,15 +294,12 @@ describe("administrative HTTP boundary", () => {
     expect(mocks.generate).toHaveBeenCalledWith(deckId, { count: 10 });
   });
 
-  it("only accepts an explicit boolean exclusion and queues replacements", async () => {
+  it("only accepts an explicit boolean exclusion", async () => {
     mocks.exclude.mockResolvedValue({ id: deckId });
-    mocks.replace.mockResolvedValue({ id: "replacement", status: "queued" });
     expect((await exclude(request("PATCH", { excluded: "false" }), context)).status).toBe(400);
     expect(mocks.exclude).not.toHaveBeenCalled();
     expect((await exclude(request("PATCH", { excluded: false }), context)).status).toBe(200);
     expect(mocks.exclude).toHaveBeenCalledWith(deckId, cardId, false);
-    expect((await replace(request("POST"), context)).status).toBe(202);
-    expect(mocks.replace).toHaveBeenCalledWith(deckId, cardId);
   });
 
   it("rejects invalid JSON, extra fields and oversized bodies before writing", async () => {

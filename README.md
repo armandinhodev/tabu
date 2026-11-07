@@ -136,9 +136,9 @@ El panel está en `/admin`. Los mazos creados desde allí se administran por sep
 mazos originales; las partidas que ya comenzaron conservan sus cartas.
 
 La pestaña **Crear mazo** contiene el formulario de generación; **Mazos** permite revisar las
-cartas y pedir nuevas generaciones o reemplazos. El progreso en vivo se mantiene visible al
+cartas y pedir nuevas generaciones. El progreso en vivo se mantiene visible al
 cambiar de pestaña, y el formulario conserva los datos todavía no enviados.
-Al crear, generar más cartas o reemplazar una carta, el progreso muestra de inmediato
+Al crear o generar más cartas, el progreso muestra de inmediato
 **Preparando solicitud a DeepSeek…**, seguido del estado de cola o de espera de las primeras
 cartas. Al completar el trabajo, la barra desaparece y queda una confirmación breve;
 si falla, el error permanece visible. El resumen de un trabajo finalizado se descarta al cambiar
@@ -164,7 +164,7 @@ aparecen al final de la lista y mantienen las 20 cartas por página.
 En **Configuración**, el logo de DeepSeek acompaña la selección global **Flash / Pro**.
 **Guardar configuración** persiste el modelo en MongoDB para todos los administradores y mazos,
 incluso después de reiniciar el servidor. Flash (`deepseek-flash`) es el valor predeterminado;
-Pro usa `deepseek-v4-pro`. La selección se copia al encolar cada generación o reemplazo: cambiarla
+Pro usa `deepseek-v4-pro`. La selección se copia al encolar cada generación: cambiarla
 no modifica los trabajos ya encolados o en curso. Los trabajos antiguos sin modelo usan Flash.
 No hay cambio automático entre modelos; la clave de API sigue configurada sólo en el servidor.
 
@@ -179,7 +179,7 @@ es recuperable. Los botones usan etiquetas directas: **Archivar mazo**, **Elimin
 también se puede cerrar con el botón **Cerrar confirmación**, sin ejecutar la acción.
 El archivado es recuperable: no borra nada, conserva las cartas,
 los hallazgos de validación, el historial y el mismo identificador público, y el mazo deja de
-aceptar generaciones, reemplazos o cambios de cartas hasta restaurarlo. El catálogo muestra
+aceptar generaciones o cambios de cartas hasta restaurarlo. El catálogo muestra
 por defecto sólo los mazos activos; el filtro **Mostrar archivados** trae los archivados
 para poder seleccionarlos y restaurarlos. Un mazo archivado también ofrece **Eliminar definitivamente**:
 requiere una segunda confirmación y borra el mazo, sus cartas y su historial de generación;
@@ -187,7 +187,7 @@ no se puede deshacer. No se añade protección especial para partidas en curso. 
 únicamente una marca pública vacía y anónima para impedir publicaciones atrasadas, no las cartas
 ni el nombre original. Si la limpieza falla, reintentar la eliminación la completa.
 Editar, archivar, restaurar y eliminar se rechazan mientras
-el mazo tiene una generación o un reemplazo en curso. Cambiar la temática afecta sólo a las
+el mazo tiene una generación en curso. Cambiar la temática afecta sólo a las
 generaciones futuras: las cartas guardadas no se regeneran.
 
 Encolar una generación reserva el mazo antes de publicar el trabajo. Si el proceso se cae en
@@ -201,7 +201,7 @@ Configurar estas variables únicamente en el servidor, en `.env` o en el entorno
 | `ADMIN_USERNAME`       | Usuario del administrador.                                        |
 | `ADMIN_PASSWORD`       | Contraseña larga y exclusiva para este panel.                     |
 | `ADMIN_SESSION_SECRET` | Secreto aleatorio de al menos 32 caracteres para firmar sesiones. |
-| `DEEPSEEK_API_KEY`     | Clave de DeepSeek para generar cartas y reemplazos.               |
+| `DEEPSEEK_API_KEY`     | Clave de DeepSeek para generar cartas.                     |
 
 Sin las tres variables de acceso, la administración permanece deshabilitada; el juego sigue
 funcionando. Las claves nunca se envían al navegador. En producción, servir el panel mediante
@@ -217,7 +217,7 @@ proxy debe conservar el `Host` público. No se confía en `X-Forwarded-Host`.
 Desde el panel se indica nombre, temática y cantidad de cartas (1–600 por trabajo).
 **Temática e indicaciones** y **Reglas para buscar palabras prohibidas** son campos multilínea.
 Las reglas son opcionales (hasta 500 caracteres), se configuran al crear o editar el mazo y se conservan
-para las próximas generaciones, los reemplazos y las peticiones para completar cartas.
+para las próximas generaciones y las peticiones para completar cartas.
 Se envían solo al pedir palabras prohibidas, no al seleccionar objetivos, y no reemplazan las
 validaciones del servidor. Los mazos sin reglas mantienen su comportamiento anterior.
 La generación
@@ -247,8 +247,8 @@ eso tampoco garantiza su ortografía ni su existencia. Revisar editorialmente lo
 Cambiar esta opción no modifica ni revalida cartas existentes y no afecta las partidas en curso.
 
 Las cartas dudosas o incompletas quedan excluidas automáticamente. El administrador puede ver
-las advertencias, habilitar explícitamente una carta con seis prohibidas o pedir un reemplazo
-automático. La habilitación manual no elimina los hallazgos del diccionario. Una palabra desconocida
+las advertencias y habilitar explícitamente una carta con seis prohibidas. La habilitación manual
+no elimina los hallazgos del diccionario. Una palabra desconocida
 puede ser un regionalismo; el corrector no verifica significado ni garantiza calidad editorial.
 
 **Editar carta** permite corregir el objetivo y entre una y seis prohibidas sin llamar a DeepSeek.
@@ -273,19 +273,17 @@ El endpoint administrativo `PUT /api/admin/decks/:deckId/cards/:cardId` recibe `
 cada término admite hasta 200 caracteres. El `PATCH {excluded}` existente no cambia.
 
 **Eliminar carta** solicita confirmación con el nombre de la carta antes del borrado definitivo.
-El reemplazo por IA reintenta objetivos vacíos o repetidos dentro del presupuesto del trabajo
-(hasta tres intentos). Si no obtiene un objetivo nuevo, la carta y su historial se conservan.
-Cancelar o pulsar Escape no elimina nada. Se bloquea durante generaciones o reemplazos y en
+Cancelar o pulsar Escape no elimina nada. Se bloquea durante generaciones y en
 mazos archivados. Solo se quita la carta seleccionada; se conservan el mazo, las demás cartas y
 el historial de objetivos usados para evitar que futuras generaciones repitan el objetivo eliminado.
 El catálogo y la paginación se actualizan al terminar; un mazo sin cartas deja de estar disponible
 para nuevas partidas. Las partidas existentes mantienen su copia. La API usa
 `DELETE /api/admin/decks/:deckId/cards/:cardId`, sin cambiar los métodos de edición o exclusión.
 
-Generar y reemplazar consume la API de DeepSeek. Los trabajos se guardan en MongoDB, tienen
+Generar consume la API de DeepSeek. Los trabajos se guardan en MongoDB, tienen
 límites de intentos y se procesan desde el servidor personalizado; no iniciar con `next start`.
-El panel muestra progreso y errores, y conserva lo completado si una llamada falla. Los reemplazos
-se solicitan por carta y no cambian las partidas en curso. Las pruebas automatizadas usan un
+El panel muestra progreso y errores, y conserva lo completado si una llamada falla. Las
+generaciones no cambian las partidas en curso. Las pruebas automatizadas usan un
 proveedor simulado, no llamadas pagas.
 
 Los lotes incompletos o con objetivos repetidos se recuperan con reintentos acotados; nunca se
@@ -316,7 +314,7 @@ el socket de progreso, el trabajo en curso y los borradores de los formularios;
 | ----------------------------------- | ------------------------------------------------------- |
 | `dashboard/types.ts`                | Pestañas, tipos de vista y contratos compartidos.       |
 | `dashboard/api-client.ts`           | Cliente HTTP del panel y error tipado de respuesta.     |
-| `dashboard/generation-request.ts`   | Cantidad válida y peticiones de generación y reemplazo. |
+| `dashboard/generation-request.ts`   | Cantidad válida y petición de generación.                      |
 | `dashboard/create-deck-form.tsx`    | Formulario de creación de un mazo.                      |
 | `dashboard/generation-feedback.tsx` | Progreso en vivo y resultado final del trabajo.         |
 | `dashboard/deck-catalog.tsx`        | Catálogo de mazos administrados.                        |

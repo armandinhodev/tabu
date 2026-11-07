@@ -21,8 +21,6 @@ export interface ManagedCardProps {
   readonly api: AdminApi;
   /** Envoltura de acciones del tablero. */
   readonly act: AdminAction;
-  /** Pide el reemplazo automático de la carta. */
-  readonly onReplace: (cardId: string) => void;
 }
 
 /**
@@ -32,15 +30,7 @@ export interface ManagedCardProps {
  * borrado viajan por el cliente HTTP del panel y la envoltura de acciones,
  * igual que la gestión del mazo.
  */
-export function ManagedCard({
-  card,
-  cards,
-  deckId,
-  disabled,
-  api,
-  act,
-  onReplace,
-}: ManagedCardProps) {
+export function ManagedCard({ card, cards, deckId, disabled, api, act }: ManagedCardProps) {
   const cardUrl = `/api/admin/decks/${encodeURIComponent(deckId)}/cards/${encodeURIComponent(card.id)}`;
 
   return (
@@ -145,15 +135,6 @@ export function ManagedCard({
           }
         >
           {card.excluded ? "Habilitar de todos modos" : "Excluir"}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="enabled:hover:border-line-control enabled:hover:bg-raised-hover enabled:hover:shadow-card"
-          disabled={disabled}
-          onClick={() => onReplace(card.id)}
-        >
-          Reemplazar con IA
         </Button>
         <CardDeletion
           word={card.word}

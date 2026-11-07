@@ -28,8 +28,6 @@ export interface CardListProps {
   readonly act: AdminAction;
   /** Cambia la búsqueda, el filtro o la página. */
   readonly onViewChange: (patch: Partial<CardListView>) => void;
-  /** Pide el reemplazo automático de una carta. */
-  readonly onReplaceCard: (cardId: string) => void;
 }
 
 /**
@@ -47,7 +45,6 @@ export function CardList({
   api,
   act,
   onViewChange,
-  onReplaceCard,
 }: CardListProps) {
   const searchQuery = normalizeWord(view.search);
   const filteredCards = cards.filter(
@@ -146,7 +143,6 @@ export function CardList({
             disabled={disabled}
             api={api}
             act={act}
-            onReplace={onReplaceCard}
           />
         ))}
       </div>

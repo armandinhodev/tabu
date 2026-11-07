@@ -23,11 +23,7 @@ import { DeckCatalog } from "./dashboard/deck-catalog";
 import { DeckWorkspace } from "./dashboard/deck-workspace";
 import { GenerateCardsForm } from "./dashboard/generate-cards-form";
 import { GenerationFeedback } from "./dashboard/generation-feedback";
-import {
-  parseGenerationAmount,
-  requestCardReplacement,
-  requestDeckGeneration,
-} from "./dashboard/generation-request";
+import { parseGenerationAmount, requestDeckGeneration } from "./dashboard/generation-request";
 import {
   ADMIN_TABS,
   type AdminActionOptions,
@@ -465,13 +461,6 @@ export function AdminDashboard() {
     });
   }
 
-  /** Encola el reemplazo automático de una carta. */
-  async function replaceCard(cardId: string) {
-    const current = deck;
-    if (current === null) return;
-    await act(async () => requestGeneration(1, () => requestCardReplacement(current.id, cardId)));
-  }
-
   const running = job?.status === "queued" || job?.status === "running";
   const cards = deck?.cards ?? [];
   const archived = deck?.archivedAt !== undefined;
@@ -678,7 +667,6 @@ export function AdminDashboard() {
                     api={api}
                     act={act}
                     onViewChange={updateCardListView}
-                    onReplaceCard={(cardId) => void replaceCard(cardId)}
                   />
                 </section>
                 <section

@@ -37,7 +37,6 @@ export class MongoAdminJobStore implements AdminJobStore {
         // Una admisión pendiente todavía no es ejecutable: el worker no la
         // reclama hasta que se activa.
         ...(input.admissionPending === true ? { admissionPending: true } : {}),
-        ...(input.targetCardId === undefined ? {} : { targetCardId: input.targetCardId }),
         requested: input.requested,
         processed: 0,
         objectives: [],

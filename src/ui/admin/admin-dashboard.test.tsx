@@ -119,7 +119,7 @@ beforeEach(() => {
         if (method === "PATCH") globalModel = JSON.parse(String(init?.body)).model;
         return Response.json({ data: { model: globalModel } });
       }
-      if (url.endsWith("/generate") || url.endsWith("/replace")) {
+      if (url.endsWith("/generate")) {
         if (deferGenerateResponse) {
           return new Promise<Response>((resolve) => {
             resolveGenerateResponse = resolve;
@@ -200,9 +200,6 @@ describe("AdminDashboard", () => {
       render(<AdminDashboard />);
       await screen.findByRole("heading", { name: "jaula" });
       expect(screen.getByRole("button", { name: "Editar carta" })).toHaveClass(
-        "enabled:hover:bg-raised-hover",
-      );
-      expect(screen.getByRole("button", { name: "Reemplazar con IA" })).toHaveClass(
         "enabled:hover:bg-raised-hover",
       );
       expect(
@@ -849,48 +846,40 @@ describe("AdminDashboard", () => {
     );
   });
 
-  it.each(["generate", "replace"])(
-    "shows immediate feedback for %s after a completed job",
-    async (operation) => {
-      sessionStorage.setItem("tabu:admin-job", "job-1");
-      deferGenerateResponse = true;
-      deferJobResponse = true;
-      render(<AdminDashboard />);
-      await screen.findByRole("heading", { name: "jaula" });
-      await act(async () => resolveJobResponse?.(Response.json({ data: jobPayload })));
-      if (operation === "generate")
-        fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
-      fireEvent.click(
-        screen.getByRole("button", {
-          name: operation === "generate" ? "Generar 5 cartas más" : "Reemplazar con IA",
+  it("shows immediate feedback for a generation after a completed job", async () => {
+    sessionStorage.setItem("tabu:admin-job", "job-1");
+    deferGenerateResponse = true;
+    deferJobResponse = true;
+    render(<AdminDashboard />);
+    await screen.findByRole("heading", { name: "jaula" });
+    await act(async () => resolveJobResponse?.(Response.json({ data: jobPayload })));
+    fireEvent.click(screen.getByRole("button", { name: "Generar más cartas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generar 5 cartas más" }));
+    const progress = screen.getByRole("region", { name: "Progreso de generación" });
+    expect(
+      within(progress).getByRole("status", { name: "Preparando solicitud a DeepSeek…" }),
+    ).toBeVisible();
+    expect(progress).toHaveTextContent("0/5 cartas");
+    expect(screen.queryByText(/Generación completada/)).not.toBeInTheDocument();
+    await act(async () =>
+      resolveGenerateResponse?.(
+        Response.json({
+          data: {
+            id: "job-2",
+            status: "running",
+            processed: 0,
+            requested: 5,
+          },
         }),
-      );
-      const progress = screen.getByRole("region", { name: "Progreso de generación" });
-      expect(
-        within(progress).getByRole("status", { name: "Preparando solicitud a DeepSeek…" }),
-      ).toBeVisible();
-      expect(progress).toHaveTextContent(operation === "generate" ? "0/5 cartas" : "0/1 cartas");
-      expect(screen.queryByText(/Generación completada/)).not.toBeInTheDocument();
-      await act(async () =>
-        resolveGenerateResponse?.(
-          Response.json({
-            data: {
-              id: "job-2",
-              status: "running",
-              processed: 0,
-              requested: operation === "generate" ? 5 : 1,
-            },
-          }),
-        ),
-      );
-      expect(
-        within(progress).getByRole("status", {
-          name: "Esperando las primeras cartas de DeepSeek…",
-        }),
-      ).toBeVisible();
-      expect(socketMock.disconnect).not.toHaveBeenCalled();
-    },
-  );
+      ),
+    );
+    expect(
+      within(progress).getByRole("status", {
+        name: "Esperando las primeras cartas de DeepSeek…",
+      }),
+    ).toBeVisible();
+    expect(socketMock.disconnect).not.toHaveBeenCalled();
+  });
 
   it("removes the completed progress bar while retaining a success confirmation", async () => {
     jobPayload = { id: "job-1", status: "running", processed: 0, requested: 5 };
@@ -1187,20 +1176,6 @@ describe("AdminDashboard", () => {
     expect(screen.getByRole("tab", { name: "Mazos" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("requests an automatic replacement without editing the old card locally", async () => {
-    render(<AdminDashboard />);
-    await screen.findByRole("heading", { name: "jaula" });
-    fireEvent.click(screen.getByRole("button", { name: "Reemplazar con IA" }));
-    await waitFor(() =>
-      expect(requests).toContainEqual({
-        url: "/api/admin/decks/deck-1/cards/card-1/replace",
-        method: "POST",
-        body: null,
-      }),
-    );
-    expect(screen.getByRole("heading", { name: "jaula" })).toBeInTheDocument();
-  });
-
   it("keeps the catalog usable when a remembered job no longer exists", async () => {
     sessionStorage.setItem("tabu:admin-job", "old-job");
     const originalFetch = fetch;
@@ -1495,7 +1470,6 @@ describe("AdminDashboard", () => {
     fireEvent.click(await screen.findByLabelText("Mostrar archivados"));
     await screen.findByRole("heading", { name: "jaula" });
     expect(screen.getByRole("button", { name: "Habilitar de todos modos" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reemplazar con IA" })).toBeDisabled();
   });
 
   it("does not reconnect the socket while filtering or editing the deck", async () => {

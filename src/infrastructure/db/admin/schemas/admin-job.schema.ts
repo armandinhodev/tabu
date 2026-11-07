@@ -12,7 +12,7 @@ export interface AdminJobDocument {
   /** Id estable del trabajo (lo genera la aplicación). */
   _id: string;
   deckId: string;
-  kind: "generate" | "replace";
+  kind: "generate";
   status: "queued" | "running" | "completed" | "failed";
   /**
    * Id del mazo mientras el trabajo está activo. El índice único y disperso
@@ -25,7 +25,6 @@ export interface AdminJobDocument {
    * siguen siendo reclamables.
    */
   admissionPending?: boolean;
-  targetCardId?: string;
   requested: number;
   processed: number;
   /** Objetivos ya convertidos en carta (checkpoint idempotente). */
@@ -55,7 +54,7 @@ export const adminJobSchema = new Schema<AdminJobDocument>(
     _id: { type: String, required: true },
     model: { type: String, enum: DEEPSEEK_MODELS, required: false },
     deckId: { type: String, required: true },
-    kind: { type: String, required: true, enum: ["generate", "replace"] },
+    kind: { type: String, required: true, enum: ["generate"] },
     status: {
       type: String,
       required: true,
@@ -64,7 +63,6 @@ export const adminJobSchema = new Schema<AdminJobDocument>(
     },
     activeKey: { type: String, required: false },
     admissionPending: { type: Boolean, required: false },
-    targetCardId: { type: String, required: false },
     requested: { type: Number, required: true },
     processed: { type: Number, required: true, default: 0 },
     objectives: { type: [String], required: true, default: [] },

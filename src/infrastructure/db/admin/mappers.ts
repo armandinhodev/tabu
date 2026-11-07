@@ -94,7 +94,6 @@ export function toManagedJob(document: AdminJobDocument): AdminJob {
     deckId: document.deckId,
     kind: document.kind,
     status: document.status,
-    ...(document.targetCardId === undefined ? {} : { targetCardId: document.targetCardId }),
     requested: document.requested,
     processed: document.processed,
     ...(document.error === undefined ? {} : { error: document.error }),

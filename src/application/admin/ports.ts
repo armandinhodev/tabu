@@ -74,8 +74,6 @@ export interface NewJobInput {
   readonly deckId: string;
   readonly kind: AdminJobKind;
   readonly requested: number;
-  /** Carta a reemplazar (sólo para trabajos `replace`). */
-  readonly targetCardId?: string;
   readonly limits: AdminJobLimits;
   readonly now: string;
   /**
@@ -170,21 +168,6 @@ export interface GenerationProvider {
     readonly allowProperNames?: boolean;
     readonly theme: string;
     readonly objectives: readonly string[];
-    readonly signal?: AbortSignal;
-  }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>>;
-  /**
-   * Carta única (reemplazo): devuelve un objetivo nuevo con sus candidatas en
-   * una sola llamada. Para un solo objetivo no hay nada que deduplicar en
-   * bloque, así que una llamada combinada cuesta menos que dos.
-   */
-  proposeCards(input: {
-    readonly rules?: string;
-    readonly model?: DeepSeekModel;
-    readonly allowProperNames?: boolean;
-    readonly theme: string;
-    readonly count: number;
-    /** Objetivos ya usados en el mazo (normalizados): hay que evitarlos. */
-    readonly excludedObjectives: readonly string[];
     readonly signal?: AbortSignal;
   }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>>;
   /**
@@ -297,14 +280,6 @@ export interface AdminDeckStore {
   /** Agrega una carta al mazo. Sólo el dueño vigente del lease escribe. */
   appendCard(input: {
     readonly deckId: string;
-    readonly card: ManagedCard;
-    readonly fence: JobFence;
-    readonly now: string;
-  }): Promise<ManagedDeck | null>;
-  /** Reemplaza una carta de forma atómica. Sólo el dueño vigente escribe. */
-  replaceCard(input: {
-    readonly deckId: string;
-    readonly cardId: string;
     readonly card: ManagedCard;
     readonly fence: JobFence;
     readonly now: string;

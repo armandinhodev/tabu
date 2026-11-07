@@ -698,45 +698,6 @@ export class MongoAdminDeckStore implements AdminDeckStore {
     return null;
   }
 
-  async replaceCard(input: {
-    deckId: string;
-    cardId: string;
-    card: ManagedDeck["cards"][number];
-    fence: { jobId: string; token: number };
-    now: string;
-  }): Promise<ManagedDeck | null> {
-    assertMongoAvailable();
-
-    const now = new Date(input.now);
-    const document = await AdminDeckModel.findOneAndUpdate(
-      {
-        _id: input.deckId,
-        "activeJob.jobId": input.fence.jobId,
-        "activeJob.token": input.fence.token,
-        "activeJob.leaseExpiresAt": { $gt: now },
-        // Un mazo archivado no cambia sus cartas hasta restaurarlo.
-        archivedAt: { $exists: false },
-        "cards.id": input.cardId,
-      },
-      {
-        $set: {
-          "cards.$[card]": toCardDocument(input.card),
-          updatedAt: now,
-        },
-        $addToSet: {
-          usedObjectives: normalizeWord(input.card.word),
-          proposedWords: {
-            $each: input.card.candidates.map((candidate) => normalizeWord(candidate.word)),
-          },
-        },
-        $inc: { revision: 1 },
-      },
-      { new: true, arrayFilters: [{ "card.id": input.cardId }] },
-    ).exec();
-
-    return document === null ? null : toManagedDeck(document);
-  }
-
   async releaseDeck(input: { deckId: string; jobId: string; token: number }): Promise<void> {
     assertMongoAvailable();
 

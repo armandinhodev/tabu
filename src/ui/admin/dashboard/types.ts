@@ -36,7 +36,7 @@ export type CardView = AdminCardView;
 export type JobView = {
   id: string;
   deckId?: string;
-  kind?: "generate" | "replace";
+  kind?: "generate";
   status: "queued" | "running" | "completed" | "failed";
   requested?: number;
   processed?: number;

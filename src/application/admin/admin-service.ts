@@ -327,32 +327,6 @@ export class AdminService {
     });
   }
 
-  /** Encola el reemplazo de una carta por un objetivo nuevo. */
-  async queueReplacement(deckId: string, cardId: string): Promise<AdminJob> {
-    if (!this.deps.provider.available) {
-      throw adminUnavailable("provider_unavailable", "The generation provider is not configured");
-    }
-
-    const deck = await this.getDeck(deckId);
-    this.assertDeckIsNotArchived(deck);
-
-    const card = deck.cards.find((candidate) => candidate.id === cardId);
-
-    if (card === undefined) {
-      throw adminNotFound(`No card with id "${cardId}" in the deck`);
-    }
-
-    await this.recoverStaleAdmissions();
-    await this.assertNoActiveJob(deckId);
-
-    return this.admitJob(deckId, {
-      kind: "replace",
-      requested: 1,
-      targetCardId: cardId,
-      limits: jobLimitsFor(1, this.deps.limits),
-    });
-  }
-
   /**
    * Excluye o incluye una carta a mano. Incluir una carta dudosa requiere
    * seis palabras estructuralmente válidas: no se inventan las que faltan.
@@ -576,7 +550,6 @@ export class AdminService {
     input: {
       readonly kind: AdminJobKind;
       readonly requested: number;
-      readonly targetCardId?: string;
       readonly limits: AdminJobLimits;
     },
   ): Promise<AdminJob> {
@@ -589,7 +562,6 @@ export class AdminService {
       deckId,
       kind: input.kind,
       requested: input.requested,
-      ...(input.targetCardId === undefined ? {} : { targetCardId: input.targetCardId }),
       limits: input.limits,
       now,
       admissionPending: true,

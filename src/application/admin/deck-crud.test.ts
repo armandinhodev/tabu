@@ -328,7 +328,7 @@ describe("AdminService.restoreDeck", () => {
 });
 
 describe("archived decks", () => {
-  it("reject generation, replacement and card changes until they are restored", async () => {
+  it("reject generation and card changes until they are restored", async () => {
     const { service, decks } = build();
     decks.seed({
       id: "deck-1",
@@ -339,7 +339,6 @@ describe("archived decks", () => {
     });
 
     await expectAdminError(service.queueGeneration("deck-1", 5), 409, "deck_archived");
-    await expectAdminError(service.queueReplacement("deck-1", "card-1"), 409, "deck_archived");
     await expectAdminError(service.setCardExcluded("deck-1", "card-1", true), 409, "deck_archived");
   });
 
