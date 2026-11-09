@@ -51,8 +51,9 @@ User: "sobre la animación no podemos hacer algo mejor también?".
 
 - El preview usa los componentes reales del juego: `TabooWords` (chips en columna) y `TimerRing`
   (anillo con estado urgente).
-- Un turno comprimido de 15 s: el anillo corre, entra en urgente bajo los 10 s (la regla real) y
-  **la carta cambia cuando el turno se acaba**, como en la partida.
+- S9 actualiza la simulación: una ronda de 15 s con cambios de carta cada 4 s, sin reiniciar el
+  reloj por cada carta. El anillo entra en urgente bajo los 10 s; el tiempo se explica en los textos,
+  sin leyenda debajo del cronómetro (S10).
 - Sin `blur` sobre el texto (§1.4, tipografía plana) y sin dos motions verticales a la vez.
 - Con `prefers-reduced-motion` la carta y el reloj quedan quietos.
 
@@ -82,6 +83,27 @@ User: "Mejorar la ladingpage bsándote en esa imagen" (imagen adjunta, 2026-11-0
   La entrada se consume una vez y no interfiere con volver al inicio ni con una sesión reconectada.
 - Diseño responsive, sin cambiar la apariencia del juego ni agregar dependencias.
 
+### S9 — Ejemplos aleatorios y tiempo por ronda
+
+User: "En la landing se muestra una carta, podríamos hacer que se muestre una carta al azar de un total de 10 configuradas en un json? Así cada vez que reingresen en la página principal verán ejemplso diferentes de cartas"
+
+User: "Además en el juego el tiempo es por ronda no por carta, eso puede confundir en la ladingpage"
+
+- Diez ejemplos en JSON con palabra, prohibidas y pista; selección aleatoria al montar el preview.
+- Mantener el HTML inicial determinista y completo; evitar repetir el último ejemplo visible en
+  la misma pestaña si el almacenamiento está disponible, sin depender de él para funcionar.
+- Varias cartas comparten el reloj de la ronda; los textos aclaran "por ronda", sin caption (S10).
+- Mantener la preferencia de movimiento reducido y no cambiar la lógica del juego.
+
+### S10 — Cronómetro sin leyenda y pistas completas
+
+User: "Pusiste la leyenda \"por ronda\" debajo del cronometro, quitá esa leyenda. Por otra parte en la burbuja de descripción en algunas cartas parte de la descripción se ve tapada fijate"
+
+User: "Por ejemplo \"Eso que da calor\", \"calor queda tapado\"" (captura adjunta).
+
+- Retirar únicamente la leyenda debajo del cronómetro; mantener el reloj y su comportamiento.
+- Mantener completa y legible cada pista, sin que la cola decorativa la tape.
+
 ## Tasks
 
 - **T1** → S1 — inline; `buttonVariants` en los CTA y escala tipográfica por token. Risk: none.
@@ -109,6 +131,17 @@ User: "Mejorar la ladingpage bsándote en esa imagen" (imagen adjunta, 2026-11-0
   del baseline completados en copias aisladas; HTML inicial con carta, CTAs y metadata presentes.
   Revisión visual final: capturas CDP reales de 320, 390 y 1440 px; sin desbordamiento del documento,
   navegación dentro del ancho disponible, reloj sin tapar la palabra y chips claros legibles.
+
+- **T10** → S5, S7, S9 — inline, completada; JSON de ejemplos, inicio aleatorio, pista sincronizada y
+  reloj independiente por ronda. RED: 7 tests fallan antes de implementar; GREEN focalizado: 26 pasan.
+  Commit solicitado: `feat(landing): randomize examples and fix preview hints`. Risk: none (preview y textos de la landing).
+  Verificación final: 1034 tests pasan / 45 omitidos; tipos y lint sin errores; build limpio y revisión
+  móvil mediante CDP completados sin cambios en el juego.
+
+- **T11** → S9-S10 — inline, completada; retirar caption y pintar la cola detrás del texto.
+  Reproducción visual previa en 3 anchos; RED: 3 tests fallan. GREEN: 28 focalizados y 1036 de suite
+  pasan / 45 omitidos; tipos y lint sin errores. Recheck CDP: 10 pistas × 3 viewports sin texto tapado.
+  Commit solicitado: `feat(landing): randomize examples and fix preview hints`. Risk: none (CSS y presentación de la landing).
 
 ## Log
 
@@ -156,3 +189,23 @@ User: "Mejorar la ladingpage bsándote en esa imagen" (imagen adjunta, 2026-11-0
    servían como prueba de viewport: Edge impone un ancho mínimo de ventana; se usó emulación CDP.
 - **L11 (2026-11-09).** User: "Comitealo y pushealo a main". Se autoriza publicar el rediseño
   verificado en `origin/main` mediante la autenticación SSH ya autorizada para este repositorio.
+- **L12 (2026-11-09).** User: "En la landing se muestra una carta, podríamos hacer que se muestre una carta al azar de un total de 10 configuradas en un json? Así cada vez que reingresen en la página principal verán ejemplso diferentes de cartas"
+- **L13 (2026-11-09).** User: "Además en el juego el tiempo es por ronda no por carta, eso puede confundir en la ladingpage"
+- **L14 (2026-11-09).** `example-cards.json` contiene diez ejemplos con cuatro prohibidas y una
+  pista coherente. La selección aleatoria ocurre después de hidratar; `sessionStorage` recuerda
+  la última carta visible para evitar la repetición inmediata, pero no es requisito para funcionar.
+  El hook conserva el comportamiento anterior por defecto y permite cambiar la carta cada 4 s
+  dentro de una ronda de 15 s, manteniendo el mismo deadline hasta que termina la ronda. Los textos
+  y el reloj dicen "por ronda". RED: 7 tests fallan; GREEN: 1034 pass / 45 skip, `tsc` y `eslint` 0
+  (el warning preexistente continúa). Build limpio aislado exit 0; HTML inicial determinista con
+  carta completa y etiqueta. CDP móvil confirma pista sincronizada, texto visible, rotaciones de
+  aproximadamente 4 s, reloj descendente sin reinicios por carta y selección distinta al recargar.
+- **L15 (2026-11-09).** User: "Pusiste la leyenda \"por ronda\" debajo del cronometro, quitá esa leyenda. Por otra parte en la burbuja de descripción en algunas cartas parte de la descripción se ve tapada fijate". User: "Por ejemplo \"Eso que da calor\", \"calor queda tapado\"".
+- **L16 (2026-11-09).** Reproducción CDP previa: la cola `.speech::after`, posicionada con z-index
+  automático, se pintaba sobre el texto inline y borraba 9–12 % de la última palabra en las pistas
+  reportadas. El temporizador no era la causa. Se asignó `z-index: -1` a la cola dentro del stacking
+  context de la burbuja y se eliminó el caption y su CSS sin cambiar geometría ni tiempos.
+  Recheck: 10 pistas × 3 viewports (1440/390/320), 102 cajas de palabras y 0 píxeles de texto
+  cubiertos; se conserva la cola y el reloj, sin leyenda. Tests: 1036 pass / 45 skip; tipos y lint 0.
+- **L17 (2026-11-09).** User: "Comitealo y pushealo a main". Se autoriza publicar los ejemplos
+  aleatorios, el reloj por ronda y las correcciones visuales verificadas en `origin/main`.

@@ -118,7 +118,8 @@ describe("LandingPage", () => {
 
     expect(screen.getAllByText(/sin registro/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/2–4 equipos/i)).toBeInTheDocument();
-    expect(screen.getByText(/30–120 s por turno/i)).toBeInTheDocument();
+    expect(screen.getByText(/30–120 s por ronda/i)).toBeInTheDocument();
+    expect(screen.getByText(/El reloj es por ronda, no por carta/i)).toBeInTheDocument();
     expect(screen.getByText(/1–6 palabras prohibidas/i)).toBeInTheDocument();
     expect(screen.getByText(/palabras adivinadas/i)).toBeInTheDocument();
   });

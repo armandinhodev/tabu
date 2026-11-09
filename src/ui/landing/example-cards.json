@@ -1,0 +1,40 @@
+[
+  {
+    "word": "fuego",
+    "taboo": ["llama", "chimenea", "brasa", "humo"],
+    "hint": "¡Eso que da calor!"
+  },
+  { "word": "playa", "taboo": ["arena", "mar", "ola", "verano"], "hint": "¡Llevá la sombrilla!" },
+  {
+    "word": "reloj",
+    "taboo": ["hora", "aguja", "tiempo", "pulsera"],
+    "hint": "¡No llegues tarde!"
+  },
+  { "word": "pizza", "taboo": ["queso", "masa", "horno", "tomate"], "hint": "¡Una porción más!" },
+  {
+    "word": "bosque",
+    "taboo": ["árbol", "hoja", "verde", "naturaleza"],
+    "hint": "¡Hay que seguir el sendero!"
+  },
+  {
+    "word": "libro",
+    "taboo": ["leer", "página", "historia", "autor"],
+    "hint": "¡Una aventura entre tapas!"
+  },
+  {
+    "word": "lluvia",
+    "taboo": ["agua", "nube", "gota", "paraguas"],
+    "hint": "¡Mejor quedarnos adentro!"
+  },
+  {
+    "word": "avión",
+    "taboo": ["volar", "cielo", "ala", "piloto"],
+    "hint": "¡Abrochate el cinturón!"
+  },
+  { "word": "barco", "taboo": ["mar", "agua", "navegar", "vela"], "hint": "¡Todos a bordo!" },
+  {
+    "word": "perro",
+    "taboo": ["ladrar", "mascota", "animal", "hueso"],
+    "hint": "¡Tu mejor compañía!"
+  }
+]

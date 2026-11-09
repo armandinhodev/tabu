@@ -496,11 +496,15 @@ que más afectan el uso:
   `/jugar?accion=unirse` para abrir el ingreso. La acción se consume una vez, sin saltarse la
   validación del nombre ni interferir con volver al inicio o reconectar una sesión existente.
 - **Vista previa de un turno real.** La landing muestra el juego con sus propios componentes: las
-  palabras prohibidas en columna y el anillo del reloj. El turno está comprimido a 15 segundos para
-  que se vea el estado urgente y **la carta cambia cuando el turno se acaba**, como en la partida.
-  La carta inicial se sirve en el HTML y la animación la mejora al hidratar. Con
+  palabras prohibidas en columna y el anillo del reloj. La ronda de ejemplo dura 15 segundos y las
+  cartas cambian cada 4 segundos **sin reiniciar el reloj**: el tiempo es por ronda, no por carta.
+  Los 10 ejemplos se configuran en `src/ui/landing/example-cards.json` con `word`, `taboo` (cuatro
+  prohibidas) y `hint`. Al entrar se elige uno al azar, evitando el último visible en esa pestaña
+  cuando el almacenamiento del navegador está disponible. Para actualizar los ejemplos se edita
+  el JSON y se recompila. La carta inicial se sirve en el HTML y la elección aleatoria ocurre al
+  hidratar, sin discrepancias entre servidor y cliente. Con
   `prefers-reduced-motion` la carta y el reloj quedan quietos; el temporizador vive en un hook aparte
-  (`use-turn-preview`) para probarlo sin animaciones.
+  (`use-turn-preview`) para probarlo sin animaciones. La pista del globo corresponde a la carta visible.
 - **Presentación de la landing.** Titular grande, fondo oscuro, cartas claras apiladas, tres pasos
   ilustrados y llamada final a crear una sala. La composición se adapta a móvil y usa los tokens
   de marca; las superficies de papel se limitan a la ilustración y no cambian el aspecto del juego.

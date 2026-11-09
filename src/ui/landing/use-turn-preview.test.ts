@@ -18,6 +18,21 @@ afterEach(() => {
 });
 
 describe("useTurnPreview", () => {
+  it("changes cards without resetting the deadline until the round ends", () => {
+    const { result } = renderHook(() =>
+      useTurnPreview({ cardCount: 10, turnMs: 15_000, cardMs: 4_000 }),
+    );
+    const deadline = result.current.deadlineAt;
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(result.current.cardIndex).toBe(1);
+    expect(result.current.deadlineAt).toBe(deadline);
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(result.current.cardIndex).toBe(2);
+    expect(result.current.deadlineAt).toBe(deadline);
+    act(() => vi.advanceTimersByTime(7_000));
+    expect(result.current.deadlineAt).toBeGreaterThan(deadline);
+  });
+
   it("starts paused so the first render is the same on the server and on the client", () => {
     const { result } = renderHook(() =>
       useTurnPreview({ cardCount: 3, turnMs: 15_000, enabled: false }),

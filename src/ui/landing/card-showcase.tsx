@@ -7,16 +7,12 @@ import { TabooWords } from "@/ui/components/game/taboo-words";
 import { TimerRing } from "@/ui/components/game/timer-ring";
 import { useTurnPreview } from "./use-turn-preview";
 import styles from "./landing-page.module.css";
+import CARDS from "./example-cards.json";
 
-const CARDS = [
-  { word: "fuego", taboo: ["llama", "chimenea", "brasa", "humo"] },
-  { word: "playa", taboo: ["arena", "mar", "ola", "verano"] },
-  { word: "reloj", taboo: ["hora", "aguja", "tiempo", "pulsera"] },
-] as const;
+const LAST_CARD_KEY = "tabu.landing.last-card";
 
 /**
- * The preview plays a compressed turn: long enough for the clock to reach its
- * urgent state (under ten seconds, §9) and short enough to see a whole turn.
+ * Several cards share one compressed round. Only the round resets the clock.
  */
 const TURN_SECONDS = 15;
 const TURN_MS = TURN_SECONDS * 1_000;
@@ -27,28 +23,48 @@ const WORD_CLASS = "font-display text-h1 font-extrabold break-words text-fg uppe
  * Decorative preview of a real turn.
  *
  * It uses the game's own components — the forbidden words and the timer ring —
- * so the landing shows the game as it is, and it changes when the turn ends,
- * the way a turn does.
+ * so the landing shows several cards sharing the same round clock.
  */
 export function CardShowcase() {
   const reduced = useReducedMotion() ?? false;
   const [mounted, setMounted] = useState(false);
+  const [startOffset, setStartOffset] = useState(0);
 
   useEffect(() => {
+    let previous: string | null = null;
+    try {
+      previous = sessionStorage.getItem(LAST_CARD_KEY);
+    } catch {
+      // Storage is optional; private browsing must still show a random example.
+    }
+    const candidates = CARDS.filter((candidate) => candidate.word !== previous);
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)] ?? CARDS[0]!;
+    setStartOffset(CARDS.indexOf(chosen));
     setMounted(true);
   }, []);
 
   const { cardIndex, deadlineAt, started } = useTurnPreview({
     cardCount: CARDS.length,
     turnMs: TURN_MS,
+    cardMs: 4_000,
     reduced,
     enabled: mounted,
   });
 
-  const card = CARDS[cardIndex] ?? CARDS[0];
+  const card = CARDS[(startOffset + cardIndex) % CARDS.length] ?? CARDS[0]!;
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      sessionStorage.setItem(LAST_CARD_KEY, card.word);
+    } catch {
+      // The preview still works when browser storage is unavailable.
+    }
+  }, [mounted, card.word]);
 
   return (
     <div className={styles.demoCard}>
+      <span className={styles.speech}>{card.hint}</span>
       <div className={styles.previewTimer}>
         <TimerRing
           deadlineAt={started ? deadlineAt : undefined}

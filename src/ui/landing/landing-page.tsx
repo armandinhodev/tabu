@@ -28,7 +28,7 @@ const STEPS = [
   },
   {
     title: "Describí con cuidado",
-    detail: "Tu equipo adivina. Los rivales vigilan.",
+    detail: "Tu equipo adivina y los rivales vigilan. El reloj es por ronda, no por carta.",
     icon: MessagesSquare,
   },
   {
@@ -40,7 +40,7 @@ const STEPS = [
 
 const FEATURES = [
   { label: "2–4 equipos", icon: UsersRound },
-  { label: "30–120 s por turno", icon: Clock3 },
+  { label: "30–120 s por ronda", icon: Clock3 },
   { label: "1–6 palabras prohibidas", icon: Layers3 },
 ] as const;
 
@@ -142,11 +142,6 @@ export function LandingPage() {
             aria-hidden="true"
             data-testid="landing-preview"
           >
-            <span className={styles.speech}>
-              ¡Eso que
-              <br />
-              da calor!
-            </span>
             <span className={cn(styles.backCard, styles.backCardGold)}>
               <Layers3 />
             </span>
