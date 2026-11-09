@@ -491,14 +491,19 @@ que más afectan el uso:
   (D43).
 - **Una ruta, pantallas por estado.** El cliente no navega entre rutas: cambia de pantalla según el
   estado de la partida, así el socket y el `playerToken` sobreviven (D44). La única excepción es la
-  landing pública: `/` explica el juego y su botón **Jugar** lleva a `/jugar`, donde vive el cliente
-  con esa navegación interna.
+  landing pública: `/` explica el juego y **Jugar** lleva a `/jugar`. **Crear sala** usa
+  `/jugar?accion=crear` para abrir el paso de nombre y **Unirme con código** usa
+  `/jugar?accion=unirse` para abrir el ingreso. La acción se consume una vez, sin saltarse la
+  validación del nombre ni interferir con volver al inicio o reconectar una sesión existente.
 - **Vista previa de un turno real.** La landing muestra el juego con sus propios componentes: las
   palabras prohibidas en columna y el anillo del reloj. El turno está comprimido a 15 segundos para
   que se vea el estado urgente y **la carta cambia cuando el turno se acaba**, como en la partida.
   La carta inicial se sirve en el HTML y la animación la mejora al hidratar. Con
   `prefers-reduced-motion` la carta y el reloj quedan quietos; el temporizador vive en un hook aparte
   (`use-turn-preview`) para probarlo sin animaciones.
+- **Presentación de la landing.** Titular grande, fondo oscuro, cartas claras apiladas, tres pasos
+  ilustrados y llamada final a crear una sala. La composición se adapta a móvil y usa los tokens
+  de marca; las superficies de papel se limitan a la ilustración y no cambian el aspecto del juego.
 - **El movimiento ocurre donde se mira.** Cada bloque de la landing se revela cuando entra en la
   ventana (no cuando carga la página) y la flotación de la carta se detiene si el bloque no está a la
   vista o la pestaña está en segundo plano. Sin JavaScript el contenido se ve igual: la mejora es

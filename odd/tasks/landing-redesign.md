@@ -2,7 +2,7 @@
 
 **Objetivo:** que la landing sea la mejor carta de presentación del juego: se entienda en cinco
 segundos, se pueda compartir con una vista previa, y se mueva sólo donde tiene sentido.
-**Rama:** `main`. **Delivery:** un commit por tarea. **Runner:** `pnpm exec vitest run`,
+**Rama:** `main`. **Delivery:** cambios locales; commit y publicación solo por solicitud. **Runner:** `pnpm exec vitest run`,
 `pnpm typecheck`, `pnpm lint`, `pnpm build`, Prettier.
 
 ---
@@ -17,7 +17,7 @@ User: "mejorá la landing". La landing copia a mano las clases de dos variantes 
 
 - Los CTA salen de `buttonVariants` (`src/ui/components/ui/button.tsx`), no de strings duplicados.
 - Ningún tamaño literal: sólo tokens de la escala tipográfica (§4).
-- El titular se acorta para que entre en dos líneas en móvil.
+- El titular se adapta al ancho disponible sin desbordar en móvil; S8 aporta la nueva composición.
 
 ### S2 — Metadata y vista previa al compartir
 
@@ -32,8 +32,9 @@ ni `twitter`, y las dos rutas comparten el mismo título.
 
 User: "mejorá la landing".
 
-- §1.5 "un acento, un uso": el naranja queda para el logo y el CTA; los números de paso y las
-  viñetas pasan a neutros.
+- S8 actualiza la dirección visual: naranja para la marca, las acciones principales y los números
+  ilustrativos; amarillo para reloj, puntos y detalles decorativos. Los CTA secundarios no compiten
+  con el primario. El juego conserva sus estilos originales.
 - La sección que anuncia "configuración" pero lista hechos baja de jerarquía y se renombra.
 - El ancla "Cómo se juega" mueve el foco y deja margen al desplazarse (§9).
 
@@ -70,6 +71,17 @@ User: "mejorá la landing".
 
 - La carta inicial se sirve en el HTML (LCP), y la animación la mejora después de hidratar.
 
+### S8 — Referencia visual y entradas directas
+
+User: "Mejorar la ladingpage bsándote en esa imagen" (imagen adjunta, 2026-11-09).
+
+- Adaptar la referencia: fondo oscuro, titular "Decí todo. Menos la palabra prohibida.", naranja y
+  amarillo, carta clara apilada, tres pasos ilustrados y cierre "Tu próxima juntada empieza acá.".
+- Mantener los componentes reales del preview, la mejora progresiva, el foco del ancla y las reglas.
+- "Crear sala" abre el paso de nombre existente; "Unirme con código" abre el formulario de ingreso.
+  La entrada se consume una vez y no interfiere con volver al inicio ni con una sesión reconectada.
+- Diseño responsive, sin cambiar la apariencia del juego ni agregar dependencias.
+
 ## Tasks
 
 - **T1** → S1 — inline; `buttonVariants` en los CTA y escala tipográfica por token. Risk: none.
@@ -89,6 +101,14 @@ User: "mejorá la landing".
   `feat(landing)`.
 - **T7** → S7 — inline; la carta inicial en el HTML. Risk: none. Commit: `feat(landing)`.
 - **T8** → S1-S7 — inline; tests, gates y documentación. Risk: none.
+- **T9** → S1, S3, S5-S8 — inline, completada; composición de referencia y entradas directas.
+  Ruta: una sola unidad de presentación, sin motivo para delegar escritura; exploración acotada
+  delegada para mapear las restricciones del ingreso y el preview. RED: 6 tests fallan antes del cambio.
+  Commit solicitado: `feat(landing): redesign homepage from visual reference` (2026-11-09).
+  GREEN: 1027 tests pasan / 45 omitidos; tipos y lint sin errores. Build limpio del candidato y
+  del baseline completados en copias aisladas; HTML inicial con carta, CTAs y metadata presentes.
+  Revisión visual final: capturas CDP reales de 320, 390 y 1440 px; sin desbordamiento del documento,
+  navegación dentro del ancho disponible, reloj sin tapar la palabra y chips claros legibles.
 
 ## Log
 
@@ -110,4 +130,29 @@ User: "mejorá la landing".
   (1 warning preexistente); `prettier` limpio en los archivos tocados; `pnpm build` ✓. El HTML
   prerenderizado de `/` ya trae la palabra, las prohibidas en columna y el anillo ("Quedan 15
   segundos") y la metadata de `og:image`.
-
+- **L7 (2026-11-09).** User: "Mejorar la ladingpage bsándote en esa imagen". La referencia adjunta
+  define la composición y reemplaza el tratamiento neutro anterior de los números de los pasos.
+- **L8 (2026-11-09).** Se conserva el preview real de 15 s dentro de una carta clara con tarjetas
+  decorativas apiladas. CSS Module local y tokens de papel/titular nuevos, sin cambiar los tokens
+  existentes del juego. Las entradas `accion=crear|unirse` se consumen en HomeScreen mediante el
+  navegador, sin modificar el provider ni convertir `/jugar` en ruta dinámica. Se reutilizan la
+  validación de nombre, `goTo` y las reglas existentes; los demás parámetros y el hash se conservan.
+- **L9 (2026-11-09).** Verificación: RED 6 tests antes del cambio, GREEN 1027 pass / 45 skip;
+  `tsc` 0, `eslint` 0 (el warning preexistente de `act` continúa). Prettier aplicado al código/CSS
+  modificado y `git diff --check` limpio. El build dentro del workspace compiló y verificó tipos,
+  pero falló en la generación con `no direct app page entry found for /_not-found`. La comparación
+  aislada del baseline `a7efdb4` y del candidato dio exit 0 en ambos builds, sin modificar fuentes,
+  configuración, procesos ni la caché del workspace. `/jugar` sigue estático; el HTML inicial de `/`
+  contiene el nuevo titular, `fuego`, `llama`, `chimenea`, los dos enlaces de entrada y metadata OG.
+  La revisión visual se completó después mediante Chromium instalado, CDP y perfiles temporales
+  vacíos; no se agregó ningún runner ni dependencia al proyecto.
+- **L10 (2026-11-09).** Las primeras capturas detectaron el tamaño responsive heredado del reloj y
+  los chips oscuros del juego sobre el papel claro. La corrección quedó limitada al CSS Module de
+  la ilustración; TimerRing y TabooWords no se modificaron. Se compactó el encabezado por debajo
+  de 375 px para mantener "Jugar" dentro del viewport. Recheck: 20 tests focalizados pasan y el build
+  final limpio da exit 0. Las capturas CDP finales muestran `scrollWidth === clientWidth` en 320,
+  360, 390 y 1440 px; el botón del encabezado conserva el margen de 20 px en móvil. El reloj no
+  tapa FUEGO y los chips claros tienen contraste medido 13,72:1. Las capturas móviles por CLI no
+   servían como prueba de viewport: Edge impone un ancho mínimo de ventana; se usó emulación CDP.
+- **L11 (2026-11-09).** User: "Comitealo y pushealo a main". Se autoriza publicar el rediseño
+  verificado en `origin/main` mediante la autenticación SSH ya autorizada para este repositorio.

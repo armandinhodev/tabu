@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronLeft, KeyRound, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 
@@ -18,6 +18,21 @@ export function HomeScreen() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState(playerName);
   const [error, setError] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const action = url.searchParams.get("accion");
+    if (action !== "crear" && action !== "unirse") return;
+    // Consume the entry before navigating, so Back and reconnect stay authoritative.
+    url.searchParams.delete("accion");
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+    if (action === "crear") setCreating(true);
+    else goTo("join");
+  }, [goTo]);
 
   const continueWithName = (): void => {
     const value = name.trim();

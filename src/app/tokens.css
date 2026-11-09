@@ -42,6 +42,9 @@
   --danger: #ff3b47;
   --danger-soft: #2b1216;
   --gold: #e9b949;
+  /* Decorative paper surfaces, scoped to the public landing illustration. */
+  --landing-paper: #fff0d0;
+  --landing-paper-raised: #eddbb4;
 
   /* Códigos de equipo (máx. 4) */
   --team-1: #ff6b2c;

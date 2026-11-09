@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { TabooWords } from "@/ui/components/game/taboo-words";
 import { TimerRing } from "@/ui/components/game/timer-ring";
 import { useTurnPreview } from "./use-turn-preview";
+import styles from "./landing-page.module.css";
 
 const CARDS = [
   { word: "fuego", taboo: ["llama", "chimenea", "brasa", "humo"] },
@@ -47,17 +48,16 @@ export function CardShowcase() {
   const card = CARDS[cardIndex] ?? CARDS[0];
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-line-strong bg-surface-2 p-5 shadow-float">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-caption text-fg-subtle uppercase">Tu carta</span>
+    <div className={styles.demoCard}>
+      <div className={styles.previewTimer}>
         <TimerRing
           deadlineAt={started ? deadlineAt : undefined}
           turnSeconds={TURN_SECONDS}
-          className="size-28"
+          className="size-20"
         />
       </div>
-
-      <div className="min-h-[9.5rem]">
+      <p className={styles.cardHeading}>Tu palabra</p>
+      <div className={styles.cardBody}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={card.word}
@@ -67,15 +67,18 @@ export function CardShowcase() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.28, ease: "easeOut" }}
           >
-            <p className={WORD_CLASS} data-testid="preview-word">
+            <p className={`${WORD_CLASS} ${styles.cardWord}`} data-testid="preview-word">
               {card.word}
+            </p>
+            <p className="text-center font-display text-body-sm font-extrabold uppercase">
+              No podés decir
             </p>
             <TabooWords words={card.taboo} variant="informative" />
           </motion.div>
         </AnimatePresence>
       </div>
 
-      <p className="text-body-sm text-fg-muted">Si decís una de estas, tu equipo pierde 1 punto.</p>
+      <p className="sr-only">Si decís una de estas, tu equipo pierde 1 punto.</p>
     </div>
   );
 }

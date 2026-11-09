@@ -42,6 +42,41 @@ vi.mock("./card-showcase-loader", async () => {
 afterEach(cleanup);
 
 describe("LandingPage", () => {
+  it("uses the reference headline and offers distinct create and join entry points", () => {
+    render(<LandingPage />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Decí todo. Menos la palabra prohibida.",
+    );
+    expect(screen.getByRole("link", { name: "Crear sala" })).toHaveAttribute(
+      "href",
+      "/jugar?accion=crear",
+    );
+    expect(screen.getByRole("link", { name: "Unirme con código" })).toHaveAttribute(
+      "href",
+      "/jugar?accion=unirse",
+    );
+    expect(screen.getByRole("link", { name: "Crear una sala" })).toHaveAttribute(
+      "href",
+      "/jugar?accion=crear",
+    );
+    expect(screen.getByText("Sin descargas")).toBeVisible();
+    expect(screen.getByText("En tiempo real")).toBeVisible();
+  });
+
+  it("keeps the illustration responsive and scoped to landing paper tokens", () => {
+    const css = readFileSync(join(process.cwd(), "src/ui/landing/landing-page.module.css"), "utf8");
+    expect(css).toContain("var(--landing-paper)");
+    expect(css).toContain("var(--accent)");
+    expect(css).toContain("grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr)");
+    expect(css).toContain("@media (min-width: 768px)");
+    expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(css).toContain('.previewTimer > [role="timer"]');
+    expect(css).toContain(".cardBody :global(li > span)");
+    expect(css).toContain(".brand > span:first-child");
+    expect(css).toContain("@media (max-width: 374px)");
+    expect(css).not.toMatch(/#[\da-f]{3,8}\b/i);
+  });
+
   it("presents one clear purpose and sends the only call to action to the playable screen", () => {
     render(<LandingPage />);
 
@@ -64,7 +99,7 @@ describe("LandingPage", () => {
     expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveTextContent(/creá la sala/i);
     expect(rows[1]).toHaveTextContent(/describí/i);
-    expect(rows[2]).toHaveTextContent(/adiviná/i);
+    expect(rows[2]).toHaveTextContent(/sumá/i);
   });
 
   it("shows a representative card with its forbidden words as a decorative preview", () => {
@@ -82,9 +117,9 @@ describe("LandingPage", () => {
     render(<LandingPage />);
 
     expect(screen.getAllByText(/sin registro/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/2 a 4 equipos/i)).toBeInTheDocument();
-    expect(screen.getByText(/30 a 120 segundos/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 a 6 palabras prohibidas/i)).toBeInTheDocument();
+    expect(screen.getByText(/2–4 equipos/i)).toBeInTheDocument();
+    expect(screen.getByText(/30–120 s por turno/i)).toBeInTheDocument();
+    expect(screen.getByText(/1–6 palabras prohibidas/i)).toBeInTheDocument();
     expect(screen.getByText(/palabras adivinadas/i)).toBeInTheDocument();
   });
 
@@ -115,7 +150,7 @@ describe("LandingPage", () => {
   it("takes the call to action styles from the shared button", () => {
     render(<LandingPage />);
 
-    const cta = screen.getAllByRole("link", { name: /^jugar$/i })[0]!;
+    const cta = screen.getByRole("link", { name: "Crear sala" });
     expect(cta.className).toContain("bg-accent");
     expect(cta.className).toContain("text-on-accent");
     expect(cta.className).toContain("min-h-14");
@@ -130,7 +165,7 @@ describe("LandingPage", () => {
     const target = document.getElementById("como-se-juega");
     expect(target).not.toBeNull();
     expect(target?.className).toContain("scroll-mt-24");
-    expect(screen.getByRole("heading", { name: "Cómo se juega" })).toHaveAttribute(
+    expect(screen.getByRole("heading", { name: "Tres pasos. Muchas risas." })).toHaveAttribute(
       "tabindex",
       "-1",
     );

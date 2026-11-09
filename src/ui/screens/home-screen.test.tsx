@@ -23,9 +23,42 @@ afterEach(() => {
   game.playerName = "";
   game.setPlayerName.mockClear();
   game.goTo.mockClear();
+  window.history.replaceState(null, "", "/jugar");
 });
 
 describe("HomeScreen", () => {
+  it("opens the name step from the landing create link without bypassing validation", () => {
+    window.history.replaceState(null, "", "/jugar?accion=crear");
+    render(<HomeScreen />);
+    expect(screen.getByLabelText("Tu nombre")).toBeVisible();
+    expect(window.location.search).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Necesitamos un nombre");
+    expect(game.goTo).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Volver" }));
+    expect(screen.getByRole("button", { name: "Crear sala" })).toBeVisible();
+  });
+
+  it("consumes the join entry once so returning home keeps the action chooser", () => {
+    window.history.replaceState(null, "", "/jugar?accion=unirse&otro=valor#inicio");
+    const { unmount } = render(<HomeScreen />);
+    expect(game.goTo).toHaveBeenCalledExactlyOnceWith("join");
+    expect(window.location.search).toBe("?otro=valor");
+    expect(window.location.hash).toBe("#inicio");
+    unmount();
+    game.goTo.mockClear();
+    render(<HomeScreen />);
+    expect(screen.getByRole("button", { name: "Crear sala" })).toBeVisible();
+    expect(game.goTo).not.toHaveBeenCalled();
+  });
+
+  it("ignores unknown landing actions without changing normal home behavior", () => {
+    window.history.replaceState(null, "", "/jugar?accion=desconocida");
+    render(<HomeScreen />);
+    expect(screen.getByRole("button", { name: "Crear sala" })).toBeVisible();
+    expect(game.goTo).not.toHaveBeenCalled();
+  });
+
   it("asks for a name after choosing Crear sala", () => {
     render(<HomeScreen />);
 

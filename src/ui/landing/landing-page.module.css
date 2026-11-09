@@ -1,0 +1,286 @@
+.landing {
+  overflow: clip;
+  background:
+    radial-gradient(ellipse at 85% 24%, var(--accent-soft), transparent 42%), var(--bg-canvas);
+}
+
+.hero {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: calc(var(--spacing-unit) * 8);
+}
+
+.primaryCta {
+  padding-inline: calc(var(--spacing-unit) * 8);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elevation-card);
+}
+
+.secondaryCta {
+  border-color: var(--border-control);
+  border-radius: var(--r-lg);
+}
+
+.navPlay {
+  padding-inline: calc(var(--spacing-unit) * 5);
+  border-color: var(--accent);
+}
+
+.scene {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: calc(var(--spacing-unit) * 112);
+  min-height: calc(var(--spacing-unit) * 118);
+  margin-inline: auto;
+}
+
+.scene::before {
+  position: absolute;
+  z-index: -2;
+  inset: 12% -10% 0;
+  content: "";
+  background: radial-gradient(ellipse, var(--accent-soft), transparent 72%);
+}
+
+.backCard {
+  position: absolute;
+  inset: 24% 9% 9%;
+  display: grid;
+  place-items: center;
+  border: 2px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+  border-radius: var(--r-xl);
+  box-shadow: var(--elevation-float);
+}
+
+.backCard svg {
+  width: 42%;
+  height: 42%;
+  opacity: 0.5;
+}
+
+.backCardGold {
+  background: var(--gold);
+  color: var(--accent-press);
+  transform: rotate(-16deg) translateX(-9%);
+}
+
+.backCardOrange {
+  background: var(--accent-press);
+  color: var(--gold);
+  transform: rotate(17deg) translateX(10%);
+}
+
+.frontCard {
+  position: relative;
+  z-index: 1;
+  width: 76%;
+  margin-inline: auto;
+  padding-top: calc(var(--spacing-unit) * 23);
+  transform: rotate(5deg);
+}
+
+.speech {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--spacing-unit) * 4);
+  left: 0;
+  padding: calc(var(--spacing-unit) * 4) calc(var(--spacing-unit) * 6);
+  border-radius: 50%;
+  background: var(--landing-paper);
+  color: var(--on-accent);
+  font-family: var(--font-outfit), sans-serif;
+  font-size: var(--text-h3);
+  font-weight: 900;
+  line-height: var(--text-h3--line-height);
+  text-align: center;
+  transform: rotate(-12deg);
+  box-shadow: var(--elevation-card);
+}
+
+.speech::after {
+  position: absolute;
+  right: 18%;
+  bottom: -8%;
+  width: calc(var(--spacing-unit) * 7);
+  height: calc(var(--spacing-unit) * 7);
+  content: "";
+  background: var(--landing-paper);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.pointBadge {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: calc(var(--spacing-unit) * 2);
+  padding: calc(var(--spacing-unit) * 2) calc(var(--spacing-unit) * 5);
+  border: 2px solid color-mix(in srgb, var(--text-primary) 30%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--gold);
+  color: var(--on-accent);
+  font-family: var(--font-outfit), sans-serif;
+  font-size: var(--text-h2);
+  font-weight: 900;
+  transform: rotate(-7deg);
+  box-shadow: var(--elevation-float);
+}
+
+.demoCard {
+  position: relative;
+  padding: calc(var(--spacing-unit) * 2);
+  border: 2px solid var(--accent-hover);
+  border-radius: var(--r-xl);
+  background: var(--accent);
+  box-shadow: var(--elevation-float);
+}
+
+.cardHeading {
+  padding: calc(var(--spacing-unit) * 2);
+  color: var(--on-accent);
+  font-family: var(--font-outfit), sans-serif;
+  font-size: var(--text-h2);
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.cardBody {
+  /* Scope the real game chips' surface tokens to this decorative paper card. */
+  --bg-surface-3: var(--landing-paper-raised);
+  --text-primary: var(--on-accent);
+  --text-secondary: var(--on-accent);
+  padding: calc(var(--spacing-unit) * 5);
+  border-radius: var(--r-md);
+  background: var(--landing-paper);
+  color: var(--on-accent);
+}
+
+.cardWord {
+  font-size: var(--text-display);
+  margin-bottom: calc(var(--spacing-unit) * 3);
+  padding-bottom: calc(var(--spacing-unit) * 3);
+  border-bottom: 2px solid var(--landing-paper-raised);
+  color: var(--on-accent);
+  text-align: center;
+}
+
+.cardBody :global(li) {
+  justify-content: center;
+  font-family: var(--font-outfit), sans-serif;
+  font-weight: 800;
+}
+
+.cardBody :global(li > span) {
+  justify-content: center;
+  border-color: transparent;
+  background: var(--landing-paper-raised);
+  color: var(--on-accent);
+  font-family: var(--font-outfit), sans-serif;
+  font-size: var(--text-h3);
+  font-weight: 800;
+}
+
+.previewTimer {
+  position: absolute;
+  z-index: 4;
+  top: calc(var(--spacing-unit) * -16);
+  right: calc(var(--spacing-unit) * -7);
+  padding: calc(var(--spacing-unit) * 2);
+  border: 2px solid var(--gold);
+  border-radius: var(--r-pill);
+  background: var(--bg-canvas);
+  transform: rotate(-5deg);
+}
+
+.previewTimer > [role="timer"] {
+  width: calc(var(--spacing-unit) * 20);
+  height: calc(var(--spacing-unit) * 20);
+}
+
+.previewTimer > [role="timer"] > div > span:last-child {
+  display: none;
+}
+
+.previewTimer > [role="timer"] > div > span {
+  font-size: var(--text-h2);
+}
+
+.step {
+  background: linear-gradient(145deg, var(--bg-surface-2), var(--bg-surface));
+}
+
+.stepArt {
+  position: relative;
+  display: grid;
+  width: calc(var(--spacing-unit) * 25);
+  height: calc(var(--spacing-unit) * 23);
+  place-items: center;
+  color: var(--gold);
+  transform: rotate(-6deg);
+}
+
+.stepArt > svg {
+  width: 100%;
+  height: 100%;
+  fill: var(--warning-soft);
+}
+
+.stepArt > span {
+  position: absolute;
+  top: 18%;
+  font-family: var(--font-outfit), sans-serif;
+  font-size: var(--text-h1);
+  font-weight: 900;
+  color: var(--accent);
+}
+
+.finalCta {
+  background:
+    radial-gradient(ellipse at 0 0, var(--accent-press), transparent 45%),
+    radial-gradient(ellipse at 100% 120%, var(--accent), transparent 40%), var(--accent-soft);
+}
+
+@media (min-width: 768px) {
+  .hero {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: calc(var(--spacing-unit) * 3);
+    padding-block: calc(var(--spacing-unit) * 5);
+  }
+
+  .scene {
+    min-height: calc(var(--spacing-unit) * 130);
+  }
+}
+
+@media (max-width: 374px) {
+  .header,
+  .brand,
+  .header nav {
+    gap: calc(var(--spacing-unit) * 2);
+  }
+
+  .brand > span:first-child {
+    width: calc(var(--spacing-unit) * 9);
+    height: calc(var(--spacing-unit) * 9);
+  }
+
+  .brand > span:last-child {
+    font-size: var(--text-h2);
+    line-height: var(--text-h2--line-height);
+  }
+
+  .navPlay {
+    padding-inline: calc(var(--spacing-unit) * 3);
+  }
+
+  .cardBody {
+    padding: calc(var(--spacing-unit) * 3);
+  }
+
+  .speech {
+    padding: calc(var(--spacing-unit) * 3) calc(var(--spacing-unit) * 4);
+  }
+}
