@@ -60,6 +60,8 @@ export const createGamePayload = z.object({
       skipLimit: z.number().int().min(0).max(10),
       randomTeams: z.boolean(),
       rounds: z.number().int().min(1).max(10),
+      mode: z.enum(["rounds", "points"]),
+      targetScore: z.number().int().min(10).max(Number.MAX_SAFE_INTEGER),
     })
     .partial()
     .optional(),

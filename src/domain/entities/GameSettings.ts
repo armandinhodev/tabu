@@ -6,6 +6,9 @@ export const DEFAULT_TABOO_WORD_COUNT = 4;
 export const DEFAULT_SKIP_LIMIT = 3;
 
 export interface GameSettings {
+  /** Missing in legacy games, which use rounds mode. */
+  readonly mode?: "rounds" | "points";
+  readonly targetScore?: number;
   readonly teamCount: number;
   readonly turnSeconds: Duration;
   readonly tabooWordCount: number;

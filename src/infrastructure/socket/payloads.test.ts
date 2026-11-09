@@ -10,6 +10,26 @@ import {
 } from "./payloads";
 
 describe("createGamePayload", () => {
+  it("preserves points mode and its target", () => {
+    expect(
+      parsePayload(createGamePayload, {
+        playerName: "Luz",
+        deckId: "deck-1",
+        options: { mode: "points", targetScore: 10 },
+      }).options,
+    ).toEqual({ mode: "points", targetScore: 10 });
+  });
+
+  it.each([0, 9, 10.5])("rejects an invalid points target %s", (targetScore) => {
+    expect(() =>
+      parsePayload(createGamePayload, {
+        playerName: "Luz",
+        deckId: "deck-1",
+        options: { mode: "points", targetScore },
+      }),
+    ).toThrow();
+  });
+
   it("accepts a name, a deck and no options", () => {
     const parsed = parsePayload(createGamePayload, { playerName: "  Luz  ", deckId: "deck-1" });
 

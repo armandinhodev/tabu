@@ -71,6 +71,14 @@ describe("PlayerRow", () => {
 });
 
 describe("TeamPanel", () => {
+  it("shows completed rounds during the game but not in the lobby", () => {
+    const team = { ...makeTeam([]), roundsPlayed: 2 };
+    const { rerender } = render(<TeamPanel team={team} canJoin={false} isMine showScore />);
+    expect(screen.getByLabelText("Rondas jugadas por Equipo Naranja: 2")).toBeVisible();
+    rerender(<TeamPanel team={team} canJoin={false} isMine />);
+    expect(screen.queryByLabelText(/Rondas jugadas/)).not.toBeInTheDocument();
+  });
+
   it("highlights only the current descriptor and updates when the turn changes", () => {
     const team = makeTeam([
       makePlayer({ playerId: "p1", name: "Ana" }),

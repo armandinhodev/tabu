@@ -37,7 +37,7 @@ export function LobbyScreen() {
       <ScreenHeader
         eyebrow="Antes de empezar"
         title="Sala de espera"
-        subtitle={`${state.settings.teamCount} equipos · ${state.settings.turnSeconds} s por turno · ${state.settings.tabooWordCount} prohibidas por carta · ${state.settings.skipLimit} saltos por turno · ${state.settings.rounds === 1 ? "mazo entero" : `${state.settings.rounds} vueltas`} · ${totalPlayers} de ${minimum} jugadores`}
+        subtitle={`${state.settings.teamCount} equipos · ${state.settings.turnSeconds} s por turno · ${state.settings.tabooWordCount} prohibidas por carta · ${state.settings.skipLimit} saltos por turno · ${state.settings.mode === "points" ? `Meta: ${state.settings.targetScore ?? 10} puntos` : state.settings.rounds === 1 ? "mazo entero" : `${state.settings.rounds} vueltas`} · ${totalPlayers} de ${minimum} jugadores`}
         action={<MuteButton />}
       />
 

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/ui/components/ui/button";
 import { cn } from "@/ui/lib/cn";
 import { NEUTRAL_PALETTE, teamPalette } from "./team-colors";
+import { RoundsPlayed } from "./rounds-played";
 
 export function PlayerRow({
   player,
@@ -61,6 +62,9 @@ interface TeamPanelProps {
   readonly isMine: boolean;
   readonly isActive?: boolean;
   readonly showScore?: boolean;
+  readonly currentRound?: number | undefined;
+  readonly totalRounds?: number | undefined;
+  readonly roundInProgress?: boolean;
   readonly descriptorId?: string;
 }
 
@@ -74,6 +78,9 @@ export function TeamPanel({
   isMine,
   isActive = false,
   showScore = false,
+  currentRound,
+  totalRounds,
+  roundInProgress = isActive,
   descriptorId,
 }: TeamPanelProps) {
   const palette = teamPalette(team.color);
@@ -176,6 +183,15 @@ export function TeamPanel({
           </span>
         ) : null}
       </header>
+
+      {showScore ? (
+        <RoundsPlayed
+          team={team}
+          currentRound={currentRound}
+          totalRounds={totalRounds}
+          active={roundInProgress}
+        />
+      ) : null}
 
       {team.players.length === 0 ? (
         <p className="mt-3 text-body-sm text-fg-subtle">Nadie todavía.</p>

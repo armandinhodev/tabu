@@ -17,9 +17,14 @@ export interface GameDeckCardDocument {
 export interface GameDeckSnapshotDocument {
   name: string;
   cards: GameDeckCardDocument[];
+  originalCards?: GameDeckCardDocument[];
+  guessedCardIds?: string[];
+  recyclePhase?: "initial" | "unguessed" | "full";
 }
 
 export interface GameSettingsDocument {
+  mode?: "rounds" | "points";
+  targetScore?: number;
   teamCount: number;
   turnSeconds: number;
   tabooWordCount: number;
@@ -91,6 +96,7 @@ export interface GameDocument {
   discardedCardIds: string[];
   turnHistory: GameTurnHistoryDocument[];
   round: number;
+  finalRound?: number;
   winnerTeamId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -122,12 +128,17 @@ const deckSnapshotSchema = new Schema<GameDeckSnapshotDocument>(
   {
     name: { type: String, required: true, trim: true },
     cards: { type: [deckCardSchema], required: true },
+    originalCards: { type: [deckCardSchema], default: undefined },
+    guessedCardIds: { type: [String], default: undefined },
+    recyclePhase: { type: String, enum: ["initial", "unguessed", "full"] },
   },
   { _id: false, versionKey: false },
 );
 
 const settingsSchema = new Schema<GameSettingsDocument>(
   {
+    mode: { type: String, enum: ["rounds", "points"], default: "rounds" },
+    targetScore: { type: Number, min: 10, default: 10 },
     teamCount: { type: Number, required: true, min: 2, max: 4 },
     turnSeconds: { type: Number, required: true, min: 1 },
     tabooWordCount: {
@@ -214,6 +225,7 @@ export const gameSchema = new Schema<GameDocument>(
     discardedCardIds: { type: [String], required: true, default: [] },
     turnHistory: { type: [turnHistorySchema], required: true, default: [] },
     round: { type: Number, required: true, min: 1, default: 1 },
+    finalRound: { type: Number, min: 1 },
     winnerTeamId: { type: String, default: null },
     createdAt: { type: Date, required: true },
     finishedAt: { type: Date, default: null },

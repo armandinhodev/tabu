@@ -46,6 +46,35 @@ describe("deck mapper", () => {
 });
 
 describe("game mapper", () => {
+  it("preserves the original deck, recycling progress and final-round marker", () => {
+    const originalCards = [makeCard("a"), makeCard("b")];
+    const base = makeGame();
+    const game = makeGame({
+      settings: makeSettings({ mode: "points", targetScore: 10 }),
+      deck: {
+        ...base.deck,
+        originalCards,
+        guessedCardIds: [CardId.from("a")],
+        recyclePhase: "unguessed",
+      },
+      finalRound: 2,
+      round: 2,
+    });
+    const restored = toGameDomain({ ...toGameDocument(game), updatedAt: LATER });
+    expect(restored).toEqual(game);
+    expect(restored.deck.originalCards?.map((card) => card.id)).toEqual(["a", "b"]);
+    expect(restored.finalRound).toBe(2);
+  });
+
+  it("round-trips points settings and defaults legacy games to rounds", () => {
+    const game = makeGame({ settings: makeSettings({ mode: "points", targetScore: 15 }) });
+    const document = { ...toGameDocument(game), updatedAt: LATER };
+    expect(toGameDomain(document).settings).toEqual(game.settings);
+    delete document.settings.mode;
+    delete document.settings.targetScore;
+    expect(toGameDomain(document).settings).toMatchObject({ mode: "rounds", targetScore: 10 });
+  });
+
   it("loads an older snapshot without a taboo count using four", () => {
     const game = makeGame();
     const document = toGameDocument(game);

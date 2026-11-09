@@ -39,6 +39,8 @@ export type AppView = "home" | "create" | "join" | "lobby" | "game" | "result";
 export type ConnectionState = "connecting" | "online" | "reconnecting" | "offline";
 
 export interface CreateGameOptions {
+  readonly mode?: "rounds" | "points";
+  readonly targetScore?: number;
   readonly deckId: string;
   readonly teamCount: number;
   readonly turnSeconds: number;
@@ -405,6 +407,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
               tabooWordCount: options.tabooWordCount,
               skipLimit: options.skipLimit,
               rounds: options.rounds,
+              ...(options.mode === undefined ? {} : { mode: options.mode }),
+              ...(options.targetScore === undefined ? {} : { targetScore: options.targetScore }),
               randomTeams: options.randomTeams,
             },
           },

@@ -21,9 +21,20 @@ todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo ad
   contra la carta activa, le confirma el acierto y **el texto que escribió lo ve toda la sala**.
 - **Equipos rivales**: ven la palabra y los chips **reportables** al toque durante el turno activo.
 
-**Ninguna carta se repite en una partida.** Toda carta que sale del mazo se consume o se descarta:
-la adivinada, la penalizada, la que se salta y la que se agota el tiempo. La partida termina
-cuando el mazo se agota.
+**Cartas.** En el modo por rondas ninguna carta se repite: toda carta que sale del mazo se consume
+o se descarta. En el modo por puntos, al agotar el mazo se barajan y vuelven a mostrar las cartas
+que no fueron adivinadas (saltadas, penalizadas o vencidas por tiempo). Al agotar esa segunda pasada,
+se baraja el mazo completo nuevamente, repitiéndolo las veces necesarias. Si todas las cartas fueron
+adivinadas en la primera pasada, se pasa directamente al mazo completo.
+
+**Modo de juego.** Al crear la sala se elige entre **Por rondas** (el modo predeterminado,
+con la configuración de vueltas existente) y **Por puntos**. En el modo por puntos se configura
+una meta entera de **10 puntos o más**. Al alcanzar la meta, incluso mediante un ajuste manual del
+host, se activa la última ronda: el turno actual conserva todo su tiempo y todos los equipos completan
+la misma cantidad de turnos. Al cerrar esa ronda gana quien tenga más puntos; si los primeros están
+igualados, se declara empate, sin rondas adicionales. Las vueltas no limitan este modo y agotar el
+mazo no termina la partida. En el modo por rondas, agotar el mazo sigue cerrando la partida con el
+equipo de mayor puntaje como ganador, o empate si los primeros están igualados.
 
 **El host manda en el marcador.** Puede sumar o restar puntos a cualquier equipo en cualquier
 momento de la partida: el botón _Ajustar puntaje_ aparece junto al marcador y la sala ve el
@@ -55,6 +66,12 @@ al contenido central y la carta juega al lado de las notificaciones en dos colum
 el nombre y el puntaje de cada lado; cada equipo marca su borde exterior con su color. Con tres o
 cuatro equipos, el nombre va arriba y el puntaje abajo. El equipo activo se tiñe con su color. Cada
 equipo conserva el borde de su color, esté activo o no.
+El marcador y los paneles de equipo muestran **Rondas jugadas**: un contador por equipo que aumenta
+al completar su turno cronometrado, no al resolver cada carta. Durante un turno en curso se mantiene
+el total anterior, para comparar cuántas oportunidades completas tuvo cada equipo.
+Cada ronda también tiene un marcador numerado: color del equipo y una marca de verificación al
+completarla, borde resaltado mientras se juega y gris si está pendiente. Se muestran hasta cinco
+marcadores a la vez y se resume el historial anterior para mantener la vista compacta en móvil.
 El panel de
 actividad combina respuestas escritas y avisos públicos: quienes adivinan escriben en el panel y
 **lo que escriben lo ve toda la sala**, rival incluido; se anuncia como _"Mika escribió:"_ con el

@@ -26,10 +26,14 @@ export interface TeamView {
   readonly name: string;
   readonly color: string;
   readonly score: number;
+  /** Fully completed timed turns, not resolved cards. */
+  readonly roundsPlayed?: number;
   readonly players: readonly PlayerView[];
 }
 
 export interface SettingsView {
+  readonly mode?: "rounds" | "points";
+  readonly targetScore?: number;
   readonly teamCount: number;
   readonly turnSeconds: number;
   readonly tabooWordCount: number;
@@ -76,12 +80,15 @@ export interface GameStateView {
   readonly me: MeView;
   readonly turn?: TurnView;
   readonly round: number;
+  readonly finalRound?: number;
   /** Skips que quedan en la ronda actual (S4). */
   readonly skipsLeft: number;
 }
 
 export function toSettingsView(game: Game): SettingsView {
   return {
+    mode: game.settings.mode ?? "rounds",
+    targetScore: game.settings.targetScore ?? 10,
     teamCount: game.settings.teamCount,
     turnSeconds: game.settings.turnSeconds.seconds,
     tabooWordCount: game.settings.tabooWordCount,
@@ -92,12 +99,20 @@ export function toSettingsView(game: Game): SettingsView {
   };
 }
 
-export function toTeamViews(teams: readonly Team[]): readonly TeamView[] {
+export function toTeamViews(
+  teams: readonly Team[],
+  history: Game["turnHistory"] = [],
+): readonly TeamView[] {
   return teams.map((team) => ({
     id: team.id,
     name: team.name,
     color: team.color,
     score: team.score.value,
+    roundsPlayed: new Set(
+      history
+        .filter((entry) => entry.teamId === team.id && entry.reason === "TIME")
+        .map((entry) => entry.turnId),
+    ).size,
     players: team.players.map(toPlayerView),
   }));
 }
@@ -130,10 +145,11 @@ export function toGameState(game: Game, viewerId: PlayerId): GameStateView {
     status: game.status,
     code: game.code.value,
     settings: toSettingsView(game),
-    teams: toTeamViews(game.teams),
+    teams: toTeamViews(game.teams, game.turnHistory),
     waitingPlayers: game.players.map(toPlayerView),
     me,
     round: game.round,
+    ...(game.finalRound === undefined ? {} : { finalRound: game.finalRound }),
     skipsLeft: Math.max(0, effectiveSkipLimit(game.settings.skipLimit) - (turn?.skipsUsed ?? 0)),
     ...(turn === null
       ? {}

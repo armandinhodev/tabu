@@ -66,6 +66,106 @@ function eventTypes(events: readonly DomainEvent[]): readonly string[] {
 }
 
 describe("startGame", () => {
+  it.each([10, 15])("uses the configured points target of %i", (targetScore) => {
+    const active = startGame(
+      makeGame({ settings: makeSettings({ mode: "points", targetScore }) }),
+      makeContext(),
+    ).game;
+    const game = {
+      ...active,
+      teams: active.teams.map((team) => ({
+        ...team,
+        score: Score.from(team.id === active.currentTurn?.teamId ? targetScore - 2 : 0),
+      })),
+    };
+    const below = resolveTurn(
+      game,
+      { kind: "CORRECT", actorId: PlayerId.from("p2") },
+      makeContext(),
+    );
+    expect(below.game.status).toBe("playing");
+    const reached = resolveTurn(
+      below.game,
+      { kind: "CORRECT", actorId: PlayerId.from("p2") },
+      makeContext(),
+    );
+    expect(reached.game.status).toBe("playing");
+    expect(reached.game.finalRound).toBe(1);
+  });
+
+  it.each([0, 2])(
+    "recycles points games on deck exhaustion with a leading score of %i",
+    (score) => {
+      const active = startGame(
+        makeGame({
+          settings: makeSettings({ mode: "points", targetScore: 10 }),
+          deck: makeDeck([makeCard("only")]),
+        }),
+        makeContext(),
+      ).game;
+      const game = {
+        ...active,
+        teams: active.teams.map((team, index) => ({
+          ...team,
+          score: Score.from(index === 0 ? score : 0),
+        })),
+      };
+      const result = resolveTurn(game, { kind: "TIME" }, makeContext());
+      expect(result.game.status).toBe("playing");
+      expect(result.game.currentTurn?.card.id).toBe("only");
+      expect(eventTypes(result.events)).not.toContain("GameFinished");
+    },
+  );
+
+  it("keeps the full timed turn when a team reaches the points target", () => {
+    const initial = makeGame({ settings: makeSettings({ mode: "points", targetScore: 10 }) });
+    const active = startGame(initial, makeContext()).game;
+    const game = {
+      ...active,
+      teams: active.teams.map((team) => ({
+        ...team,
+        score: Score.from(team.id === active.currentTurn?.teamId ? 9 : 0),
+      })),
+    };
+    const result = resolveTurn(
+      game,
+      { kind: "CORRECT", actorId: PlayerId.from("p2") },
+      makeContext(),
+    );
+    expect(result.game.status).toBe("playing");
+    expect(result.game.finalRound).toBe(1);
+    expect(result.game.currentTurn?.deadlineAt).toEqual(active.currentTurn?.deadlineAt);
+    expect(result.game.finishedAt).toBeNull();
+    expect(eventTypes(result.events)).not.toContain("GameFinished");
+    expect(result.game.teams[0]?.score.value).toBe(10);
+  });
+
+  it("ignores the rounds limit in points mode while cards remain", () => {
+    const initial = makeGame({
+      settings: makeSettings({ mode: "points", targetScore: 10, rounds: 2 }),
+    });
+    const active = startGame(initial, makeContext()).game;
+    const turn = active.currentTurn!;
+    const game = { ...active, round: 2, currentTurn: { ...turn, teamId: TeamId.from("t2") } };
+    const result = resolveTurn(game, { kind: "TIME" }, makeContext());
+    expect(result.game.status).toBe("playing");
+    expect(result.game.round).toBe(3);
+  });
+
+  it.each(["rounds", "points"] as const)("keeps playing below the target in %s mode", (mode) => {
+    const active = startGame(
+      makeGame({ settings: makeSettings({ mode, targetScore: 10 }) }),
+      makeContext(),
+    ).game;
+    const result = resolveTurn(
+      active,
+      { kind: "CORRECT", actorId: PlayerId.from("p2") },
+      makeContext(),
+    );
+    expect(result.game.status).toBe("playing");
+    expect(eventTypes(result.events)).not.toContain("GameFinished");
+  });
+
   it.each([1, 4, 6])("uses %i taboo words from a six-word card", (tabooWordCount) => {
     const words = ["llama", "calor", "humo", "brasa", "ceniza", "quemar"];
     const game = makeGame({

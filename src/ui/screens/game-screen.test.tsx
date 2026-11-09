@@ -28,6 +28,58 @@ const context = vi.hoisted(() => ({
   leaveGame: vi.fn(),
 }));
 vi.mock("@/ui/providers/game-provider", () => ({ useGame: () => context }));
+it("keeps the selected round pending until its clock starts and shares the same numbered round across teams", () => {
+  const game = makeGame({
+    status: "playing",
+    round: 2,
+    settings: makeSettings({ rounds: 3 }),
+    currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1", status: "pending" }),
+  });
+  const initial = toGameState(game, PlayerId.from("p1"));
+  context.state = {
+    ...initial,
+    teams: initial.teams.map((team) => ({ ...team, roundsPlayed: 1 })),
+  };
+  const { rerender } = render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+  expect(screen.getByRole("img", { name: "Ronda 2 de Equipo 1: pendiente" })).not.toHaveAttribute(
+    "aria-current",
+  );
+  expect(screen.queryByRole("img", { name: /en juego/ })).not.toBeInTheDocument();
+  context.state = { ...context.state, turn: { ...context.state.turn!, status: "active" } };
+  rerender(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+  expect(screen.getAllByRole("img", { name: "Ronda 2 de Equipo 1: en juego" })).toHaveLength(2);
+  expect(screen.getAllByRole("img", { name: "Ronda 2 de Equipo 2: pendiente" })).toHaveLength(2);
+  expect(screen.getAllByRole("img", { name: "Ronda 1 de Equipo 1: completada" })).toHaveLength(2);
+});
+
+it("shows the points target and the final round instead of a rounds limit", () => {
+  context.state = toGameState(
+    makeGame({
+      status: "playing",
+      settings: makeSettings({ mode: "points", targetScore: 15, rounds: 2 }),
+      finalRound: 1,
+      currentTurn: makeTurn({ teamId: "t1", descriptorId: "p1" }),
+    }),
+    PlayerId.from("p1"),
+  );
+  render(
+    <SoundProvider>
+      <GameScreen rules={TEST_HOUSE_RULES} />
+    </SoundProvider>,
+  );
+  expect(screen.getAllByText(/Meta: 15 puntos/)).toHaveLength(2);
+  expect(screen.getAllByText(/Última ronda/)).toHaveLength(2);
+  expect(screen.queryByText(/Ronda 1 de 2/)).not.toBeInTheDocument();
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

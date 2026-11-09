@@ -12,6 +12,28 @@ vi.mock("react", async () => {
 
 afterEach(cleanup);
 
+it.each([2, 3, 4])("shows each team's completed rounds for %i teams", (count) => {
+  const entries = teams(count).map((team, index) => ({ ...team, roundsPlayed: index }));
+  render(<ScoreBoard teams={entries} activeTeamId="t1" />);
+  for (const [index, team] of entries.entries()) {
+    expect(screen.getByLabelText(`Rondas jugadas por ${team.name}: ${index}`)).toHaveTextContent(
+      `Rondas jugadas: ${index}`,
+    );
+  }
+});
+
+it("updates completed rounds independently from scores", () => {
+  const original = teams(2).map((team) => ({ ...team, roundsPlayed: 0 }));
+  const { rerender } = render(<ScoreBoard teams={original} activeTeamId="t1" />);
+  rerender(
+    <ScoreBoard teams={[{ ...original[0]!, roundsPlayed: 1 }, original[1]!]} activeTeamId="t2" />,
+  );
+  expect(screen.getByLabelText("Rondas jugadas por Equipo A: 1")).toBeVisible();
+  expect(screen.getByLabelText("Rondas jugadas por Equipo B: 0")).toBeVisible();
+  expect(screen.getByText("12")).toBeVisible();
+  expect(screen.getByText("8")).toBeVisible();
+});
+
 function teams(count: number): TeamView[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `t${index + 1}`,

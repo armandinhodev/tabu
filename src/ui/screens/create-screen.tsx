@@ -75,6 +75,9 @@ export function CreateScreen() {
   const [skipLimit, setSkipLimit] = useState<"0" | "1" | "2" | "3" | "4" | "5">("3");
   const [rounds, setRounds] = useState<"1" | "2" | "3" | "4" | "5">("1");
   const [randomTeams, setRandomTeams] = useState(false);
+  const [mode, setMode] = useState<"rounds" | "points">("rounds");
+  const [targetScore, setTargetScore] = useState("10");
+  const validTarget = Number.isSafeInteger(Number(targetScore)) && Number(targetScore) >= 10;
 
   const loadDecks = (): void => {
     setDeckState("loading");
@@ -253,19 +256,57 @@ export function CreateScreen() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-body-sm font-semibold text-fg">Vueltas al mazo</span>
+            <span className="text-body-sm font-semibold text-fg">Modo de juego</span>
             <SegmentedControl
-              label="Cantidad de vueltas al mazo"
-              value={rounds}
-              options={ROUNDS_OPTIONS}
-              onValueChange={setRounds}
-              className="grid grid-cols-3 min-[375px]:grid-cols-5 [&>button]:px-2"
+              label="Modo de juego"
+              value={mode}
+              options={[
+                { value: "rounds", label: "Por rondas" },
+                { value: "points", label: "Por puntos" },
+              ]}
+              onValueChange={setMode}
             />
-            <p className="text-body-sm text-fg-muted">
-              Con «Mazo» se juega hasta agotar las cartas; desde 2, la partida termina al completar
-              esa cantidad de vueltas.
-            </p>
           </div>
+
+          {mode === "points" ? (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="target-score" className="text-body-sm font-semibold text-fg">
+                Meta de puntos
+              </label>
+              <input
+                id="target-score"
+                type="number"
+                min={10}
+                max={Number.MAX_SAFE_INTEGER}
+                step={1}
+                value={targetScore}
+                onChange={(event) => setTargetScore(event.target.value)}
+                aria-invalid={!validTarget}
+                aria-describedby="target-score-help"
+                className="rounded-md border border-line bg-surface p-3 text-fg focus-visible:outline-2 focus-visible:outline-accent"
+              />
+              <p id="target-score-help" className="text-body-sm text-fg-muted">
+                Mínimo 10 puntos. Al alcanzar la meta se completa la ronda y gana quien tenga más
+                puntos; si empatan, hay empate. Al agotar las cartas se repiten primero las no
+                adivinadas y después el mazo completo.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <span className="text-body-sm font-semibold text-fg">Vueltas al mazo</span>
+              <SegmentedControl
+                label="Cantidad de vueltas al mazo"
+                value={rounds}
+                options={ROUNDS_OPTIONS}
+                onValueChange={setRounds}
+                className="grid grid-cols-3 min-[375px]:grid-cols-5 [&>button]:px-2"
+              />
+              <p className="text-body-sm text-fg-muted">
+                Con «Mazo» se juega hasta agotar las cartas; desde 2, la partida termina al
+                completar esa cantidad de vueltas.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex items-center justify-between gap-4 border-t border-line pt-5">
@@ -307,15 +348,21 @@ export function CreateScreen() {
             <p className="mt-1 text-fg-muted">
               {teamCount} equipos · {turnSeconds} s por turno · {tabooWordCount} prohibidas ·{" "}
               {skipLimit === "0" ? "Sin saltos" : `${skipLimit} saltos`} ·{" "}
-              {rounds === "1" ? "mazo entero" : `${rounds} vueltas`}
+              {mode === "points"
+                ? `Meta: ${targetScore} puntos`
+                : rounds === "1"
+                  ? "mazo entero"
+                  : `${rounds} vueltas`}
             </p>
           </div>
         )}
         <Button
           block
-          disabled={busy || deckId === null || deckState !== "ready"}
+          disabled={
+            busy || deckId === null || deckState !== "ready" || (mode === "points" && !validTarget)
+          }
           onClick={() => {
-            if (deckId === null) {
+            if (deckId === null || (mode === "points" && !validTarget)) {
               return;
             }
 
@@ -326,6 +373,7 @@ export function CreateScreen() {
               tabooWordCount: Number(tabooWordCount),
               skipLimit: Number(skipLimit),
               rounds: Number(rounds),
+              ...(mode === "points" ? { mode, targetScore: Number(targetScore) } : {}),
               randomTeams,
             });
           }}

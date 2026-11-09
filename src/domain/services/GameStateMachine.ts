@@ -26,6 +26,7 @@ import type { Rng } from "../rng";
 import type { CardId, PlayerId, TurnId } from "../value-objects/PlayerId";
 import { TabooWords } from "../value-objects/TabooWords";
 import { shuffleDeck } from "./DeckShuffler";
+import { replenishPointsDeck } from "./PointsDeck";
 
 export interface TransitionContext {
   readonly now: Date;
@@ -100,7 +101,17 @@ export function startGame(game: Game, ctx: TransitionContext): TransitionResult 
     status: "playing",
     teams,
     players: [],
-    deck: { ...game.deck, cards: shuffleDeck(game.deck.cards, ctx.rng) },
+    deck: {
+      ...game.deck,
+      cards: shuffleDeck(game.deck.cards, ctx.rng),
+      ...(game.settings.mode === "points"
+        ? {
+            originalCards: game.deck.cards.remaining,
+            guessedCardIds: [],
+            recyclePhase: "initial" as const,
+          }
+        : {}),
+    },
     turnOrder: rotation.flatMap((team) => team.players.map((player) => player.id)),
     currentTurn: null,
     turnHistory: [],
@@ -143,14 +154,15 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
     candidate.id === team.id ? selection.team : candidate,
   );
 
-  const { deck, card } = game.deck.cards.draw();
+  const ready = replenishPointsDeck(game, ctx.rng);
+  const { deck, card } = ready.deck.cards.draw();
 
   if (card === null) {
     return finishGame(
       {
-        ...game,
+        ...ready,
         teams: teamsWithDescriptor,
-        deck: { ...game.deck, cards: deck },
+        deck: { ...ready.deck, cards: deck },
       },
       ctx,
     );
@@ -173,9 +185,9 @@ export function beginTurn(game: Game, ctx: TransitionContext): TransitionResult 
   };
 
   const next: Game = {
-    ...game,
+    ...ready,
     teams: teamsWithDescriptor,
-    deck: { ...game.deck, cards: deck },
+    deck: { ...ready.deck, cards: deck },
     currentTurn: turn,
   };
 
@@ -220,8 +232,8 @@ export function activateTurn(game: Game, ctx: TransitionContext): TransitionResu
  * del mazo, con el mismo reloj. El límite de skips vive en el turno
  * (`turn.skipsUsed`), así que se reinicia con cada turno.
  *
- * La carta saltada **no vuelve a salir**: no pasa al equipo rival, se
- * descarta como las penalizadas (ninguna carta se repite en la partida).
+ * A skipped card is consumed for this pass. Points games can recycle it only
+ * after exhausting the draw queue; rounds games never repeat it.
  */
 export function skipCard(game: Game, ctx: TransitionContext): TransitionResult {
   if (game.status !== "playing") {
@@ -234,13 +246,14 @@ export function skipCard(game: Game, ctx: TransitionContext): TransitionResult {
     throw new TurnNotActiveError();
   }
 
-  const drawn = game.deck.cards.draw();
   const discardedCardIds = [...game.discardedCardIds, turn.card.id];
+  const ready = replenishPointsDeck({ ...game, discardedCardIds }, ctx.rng);
+  const drawn = ready.deck.cards.draw();
 
   if (drawn.card === null) {
-    // No queda mazo: la carta skipeada se consume y la partida termina.
+    // A rounds game (or a legacy snapshot without an archive) cannot refill.
     const finished = finishGame(
-      { ...game, deck: { ...game.deck, cards: drawn.deck }, discardedCardIds },
+      { ...ready, deck: { ...ready.deck, cards: drawn.deck }, discardedCardIds },
       ctx,
     );
 
@@ -259,8 +272,8 @@ export function skipCard(game: Game, ctx: TransitionContext): TransitionResult {
   };
 
   const next: Game = {
-    ...game,
-    deck: { ...game.deck, cards: drawn.deck },
+    ...ready,
+    deck: { ...ready.deck, cards: drawn.deck },
     discardedCardIds,
     currentTurn: nextTurn,
   };
@@ -321,7 +334,7 @@ export function resolveTurn(
   let discardedCardIds: readonly CardId[] = game.discardedCardIds;
 
   if (kind === "VIOLATION" || kind === "TIME") {
-    // Penalizada o tiempo agotado: la carta se consume y no vuelve al mazo.
+    // The card leaves this pass; points mode can replay it when the queue empties.
     deck = deck.remove(turn.card.id);
     discardedCardIds = [...discardedCardIds, turn.card.id];
   }
@@ -368,14 +381,25 @@ export function resolveTurn(
     );
   }
 
-  const nextGame: Game = {
-    ...game,
-    teams,
-    deck: { ...game.deck, cards: deck },
-    discardedCardIds,
-    turnHistory: [...game.turnHistory, historyEntry],
-    currentTurn: null,
-  };
+  const nextGame = replenishPointsDeck(
+    markPointsFinalRound({
+      ...game,
+      teams,
+      deck: {
+        ...game.deck,
+        cards: deck,
+        ...(game.settings.mode === "points" && kind === "CORRECT"
+          ? {
+              guessedCardIds: [...new Set([...(game.deck.guessedCardIds ?? []), turn.card.id])],
+            }
+          : {}),
+      },
+      discardedCardIds,
+      turnHistory: [...game.turnHistory, historyEntry],
+      currentTurn: null,
+    }),
+    ctx.rng,
+  );
 
   // Resolving a card does not end the team's timed round.
   if (kind !== "TIME") {
@@ -414,6 +438,16 @@ export function resolveTurn(
     });
   }
 
+  if (
+    nextGame.settings.mode === "points" &&
+    roundComplete &&
+    nextGame.finalRound !== undefined &&
+    nextGame.round >= nextGame.finalRound
+  ) {
+    const finished = finishGame(nextGame, ctx);
+    return { game: finished.game, events: [...events, ...finished.events] };
+  }
+
   const deckExhausted = nextGame.deck.cards.isEmpty;
 
   if (deckExhausted) {
@@ -423,7 +457,10 @@ export function resolveTurn(
 
   // §6.10: `rounds = 1` significa "mazo entero"; el tope por vueltas aplica desde 2.
   const roundsReached =
-    roundComplete && nextGame.settings.rounds > 1 && nextGame.round >= nextGame.settings.rounds;
+    nextGame.settings.mode !== "points" &&
+    roundComplete &&
+    nextGame.settings.rounds > 1 &&
+    nextGame.round >= nextGame.settings.rounds;
 
   if (roundsReached) {
     const finished = finishGame(nextGame, ctx);
@@ -469,6 +506,19 @@ export function finishGame(game: Game, ctx: { readonly now: Date }): TransitionR
       },
     ],
   };
+}
+
+export function hasReachedPointsTarget(game: Game): boolean {
+  return (
+    game.settings.mode === "points" &&
+    game.teams.some((team) => team.score.value >= (game.settings.targetScore ?? 10))
+  );
+}
+
+export function markPointsFinalRound(game: Game): Game {
+  return game.finalRound === undefined && hasReachedPointsTarget(game)
+    ? { ...game, finalRound: game.round }
+    : game;
 }
 
 /** El deadline es absoluto: el scheduler compara contra `now`, sin acumular ticks. */

@@ -78,7 +78,14 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
   const isRival = role === "RIVAL";
   const isGuesser = role === "ACTIVE";
   const activeTeam = state.teams.find((team) => team.id === turn.teamId) ?? null;
-  const round = roundLabel(state.round, state.settings.rounds);
+  const totalRounds =
+    state.settings.mode !== "points" && state.settings.rounds > 1
+      ? state.settings.rounds
+      : undefined;
+  const round =
+    state.settings.mode === "points"
+      ? `Meta: ${state.settings.targetScore ?? 10} puntos${state.finalRound === undefined ? "" : " · Última ronda"}`
+      : roundLabel(state.round, state.settings.rounds);
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col gap-4 px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6 md:px-8 xl:grid xl:grid-cols-[240px_minmax(0,1fr)_256px] xl:items-start xl:gap-6 xl:pt-8">
@@ -124,6 +131,9 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
             isMine={team.id === state.me.teamId}
             isActive={team.id === turn.teamId}
             descriptorId={turn.descriptorId}
+            currentRound={state.round}
+            totalRounds={totalRounds}
+            roundInProgress={turn.status === "active" && team.id === turn.teamId}
             showScore
           />
         ))}
@@ -133,7 +143,12 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
         {turn.status !== "pending" ? (
           <section aria-label="Puntajes" aria-live="polite" className="flex min-w-0 flex-col gap-3">
             <h2 className="text-caption text-fg-muted uppercase">Marcador</h2>
-            <ScoreBoard teams={state.teams} activeTeamId={turn.teamId} />
+            <ScoreBoard
+              teams={state.teams}
+              activeTeamId={turn.teamId}
+              currentRound={state.round}
+              totalRounds={totalRounds}
+            />
           </section>
         ) : null}
 

@@ -1,4 +1,5 @@
 "use client";
+import { RoundsPlayed } from "./rounds-played";
 
 import { AlertTriangle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -127,11 +128,19 @@ export function TabooWords({
 interface ScoreBoardProps {
   readonly teams: readonly TeamView[];
   readonly activeTeamId: string | null;
+  readonly currentRound?: number | undefined;
+  readonly totalRounds?: number | undefined;
   readonly className?: string;
 }
 
 /** Facing scores for two teams; one compact row for larger games. */
-export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) {
+export function ScoreBoard({
+  teams,
+  activeTeamId,
+  className,
+  currentRound,
+  totalRounds,
+}: ScoreBoardProps) {
   const facing = teams.length === 2;
 
   return (
@@ -188,6 +197,12 @@ export function ScoreBoard({ teams, activeTeamId, className }: ScoreBoardProps) 
               )}
             >
               {team.name}
+              <RoundsPlayed
+                team={team}
+                currentRound={currentRound}
+                totalRounds={totalRounds}
+                active={active}
+              />
             </span>
             <span
               className={cn(

@@ -31,8 +31,17 @@ export function toGameDocument(game: Game): GameDocumentInput {
     deckSnapshot: {
       name: game.deck.name,
       cards: game.deck.cards.remaining.map(toCardDocument),
+      ...(game.deck.originalCards === undefined
+        ? {}
+        : { originalCards: game.deck.originalCards.map(toCardDocument) }),
+      ...(game.deck.guessedCardIds === undefined
+        ? {}
+        : { guessedCardIds: [...game.deck.guessedCardIds] }),
+      ...(game.deck.recyclePhase === undefined ? {} : { recyclePhase: game.deck.recyclePhase }),
     },
     settings: {
+      mode: game.settings.mode ?? "rounds",
+      targetScore: game.settings.targetScore ?? 10,
       teamCount: game.settings.teamCount,
       turnSeconds: game.settings.turnSeconds.seconds,
       tabooWordCount: game.settings.tabooWordCount,
@@ -56,6 +65,7 @@ export function toGameDocument(game: Game): GameDocumentInput {
       at: entry.at,
     })),
     round: game.round,
+    ...(game.finalRound === undefined ? {} : { finalRound: game.finalRound }),
     winnerTeamId: game.winnerTeamId,
     createdAt: game.createdAt,
     finishedAt: game.finishedAt,
@@ -70,8 +80,19 @@ export function toGameDomain(document: GameDocument): Game {
     deck: {
       name: document.deckSnapshot.name,
       cards: CardDeck.from(document.deckSnapshot.cards.map(toCardDomain)),
+      ...(document.deckSnapshot.originalCards === undefined
+        ? {}
+        : { originalCards: document.deckSnapshot.originalCards.map(toCardDomain) }),
+      ...(document.deckSnapshot.guessedCardIds === undefined
+        ? {}
+        : { guessedCardIds: document.deckSnapshot.guessedCardIds.map(CardId.from) }),
+      ...(document.deckSnapshot.recyclePhase === undefined
+        ? {}
+        : { recyclePhase: document.deckSnapshot.recyclePhase }),
     },
     settings: {
+      mode: document.settings.mode ?? "rounds",
+      targetScore: document.settings.targetScore ?? 10,
       teamCount: document.settings.teamCount,
       turnSeconds: Duration.fromSeconds(document.settings.turnSeconds),
       tabooWordCount: document.settings.tabooWordCount ?? DEFAULT_TABOO_WORD_COUNT,
@@ -95,6 +116,7 @@ export function toGameDomain(document: GameDocument): Game {
       at: entry.at,
     })),
     round: document.round,
+    ...(document.finalRound === undefined ? {} : { finalRound: document.finalRound }),
     createdAt: document.createdAt,
     finishedAt: document.finishedAt,
     winnerTeamId: document.winnerTeamId === null ? null : TeamId.from(document.winnerTeamId),

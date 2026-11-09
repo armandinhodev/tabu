@@ -1,6 +1,8 @@
 import type { Game } from "../../domain/entities/Game";
 import { GameNotFoundError, InvalidStateError } from "../../domain/errors/DomainError";
 import type { Standing } from "../../domain/events/events";
+import type { DomainEvent } from "../../domain/events/events";
+import { markPointsFinalRound } from "../../domain/services/GameStateMachine";
 import type { PlayerId, TeamId } from "../../domain/value-objects/PlayerId";
 import { requireHost, requirePlaying, type GameDeps } from "./common";
 
@@ -8,6 +10,7 @@ import { requireHost, requirePlaying, type GameDeps } from "./common";
 export const MAX_SCORE_ADJUSTMENT = 10;
 
 export interface ScoreAdjustData {
+  readonly events: readonly DomainEvent[];
   readonly game: Game;
   readonly teamId: TeamId;
   readonly delta: number;
@@ -58,10 +61,11 @@ export function adjustScore(
       : team,
   );
 
-  const next: Game = { ...game, teams };
+  const next = markPointsFinalRound({ ...game, teams });
   deps.registry.save(next);
 
   return {
+    events: [],
     game: next,
     teamId,
     delta,

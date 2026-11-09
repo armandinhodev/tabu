@@ -5,6 +5,7 @@ import type { Player } from "./Player";
 import type { Turn, TurnOutcomeKind } from "./Turn";
 import type { GameSettings } from "./GameSettings";
 import type { Team } from "./Team";
+import type { Card } from "./Card";
 import type { CardId, GameId, TurnId } from "../value-objects/PlayerId";
 
 export type GameStatus = "waiting" | "playing" | "finished";
@@ -13,6 +14,10 @@ export type GameStatus = "waiting" | "playing" | "finished";
 export interface DeckSnapshot {
   readonly name: string;
   readonly cards: CardDeck;
+  /** Original full clues and recycling progress, present in points games. */
+  readonly originalCards?: readonly Card[];
+  readonly guessedCardIds?: readonly CardId[];
+  readonly recyclePhase?: "initial" | "unguessed" | "full";
 }
 
 export interface TurnHistoryEntry {
@@ -39,6 +44,8 @@ export interface Game {
   readonly discardedCardIds: readonly CardId[];
   readonly turnHistory: readonly TurnHistoryEntry[];
   readonly round: number;
+  /** Reaching the points target latches the round that everyone must finish. */
+  readonly finalRound?: number;
   readonly createdAt: Date;
   readonly finishedAt: Date | null;
   readonly winnerTeamId: TeamId | null;

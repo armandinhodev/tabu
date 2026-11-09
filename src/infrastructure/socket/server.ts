@@ -246,6 +246,7 @@ export function attachSocketServer(
             byPlayerId: adjustment.byPlayerId,
             teams: adjustment.standings,
           },
+          ...adjustment.events,
         ]);
         broadcaster.emitState(adjustment.game);
       });

@@ -87,6 +87,8 @@ export function makeTurn(params: {
 
 export function makeSettings(overrides: Partial<GameSettings> = {}): GameSettings {
   return {
+    mode: "rounds",
+    targetScore: 10,
     teamCount: 2,
     turnSeconds: Duration.fromSeconds(60),
     tabooWordCount: 4,

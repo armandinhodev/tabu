@@ -63,6 +63,8 @@ export async function createGame(
   const tabooWordCount = Math.min(requestedTabooWordCount, deckMinimum);
 
   const settings: GameSettings = {
+    mode: input.options?.mode ?? "rounds",
+    targetScore: input.options?.targetScore ?? 10,
     teamCount,
     turnSeconds: Duration.fromSeconds(input.options?.turnSeconds ?? deps.config.turnSecondsDefault),
     tabooWordCount,

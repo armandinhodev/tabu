@@ -39,6 +39,22 @@ afterEach(() => {
 });
 
 describe("CreateScreen", () => {
+  it("configures points mode and prevents targets below ten", async () => {
+    render(<CreateScreen />);
+    await screen.findByRole("radio", { name: /General/ });
+    fireEvent.click(screen.getByRole("button", { name: "Por puntos" }));
+    const target = screen.getByRole("spinbutton", { name: "Meta de puntos" });
+    expect(target).toHaveValue(10);
+    expect(screen.queryByLabelText("Cantidad de vueltas al mazo")).not.toBeInTheDocument();
+    fireEvent.change(target, { target: { value: "9" } });
+    expect(screen.getByRole("button", { name: "Crear sala" })).toBeDisabled();
+    fireEvent.change(target, { target: { value: "15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear sala" }));
+    expect(game.createGame).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "points", targetScore: 15 }),
+    );
+  });
+
   it("allows deck selection with the keyboard and keeps a visible focus treatment", async () => {
     const user = userEvent.setup();
     render(<CreateScreen />);
