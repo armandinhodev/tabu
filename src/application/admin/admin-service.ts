@@ -21,6 +21,7 @@ import {
   MAX_DECK_NAME_LENGTH,
   MAX_DECK_THEME_LENGTH,
   MAX_DECK_RULES_LENGTH,
+  MAX_DECK_DESCRIPTION_LENGTH,
   MAX_CARD_TEXT_LENGTH,
 } from "./deck-limits";
 import { DEFAULT_DEEPSEEK_MODEL, type AdminSettingsStore } from "./settings";
@@ -87,6 +88,11 @@ export interface AdminServiceDeps {
 
 export interface CreateDeckCommand {
   readonly rules?: string | undefined;
+  /**
+   * Descripción pública opcional. La ve el host cuando elige un mazo: nunca
+   * se envía al proveedor y no regenera las cartas.
+   */
+  readonly description?: string | undefined;
   readonly allowProperNames?: boolean | undefined;
   readonly name: string;
   readonly theme: string;
@@ -144,6 +150,15 @@ export class AdminService {
         `The forbidden-word rules cannot exceed ${MAX_DECK_RULES_LENGTH} characters`,
       );
     }
+    if (command.description !== undefined && typeof command.description !== "string") {
+      throw adminInvalid("The deck description must be text");
+    }
+    const description = command.description?.trim();
+    if (description !== undefined && description.length > MAX_DECK_DESCRIPTION_LENGTH) {
+      throw adminInvalid(
+        `The deck description cannot exceed ${MAX_DECK_DESCRIPTION_LENGTH} characters`,
+      );
+    }
     if (command.allowProperNames !== undefined && typeof command.allowProperNames !== "boolean") {
       throw adminInvalid("The proper-name option must be a boolean");
     }
@@ -173,6 +188,9 @@ export class AdminService {
 
     return this.deps.decks.create({
       ...(rules ? { rules } : {}),
+      // Una descripción vacía es la ausencia de descripción: el mazo nuevo no
+      // lleva el campo.
+      ...(description ? { description } : {}),
       id: this.deps.ids.next(),
       name,
       theme,
@@ -194,6 +212,11 @@ export class AdminService {
     id: string,
     command: {
       readonly rules?: string | undefined;
+      /**
+       * Descripción pública. `undefined` la deja como está, una cadena vacía la
+       * borra y un texto la reemplaza.
+       */
+      readonly description?: string | undefined;
       readonly name?: string | undefined;
       readonly theme?: string | undefined;
       readonly allowProperNames?: boolean | undefined;
@@ -212,10 +235,26 @@ export class AdminService {
       );
     }
 
+    if (command.description !== undefined && typeof command.description !== "string") {
+      throw adminInvalid("The deck description must be text");
+    }
+    const description = command.description?.trim();
+    if (description !== undefined && description.length > MAX_DECK_DESCRIPTION_LENGTH) {
+      throw adminInvalid(
+        `The deck description cannot exceed ${MAX_DECK_DESCRIPTION_LENGTH} characters`,
+      );
+    }
+
     if (command.allowProperNames !== undefined && typeof command.allowProperNames !== "boolean") {
       throw adminInvalid("The proper-name option must be a boolean");
     }
-    if (!hasName && !hasTheme && command.allowProperNames === undefined && rules === undefined) {
+    if (
+      !hasName &&
+      !hasTheme &&
+      command.allowProperNames === undefined &&
+      rules === undefined &&
+      description === undefined
+    ) {
       throw adminInvalid("The deck name or the deck theme is required");
     }
 
@@ -248,6 +287,8 @@ export class AdminService {
 
     const updated = await this.deps.decks.updateMetadata({
       ...(rules === undefined ? {} : { rules }),
+      // Una cadena vacía borra la descripción; si no llega, no se toca.
+      ...(description === undefined ? {} : { description }),
       deckId: id,
       ...(name === undefined ? {} : { name }),
       ...(theme === undefined ? {} : { theme }),
@@ -665,6 +706,7 @@ export function buildProjection(deck: ManagedDeck): {
   publicDeckId: string;
   name: string;
   theme: string;
+  description?: string;
   language: AdminLanguage;
   revision: number;
   cards: readonly { id: string; word: string; taboo: readonly string[] }[];
@@ -676,6 +718,8 @@ export function buildProjection(deck: ManagedDeck): {
     publicDeckId: deck.publicDeckId,
     name: deck.name,
     theme: deck.theme,
+    // La descripción es opcional: los mazos que no la tienen no la publican.
+    ...(deck.description === undefined ? {} : { description: deck.description }),
     language: deck.language,
     revision: deck.revision,
     cards: archived

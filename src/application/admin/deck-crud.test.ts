@@ -561,4 +561,112 @@ describe("buildProjection", () => {
 
     expect(buildProjection(deck).cards).toEqual([]);
   });
+
+  it("carries the public description and omits it when the deck has none", () => {
+    const base: ManagedDeck = {
+      id: "deck-1",
+      name: "General",
+      theme: "General",
+      language: "es",
+      publicDeckId: "public-1",
+      cards: [card()],
+      revision: 7,
+      usedObjectives: [],
+      proposedWords: [],
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+    const described: ManagedDeck = { ...base, description: "Un mazo para todos los públicos." };
+
+    expect(buildProjection(described).description).toBe("Un mazo para todos los públicos.");
+    expect(buildProjection(base)).not.toHaveProperty("description");
+  });
+});
+
+describe("public deck description", () => {
+  it("stores the trimmed description and leaves the decks without one untouched", async () => {
+    const { service } = build();
+
+    const described = await service.createDeck({
+      name: "Cocina",
+      theme: "Comidas",
+      description: "  Un mazo de comida para todos los públicos.  ",
+    });
+    expect(await service.getDeck(described.id)).toHaveProperty(
+      "description",
+      "Un mazo de comida para todos los públicos.",
+    );
+
+    const legacy = await service.createDeck({ name: "Legacy", theme: "General" });
+    expect(await service.getDeck(legacy.id)).not.toHaveProperty("description");
+
+    const blank = await service.createDeck({ name: "Blank", theme: "General", description: "   " });
+    expect(await service.getDeck(blank.id)).not.toHaveProperty("description");
+  });
+
+  it("rejects an invalid description before creating anything", async () => {
+    const { service, decks } = build();
+
+    for (const description of [1, null, "x".repeat(501)]) {
+      await expectAdminError(
+        service.createDeck({
+          name: "Cocina",
+          theme: "Comidas",
+          description: description as string,
+        }),
+        400,
+        "invalid_input",
+      );
+    }
+
+    expect(decks.decks.size).toBe(0);
+  });
+
+  it("sets, clears and preserves the description on metadata edits", async () => {
+    const { service, decks, jobs } = build();
+    decks.seed({
+      id: "deck-1",
+      name: "General",
+      theme: "General",
+      description: "Un mazo general.",
+      cards: [card()],
+    });
+
+    const updated = await service.updateDeck("deck-1", { description: "  Otro mazo.  " });
+    expect(updated.description).toBe("Otro mazo.");
+    expect(updated.cards).toHaveLength(1);
+
+    const cleared = await service.updateDeck("deck-1", { description: "" });
+    expect(cleared).not.toHaveProperty("description");
+
+    decks.seed({
+      id: "deck-2",
+      name: "Cine",
+      theme: "Películas",
+      description: "Un mazo de cine.",
+    });
+    expect(await service.updateDeck("deck-2", { theme: "Series" })).toHaveProperty(
+      "description",
+      "Un mazo de cine.",
+    );
+
+    // Editar la descripción no encola trabajos ni toca las cartas.
+    expect(jobs.jobs.size).toBe(0);
+  });
+
+  it("rejects an invalid description without changing the stored deck", async () => {
+    const { service, decks } = build();
+    decks.seed({ id: "deck-1", name: "General", theme: "General", description: "Original." });
+    const before = JSON.stringify(await service.getDeck("deck-1"));
+
+    for (const description of [1, null, "x".repeat(501)]) {
+      await expectAdminError(
+        service.updateDeck("deck-1", { description: description as string }),
+        400,
+        "invalid_input",
+      );
+    }
+
+    expect(JSON.stringify(await service.getDeck("deck-1"))).toBe(before);
+  });
 });

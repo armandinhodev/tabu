@@ -106,6 +106,13 @@ export class FakeProvider implements GenerationProvider {
   candidateBatchError: unknown = null;
   usagePerCall: ProviderUsage = { inputTokens: 3, outputTokens: 5 };
   completionError: unknown = null;
+  /**
+   * Every payload that reached the provider, verbatim.
+   *
+   * It proves what the model receives: a field that never enters the provider
+   * never appears here.
+   */
+  readonly providerInputs: { method: string; input: unknown }[] = [];
 
   async proposeObjectives(input: {
     model?: import("../settings").DeepSeekModel;
@@ -115,6 +122,7 @@ export class FakeProvider implements GenerationProvider {
     excludedObjectives: readonly string[];
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ objectives: readonly string[] }>> {
+    this.providerInputs.push({ method: "proposeObjectives", input: { ...input } });
     this.objectiveCalls.push({
       ...(input.model === undefined ? {} : { model: input.model }),
       ...(input.allowProperNames === undefined ? {} : { allowProperNames: input.allowProperNames }),
@@ -138,6 +146,7 @@ export class FakeProvider implements GenerationProvider {
     objectives: readonly string[];
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ cards: readonly ProposedCard[] }>> {
+    this.providerInputs.push({ method: "proposeCandidatesBatch", input: { ...input } });
     this.candidateBatchCalls.push({
       ...(input.rules === undefined ? {} : { rules: input.rules }),
       ...(input.model === undefined ? {} : { model: input.model }),
@@ -163,6 +172,7 @@ export class FakeProvider implements GenerationProvider {
     rejected: readonly string[];
     signal?: AbortSignal;
   }): Promise<ProviderResult<{ candidates: readonly string[] }>> {
+    this.providerInputs.push({ method: "proposeCandidates", input: { ...input } });
     this.completionCalls.push({
       ...(input.rules === undefined ? {} : { rules: input.rules }),
       ...(input.model === undefined ? {} : { model: input.model }),
@@ -185,6 +195,8 @@ export class FakeProvider implements GenerationProvider {
 
 interface FakeDeck {
   rules?: string;
+  /** Descripción pública opcional: la ve el host al elegir el mazo. */
+  description?: string;
   allowProperNames?: boolean;
   id: string;
   name: string;
@@ -214,6 +226,7 @@ export class FakeDeckStore implements AdminDeckStore {
   seed(partial: Partial<ManagedDeck> & { id: string; name: string; theme: string }): FakeDeck {
     const deck: FakeDeck = {
       ...(partial.rules === undefined ? {} : { rules: partial.rules }),
+      ...(partial.description === undefined ? {} : { description: partial.description }),
       ...(partial.allowProperNames === undefined
         ? {}
         : { allowProperNames: partial.allowProperNames }),
@@ -253,6 +266,7 @@ export class FakeDeckStore implements AdminDeckStore {
 
     return this.seed({
       ...(input.rules === undefined ? {} : { rules: input.rules }),
+      ...(input.description === undefined ? {} : { description: input.description }),
       id: input.id,
       name: input.name,
       theme: input.theme,
@@ -320,6 +334,7 @@ export class FakeDeckStore implements AdminDeckStore {
 
   async updateMetadata(input: {
     rules?: string;
+    description?: string;
     allowProperNames?: boolean;
     deckId: string;
     name?: string;
@@ -355,6 +370,15 @@ export class FakeDeckStore implements AdminDeckStore {
 
     if (input.rules !== undefined) {
       deck.rules = input.rules;
+    }
+
+    // Una cadena vacía borra la descripción; si no llega, no se toca.
+    if (input.description !== undefined) {
+      if (input.description === "") {
+        delete deck.description;
+      } else {
+        deck.description = input.description;
+      }
     }
 
     if (input.allowProperNames !== undefined) {

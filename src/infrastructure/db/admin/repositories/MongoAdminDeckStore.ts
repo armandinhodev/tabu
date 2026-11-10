@@ -69,6 +69,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
     try {
       const document = await AdminDeckModel.create({
         ...(input.rules === undefined ? {} : { rules: input.rules }),
+        ...(input.description === undefined ? {} : { description: input.description }),
         _id: input.id,
         name: input.name,
         theme: input.theme,
@@ -106,6 +107,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
    */
   async updateMetadata(input: {
     rules?: string;
+    description?: string;
     allowProperNames?: boolean;
     deckId: string;
     name?: string;
@@ -131,6 +133,10 @@ export class MongoAdminDeckStore implements AdminDeckStore {
       await ensureNameIndex();
     }
 
+    // La descripción se borra con `$unset`: un campo no puede estar en `$set`
+    // y en `$unset` al mismo tiempo.
+    const clearingDescription = input.description === "";
+
     try {
       const document = await AdminDeckModel.findOneAndUpdate(
         {
@@ -142,6 +148,11 @@ export class MongoAdminDeckStore implements AdminDeckStore {
         {
           $set: {
             ...(input.rules === undefined ? {} : { rules: input.rules }),
+            ...(clearingDescription
+              ? {}
+              : input.description === undefined
+                ? {}
+                : { description: input.description }),
             ...(input.allowProperNames === undefined
               ? {}
               : { allowProperNames: input.allowProperNames }),
@@ -151,6 +162,7 @@ export class MongoAdminDeckStore implements AdminDeckStore {
             ...(renaming ? { nameReserved: true } : {}),
             updatedAt: new Date(input.now),
           },
+          ...(clearingDescription ? { $unset: { description: "" } } : {}),
           $inc: { revision: 1 },
         },
         { new: true },
@@ -310,6 +322,8 @@ export class MongoAdminDeckStore implements AdminDeckStore {
           managedDeckId: input.deckId,
           revision: current.revision,
         },
+        // La tumba no conserva la descripción pública del mazo eliminado.
+        $unset: { description: "" },
         $setOnInsert: { createdAt: new Date(input.now) },
       },
       { upsert: true },
@@ -765,7 +779,13 @@ export class MongoAdminDeckStore implements AdminDeckStore {
             })),
             managedDeckId: projection.deckId,
             revision: projection.revision,
+            // La descripción es opcional: si el mazo ya no la tiene, la
+            // publicación borra la anterior en vez de dejarla vieja.
+            ...(projection.description === undefined
+              ? {}
+              : { description: projection.description }),
           },
+          ...(projection.description === undefined ? { $unset: { description: "" } } : {}),
           $setOnInsert: { createdAt: now },
         },
         { upsert: true, new: true },

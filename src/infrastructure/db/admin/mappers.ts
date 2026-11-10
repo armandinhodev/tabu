@@ -66,6 +66,7 @@ export function toManagedCard(document: AdminCardDocument): ManagedCard {
 export function toManagedDeck(document: AdminDeckDocument): ManagedDeck {
   return {
     ...(document.rules === undefined ? {} : { rules: document.rules }),
+    ...(document.description === undefined ? {} : { description: document.description }),
     ...(document.allowProperNames === undefined
       ? {}
       : { allowProperNames: document.allowProperNames }),

@@ -53,6 +53,12 @@ export interface ManagedCard {
 /** Mazo administrable y su proyección jugable. */
 export interface ManagedDeck {
   readonly rules?: string;
+  /**
+   * Descripción pública del mazo. La ve el host cuando elige un mazo para
+   * jugar: es sólo metadata y nunca se envía al proveedor, así que cambiarla
+   * no regenera ni altera ninguna carta.
+   */
+  readonly description?: string;
   /** Absent means disabled; applies only to future card generation. */
   readonly allowProperNames?: boolean;
   readonly id: string;

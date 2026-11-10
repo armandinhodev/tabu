@@ -73,6 +73,7 @@ export function AdminDashboard() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
+  const [description, setDescription] = useState("");
   const [rules, setRules] = useState("");
   const [allowProperNames, setAllowProperNames] = useState(false);
   const [count, setCount] = useState("5");
@@ -431,6 +432,7 @@ export function AdminDashboard() {
             body: JSON.stringify({
               name: name.trim(),
               theme: theme.trim(),
+              ...(description.trim() ? { description: description.trim() } : {}),
               ...(rules.trim() ? { rules: rules.trim() } : {}),
               ...(allowProperNames ? { allowProperNames: true } : {}),
             }),
@@ -440,6 +442,7 @@ export function AdminDashboard() {
           selectTab("decks");
           setName("");
           setTheme("");
+          setDescription("");
           setRules("");
           setAllowProperNames(false);
           trackJob(await requestDeckGeneration(created.id, amount));
@@ -586,6 +589,7 @@ export function AdminDashboard() {
         <CreateDeckForm
           name={name}
           theme={theme}
+          description={description}
           rules={rules}
           allowProperNames={allowProperNames}
           count={count}
@@ -593,6 +597,7 @@ export function AdminDashboard() {
           running={running}
           onNameChange={setName}
           onThemeChange={setTheme}
+          onDescriptionChange={setDescription}
           onRulesChange={setRules}
           onAllowProperNamesChange={setAllowProperNames}
           onCountChange={setCount}

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { MAX_DECK_RULES_LENGTH } from "@/application/admin/deck-limits";
+import {
+  MAX_DECK_RULES_LENGTH,
+  MAX_DECK_DESCRIPTION_LENGTH,
+} from "@/application/admin/deck-limits";
 
 import { createAdminDeck, listAdminDecks } from "@/infrastructure/admin/runtime";
 import { AdminHttpError, adminBody, adminResponse } from "@/infrastructure/admin-http/http";
@@ -10,6 +13,7 @@ export const dynamic = "force-dynamic";
 const input = z
   .object({
     rules: z.string().trim().max(MAX_DECK_RULES_LENGTH).optional(),
+    description: z.string().trim().max(MAX_DECK_DESCRIPTION_LENGTH).optional(),
     allowProperNames: z.boolean().optional(),
     name: z.string().trim().min(1).max(100),
     theme: z.string().trim().min(1).max(500),

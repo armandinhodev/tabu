@@ -154,6 +154,38 @@ describe("administrative HTTP boundary", () => {
     },
   );
 
+  it("accepts an optional public description on deck creation", async () => {
+    const description = "Un mazo de comida para todos los públicos.";
+    mocks.create.mockResolvedValue({ id: deckId, description });
+
+    const response = await create(request("POST", { name: "Cooking", theme: "Food", description }));
+
+    expect(response.status).toBe(201);
+    expect(mocks.create).toHaveBeenCalledWith({ name: "Cooking", theme: "Food", description });
+    expect(await response.json()).toEqual({ data: { id: deckId, description } });
+  });
+
+  it("accepts a description-only edit and an explicit clear", async () => {
+    mocks.update.mockResolvedValue({ id: deckId, description: "Nuevo." });
+
+    const response = await update(deckRequest("PATCH", { description: "Nuevo." }), context);
+
+    expect(response.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith(deckId, { description: "Nuevo." });
+  });
+
+  it.each([1, null, "x".repeat(501)])(
+    "rejects an invalid description before writing (%s)",
+    async (description) => {
+      expect(
+        (await create(request("POST", { name: "Cooking", theme: "Food", description }))).status,
+      ).toBe(400);
+      expect((await update(deckRequest("PATCH", { description }), context)).status).toBe(400);
+      expect(mocks.create).not.toHaveBeenCalled();
+      expect(mocks.update).not.toHaveBeenCalled();
+    },
+  );
+
   it("reads and saves the global model through the authenticated boundary", async () => {
     mocks.settings.mockResolvedValue({ model: "deepseek-flash" });
     mocks.saveSettings.mockResolvedValue({ model: "deepseek-v4-pro" });

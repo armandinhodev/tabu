@@ -1,7 +1,10 @@
 "use client";
 
 import { MAX_GENERATION_COUNT } from "@/application/admin/generation-limits";
-import { MAX_DECK_RULES_LENGTH } from "@/application/admin/deck-limits";
+import {
+  MAX_DECK_RULES_LENGTH,
+  MAX_DECK_DESCRIPTION_LENGTH,
+} from "@/application/admin/deck-limits";
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
 import { Textarea } from "@/ui/components/ui/textarea";
@@ -12,6 +15,8 @@ export interface CreateDeckFormProps {
   readonly name: string;
   /** Temática e indicaciones por escribir. */
   readonly theme: string;
+  /** Descripción pública por escribir. */
+  readonly description: string;
   /** Reglas para palabras prohibidas por escribir. */
   readonly rules: string;
   /** Permite objetivos y prohibidas con nombres propios y títulos. */
@@ -24,6 +29,7 @@ export interface CreateDeckFormProps {
   readonly running: boolean;
   readonly onNameChange: (value: string) => void;
   readonly onThemeChange: (value: string) => void;
+  readonly onDescriptionChange: (value: string) => void;
   readonly onRulesChange: (value: string) => void;
   readonly onAllowProperNamesChange: (value: boolean) => void;
   readonly onCountChange: (value: string) => void;
@@ -38,6 +44,7 @@ export interface CreateDeckFormProps {
 export function CreateDeckForm({
   name,
   theme,
+  description,
   rules,
   allowProperNames,
   count,
@@ -45,6 +52,7 @@ export function CreateDeckForm({
   running,
   onNameChange,
   onThemeChange,
+  onDescriptionChange,
   onRulesChange,
   onAllowProperNamesChange,
   onCountChange,
@@ -97,6 +105,21 @@ export function CreateDeckForm({
             placeholder="Ejemplo: deportes para público general"
           />
         </label>
+        <label className="space-y-2 md:col-span-2">
+          <span>Descripción pública</span>
+          <Textarea
+            value={description}
+            onChange={(event) => onDescriptionChange(event.target.value)}
+            maxLength={MAX_DECK_DESCRIPTION_LENGTH}
+            disabled={busy}
+            aria-describedby="deck-description-hint"
+            placeholder="Ejemplo: un mazo de comida pensado para jugar en familia."
+          />
+        </label>
+        <p id="deck-description-hint" className="text-body-sm text-fg-muted md:col-span-2">
+          Opcional. Hasta {MAX_DECK_DESCRIPTION_LENGTH} caracteres. Es lo que el host ve al elegir
+          el mazo para jugar: no se usa para generar las cartas.
+        </p>
         <label className="space-y-2 md:col-span-2">
           <span>Reglas para buscar palabras prohibidas</span>
           <Textarea

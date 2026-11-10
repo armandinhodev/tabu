@@ -16,5 +16,13 @@ export const MAX_DECK_THEME_LENGTH = 200;
 /** Maximum length of optional forbidden-word generation instructions. */
 export const MAX_DECK_RULES_LENGTH = 500;
 
+/**
+ * Maximum length of the optional public description of a deck.
+ *
+ * The description is metadata for the host: it is shown when a deck is chosen
+ * and never reaches the provider, so it has its own limit.
+ */
+export const MAX_DECK_DESCRIPTION_LENGTH = 500;
+
 /** Maximum length of an objective or forbidden term entered manually. */
 export const MAX_CARD_TEXT_LENGTH = 200;

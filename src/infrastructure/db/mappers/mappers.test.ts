@@ -43,6 +43,16 @@ describe("deck mapper", () => {
       taboo: ["llama", "calor"],
     });
   });
+
+  it("keeps the optional description out of the documents that do not have it", () => {
+    expect(toDeckDocument(deck)).not.toHaveProperty("description");
+
+    const described = { ...deck, description: "Un mazo para todos." };
+    expect(toDeckDocument(described)).toHaveProperty("description", "Un mazo para todos.");
+
+    const restored = toDeckDomain({ ...toDeckDocument(described), createdAt: NOW }, deck.id);
+    expect(restored).toHaveProperty("description", "Un mazo para todos.");
+  });
 });
 
 describe("game mapper", () => {

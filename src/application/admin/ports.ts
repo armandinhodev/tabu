@@ -39,6 +39,8 @@ export interface ClaimedJob {
 /** Datos para crear un mazo administrable. */
 export interface CreateDeckInput {
   readonly rules?: string;
+  /** Descripción pública opcional: la ve el host al elegir el mazo. */
+  readonly description?: string;
   readonly allowProperNames?: boolean;
   readonly id: string;
   readonly name: string;
@@ -61,6 +63,8 @@ export interface DeckProjection {
   readonly publicDeckId: string;
   readonly name: string;
   readonly theme: string;
+  /** Descripción pública opcional: sólo la_metadata que ve el host. */
+  readonly description?: string;
   readonly language: AdminLanguage;
   /** Revisión del mazo: la publicación sólo avanza, nunca retrocede. */
   readonly revision: number;
@@ -205,6 +209,11 @@ export interface AdminDeckStore {
    */
   updateMetadata(input: {
     readonly rules?: string;
+    /**
+     * Descripción pública. `undefined` la deja como está; una cadena vacía la
+     * borra; un texto la reemplaza.
+     */
+    readonly description?: string | undefined;
     readonly allowProperNames?: boolean;
     readonly deckId: string;
     readonly name?: string | undefined;

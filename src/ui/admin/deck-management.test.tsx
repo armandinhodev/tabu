@@ -86,6 +86,52 @@ describe("DeckManagement", () => {
     );
   });
 
+  it("edits the public description and clears it when the field is emptied", async () => {
+    const { api } = renderManagement({ deck: { ...deck, description: "Un mazo para todos." } });
+    const description = screen.getByLabelText("Descripción pública");
+
+    expect(description.tagName).toBe("TEXTAREA");
+    expect(description).toHaveAttribute("maxlength", "500");
+    expect(description).toHaveValue("Un mazo para todos.");
+
+    fireEvent.change(description, { target: { value: "  Otro mazo.  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenLastCalledWith(
+        "/api/admin/decks/deck-1",
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: "General",
+            theme: "Objetos",
+            description: "Otro mazo.",
+          }),
+        }),
+      ),
+    );
+
+    fireEvent.change(description, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(api).toHaveBeenLastCalledWith(
+        "/api/admin/decks/deck-1",
+        expect.objectContaining({
+          body: JSON.stringify({ name: "General", theme: "Objetos", description: "" }),
+        }),
+      ),
+    );
+  });
+
+  it("does not send the description when it did not change", async () => {
+    const { api } = renderManagement({ deck: { ...deck, description: "Un mazo para todos." } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() => expect(api).toHaveBeenCalled());
+    const last = api.mock.calls.at(-1) as unknown as [string, RequestInit] | undefined;
+    const body = JSON.parse(String(last?.[1]?.body)) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("description");
+  });
+
   it.each([{ busy: true }, { running: true }])(
     "locks the rules and theme textareas during operations (%j)",
     (lock) => {

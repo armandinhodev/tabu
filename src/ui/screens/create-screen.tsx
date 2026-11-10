@@ -16,7 +16,8 @@ import { cn } from "@/ui/lib/cn";
 interface DeckOption {
   readonly id: string;
   readonly name: string;
-  readonly category: string;
+  /** Descripción pública opcional: es lo único que el host lee del mazo. */
+  readonly description?: string;
   readonly cardCount: number;
 }
 
@@ -147,6 +148,9 @@ export function CreateScreen() {
             <legend className="sr-only">Mazo</legend>
             {decks.map((deck) => {
               const selected = deck.id === deckId;
+              // La temática nunca se muestra al host: sólo la descripción
+              // pública que el administrador escribió.
+              const description = deck.description?.trim() ?? "";
 
               return (
                 <label
@@ -162,10 +166,10 @@ export function CreateScreen() {
                     <span className="font-display text-h3 font-semibold break-words text-fg">
                       {deck.name}
                     </span>
-                    <span className="text-body-sm text-fg-muted">
-                      {deck.cardCount} cartas
-                      {deck.category !== deck.name ? ` · ${deck.category}` : ""}
-                    </span>
+                    <span className="text-body-sm text-fg-muted">{deck.cardCount} cartas</span>
+                    {description !== "" && (
+                      <span className="text-body-sm break-words text-fg-muted">{description}</span>
+                    )}
                   </span>
                   <input
                     type="radio"

@@ -172,6 +172,51 @@ describe("CreateScreen", () => {
     expect(game.createGame).not.toHaveBeenCalled();
   });
 
+  it("shows the public description of a deck and never falls back to the category", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          decks: [
+            {
+              id: "general",
+              name: "General",
+              category: "Categoría interna",
+              cardCount: 120,
+              description: "  Un mazo para todos.  ",
+            },
+          ],
+        }),
+      }),
+    );
+    render(<CreateScreen />);
+
+    const radio = await screen.findByRole("radio", { name: /General/ });
+    expect(screen.getByText("Un mazo para todos.")).toBeVisible();
+    expect(radio.closest("label")).toHaveTextContent("120 cartas");
+    expect(radio.closest("label")).not.toHaveTextContent("Categoría interna");
+  });
+
+  it("shows only the name and the card count when the deck has no description", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          decks: [
+            { id: "general", name: "General", category: "Categoría interna", cardCount: 120 },
+          ],
+        }),
+      }),
+    );
+    render(<CreateScreen />);
+
+    const radio = await screen.findByRole("radio", { name: /General/ });
+    expect(radio.closest("label")).toHaveTextContent("120 cartas");
+    expect(radio.closest("label")).not.toHaveTextContent("Categoría interna");
+  });
+
   it("agrupa la configuración en un grid de dos columnas desde md", () => {
     render(<CreateScreen />);
 

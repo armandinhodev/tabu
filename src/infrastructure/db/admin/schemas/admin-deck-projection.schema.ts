@@ -19,6 +19,8 @@ export interface ProjectionCardDocument {
 export interface AdminDeckProjectionDocument {
   name: string;
   category: string;
+  /** Descripción pública opcional: sólo la ve el host al elegir el mazo. */
+  description?: string;
   language: "es";
   active: boolean;
   cards: ProjectionCardDocument[];
@@ -49,6 +51,7 @@ export const adminDeckProjectionSchema = new Schema<AdminDeckProjectionDocument>
   {
     name: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true },
+    description: { type: String, required: false, trim: true },
     language: { type: String, required: true, enum: ["es"], default: "es" },
     active: { type: Boolean, required: true, default: false },
     cards: { type: [projectionCardSchema], required: true, default: [] },

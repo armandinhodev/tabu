@@ -201,6 +201,70 @@ describe("Mongo admin stores", () => {
       },
     );
 
+    it("persists the public description and clears it with an unset", async () => {
+      stub(AdminDeckModel, "findById", deckDocument({ description: "Old" }));
+      const update = stub(AdminDeckModel, "findOneAndUpdate", deckDocument({ description: "New" }));
+
+      await new MongoAdminDeckStore().updateMetadata({
+        deckId: "deck-1",
+        description: "New",
+        now: NOW,
+      });
+
+      const written = update.mock.calls[0]?.[1] as Record<string, Record<string, unknown>>;
+      expect(written.$set).toMatchObject({ description: "New" });
+      expect(written).not.toHaveProperty("$unset");
+    });
+
+    it("clears the public description without setting it at the same time", async () => {
+      stub(AdminDeckModel, "findById", deckDocument({ description: "Old" }));
+      const update = stub(AdminDeckModel, "findOneAndUpdate", deckDocument());
+
+      await new MongoAdminDeckStore().updateMetadata({
+        deckId: "deck-1",
+        description: "",
+        now: NOW,
+      });
+
+      const written = update.mock.calls[0]?.[1] as Record<string, Record<string, unknown>>;
+      expect(written.$unset).toMatchObject({ description: "" });
+      expect(written.$set).not.toHaveProperty("description");
+    });
+
+    it("publishes the public description and unsets a stale one", async () => {
+      const projection = stub(AdminDeckProjectionModel, "findOneAndUpdate", {});
+      stub(AdminDeckModel, "findOne", deckDocument({ revision: 4, description: "Un mazo." }));
+
+      await new MongoAdminDeckStore().publishProjection({ deckId: "deck-1", now: NOW });
+
+      const written = projection.mock.calls[0]?.[1] as Record<string, Record<string, unknown>>;
+      expect(written.$set).toMatchObject({ description: "Un mazo." });
+      expect(written).not.toHaveProperty("$unset");
+
+      const clearing = stub(AdminDeckProjectionModel, "findOneAndUpdate", {});
+      stub(AdminDeckModel, "findOne", deckDocument({ revision: 4 }));
+
+      await new MongoAdminDeckStore().publishProjection({ deckId: "deck-1", now: NOW });
+
+      const cleared = clearing.mock.calls[0]?.[1] as Record<string, Record<string, unknown>>;
+      expect(cleared.$unset).toMatchObject({ description: "" });
+      expect(cleared.$set).not.toHaveProperty("description");
+    });
+
+    it("removes the public description from the deletion barrier", async () => {
+      stub(AdminDeckModel, "findById", deckDocument({ archivedAt: new Date(NOW) }));
+      stub(AdminDeckModel, "findOneAndUpdate", deckDocument({ archivedAt: new Date(NOW) }));
+      const barrier = stub(AdminDeckProjectionModel, "findOneAndUpdate", {});
+      vi.spyOn(AdminJobModel, "deleteMany").mockReturnValue({ exec: async () => ({}) } as never);
+      vi.spyOn(AdminDeckModel, "deleteOne").mockReturnValue({ exec: async () => ({}) } as never);
+
+      await new MongoAdminDeckStore().deleteArchived({ deckId: "deck-1", now: NOW });
+
+      const written = barrier.mock.calls[0]?.[1] as Record<string, Record<string, unknown>>;
+      expect(written.$unset).toMatchObject({ description: "" });
+      expect(written.$set).toMatchObject({ category: "deleted", active: false });
+    });
+
     it("persists optional rules and maps them back without changing legacy documents", async () => {
       const rules = "Use common associations.\nAvoid obscure names.";
       stub(AdminDeckModel, "findOne", null);

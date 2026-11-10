@@ -7,6 +7,8 @@ export interface Deck {
   readonly id: string;
   readonly name: string;
   readonly category: string;
+  /** Descripción pública opcional: la ve el host al elegir el mazo. */
+  readonly description?: string;
   readonly language: DeckLanguage;
   readonly active: boolean;
   readonly cards: readonly Card[];
@@ -17,6 +19,8 @@ export interface Deck {
 export interface DeckInput {
   readonly name: string;
   readonly category: string;
+  /** El seed no publica descripciones: un mazo sembrado nunca pisa la que hay. */
+  readonly description?: string;
   readonly language: DeckLanguage;
   readonly active: boolean;
   readonly cards: readonly Card[];

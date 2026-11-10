@@ -146,6 +146,21 @@ describe("processClaimedJob (batch flow)", () => {
     expect((await decks.findById("deck-1"))?.cards).toHaveLength(1);
   });
 
+  it("never sends the public deck description to the provider", async () => {
+    const { decks, provider, deps, claim } = build();
+    const description = "DESCRIPTION-SENTINEL";
+    decks.seed({ id: "deck-1", name: "General", theme: "General", description });
+    queueCards(provider, [{ objective: "fuego", candidates: SIX_WORDS.slice(0, 5) }]);
+    provider.completionQueue.push([SIX_WORDS[5]!]);
+
+    await processClaimedJob(deps, claim(buildJob({ requested: 1 })));
+
+    // El mazo guarda la descripción...
+    expect((await decks.findById("deck-1"))?.description).toBe(description);
+    // ...pero el proveedor nunca la recibe: sólo travels la temática y las reglas.
+    expect(JSON.stringify(provider.providerInputs)).not.toContain(description);
+  });
+
   it.each([undefined, "deepseek-v4-pro" as const])(
     "dispatches the persisted model to both provider phases (%s)",
     async (model) => {

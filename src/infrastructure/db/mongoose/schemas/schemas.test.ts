@@ -28,6 +28,29 @@ describe("mongo models", () => {
     expect(indexes.some(([fields]) => (fields as Record<string, unknown>).active === 1)).toBe(true);
   });
 
+  it("accepts an optional public description and keeps the legacy decks valid", () => {
+    const described = new DeckModel({
+      name: "General",
+      category: "General",
+      language: "es",
+      active: true,
+      cards: [],
+      description: "Un mazo para todos.",
+    });
+    const legacy = new DeckModel({
+      name: "Legacy",
+      category: "General",
+      language: "es",
+      active: true,
+      cards: [],
+    });
+
+    expect(described.validateSync()).toBeUndefined();
+    expect(described.description).toBe("Un mazo para todos.");
+    expect(legacy.validateSync()).toBeUndefined();
+    expect(legacy.description).toBeUndefined();
+  });
+
   it("makes the room code unique", () => {
     const entry = GameModel.schema
       .indexes()

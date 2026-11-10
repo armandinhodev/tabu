@@ -188,6 +188,9 @@ No hay cambio automático entre modelos; la clave de API sigue configurada sólo
 En **Mazos** también se edita el nombre y la temática del mazo (hasta 80 y 200 caracteres),
 además de las reglas para palabras prohibidas (hasta 500 caracteres). La temática y las reglas
 se editan en campos multilínea; vaciar las reglas y guardar las elimina para futuras generaciones.
+La **descripción pública** (hasta 500 caracteres) se edita también en **Ajustes**: acompaña al
+nombre y la cantidad de cartas cuando el host elige un mazo. Es sólo metadata: no se envía al modelo,
+no genera ni regenera cartas, y borrarla no toca la temática ni las reglas.
 También se archiva y se restaura. Archivar y eliminar abren un diálogo con el nombre del mazo y
 las consecuencias; cancelar o pulsar Escape lo cierra sin realizar cambios.
 Las confirmaciones del admin destacan el nombre de la carta o del mazo y explican si la acción
@@ -232,7 +235,10 @@ sigue siendo válida porque la cookie es `HttpOnly` y `SameSite=Strict` y el hos
 proxy debe conservar el `Host` público. No se confía en `X-Forwarded-Host`.
 
 Desde el panel se indica nombre, temática y cantidad de cartas (1–600 por trabajo).
-**Temática e indicaciones** y **Reglas para buscar palabras prohibidas** son campos multilínea.
+**Temática e indicaciones**, **Descripción pública** y **Reglas para buscar palabras prohibidas**
+son campos multilínea. La descripción es opcional (hasta 500 caracteres) y el panel la presenta
+como lo que el host verá al elegir el mazo: no se usa para generar las cartas. Un mazo sin
+descripción sigue mostrando su nombre y la cantidad de cartas.
 Las reglas son opcionales (hasta 500 caracteres), se configuran al crear o editar el mazo y se conservan
 para las próximas generaciones y las peticiones para completar cartas.
 Se envían solo al pedir palabras prohibidas, no al seleccionar objetivos, y no reemplazan las
@@ -408,20 +414,20 @@ server.ts ── Next handler + Socket.IO en el mismo puerto
 
 Cliente → servidor:
 
-| Evento                          | Payload                            | Ack                                             | Quién                                                            |
-| ------------------------------- | ---------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------- |
-| `game:create`                   | `{ playerName, deckId, options? }` | `{ gameId, code, playerToken, playerId }`       | cualquiera                                                       |
-| `game:join`                     | `{ code, playerName }`             | `{ gameId, playerToken, playerId, playerName }` | cualquiera                                                       |
-| `game:reconnect`                | `{ gameId, playerToken }`          | `{ state }`                                     | el mismo jugador                                                 |
-| `game:assignTeam`               | `{ teamId }`                       | -                                               | en la sala                                                       |
-| `game:renameTeam`               | `{ teamId, name }`                 | -                                               | miembro del equipo, o el host; solo antes de arrancar            |
-| `game:autoTeams` / `game:ready` | —                                  | —                                               | en la sala                                                       |
-| `game:start`                    | —                                  | —                                               | solo el host                                                     |
-| `game:leave`                    | —                                  | —                                               | cualquiera                                                       |
-| `turn:guess`                    | `{ guess }`                        | `{ correct, pointsAwarded, teamScore }`         | equipo que adivina                                               |
-| `turn:reportViolation`          | `{ reason, tabooWord, cardId? }`   | `{ pointsDelta, teamScore }`                    | solo el equipo rival                                             |
-| `turn:skip`                     | —                                  | —                                               | solo el descriptor                                               |
-| `turn:start`                    | —                                  | —                                               | solo el descriptor elegido, antes de iniciar el reloj            |
+| Evento                          | Payload                            | Ack                                             | Quién                                                 |
+| ------------------------------- | ---------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
+| `game:create`                   | `{ playerName, deckId, options? }` | `{ gameId, code, playerToken, playerId }`       | cualquiera                                            |
+| `game:join`                     | `{ code, playerName }`             | `{ gameId, playerToken, playerId, playerName }` | cualquiera                                            |
+| `game:reconnect`                | `{ gameId, playerToken }`          | `{ state }`                                     | el mismo jugador                                      |
+| `game:assignTeam`               | `{ teamId }`                       | -                                               | en la sala                                            |
+| `game:renameTeam`               | `{ teamId, name }`                 | -                                               | miembro del equipo, o el host; solo antes de arrancar |
+| `game:autoTeams` / `game:ready` | —                                  | —                                               | en la sala                                            |
+| `game:start`                    | —                                  | —                                               | solo el host                                          |
+| `game:leave`                    | —                                  | —                                               | cualquiera                                            |
+| `turn:guess`                    | `{ guess }`                        | `{ correct, pointsAwarded, teamScore }`         | equipo que adivina                                    |
+| `turn:reportViolation`          | `{ reason, tabooWord, cardId? }`   | `{ pointsDelta, teamScore }`                    | solo el equipo rival                                  |
+| `turn:skip`                     | —                                  | —                                               | solo el descriptor                                    |
+| `turn:start`                    | —                                  | —                                               | solo el descriptor elegido, antes de iniciar el reloj |
 
 Servidor → cliente: `game:state` (por socket, con `me` y la palabra filtrada por rol), `game:started`,
 `turn:started`, `turn:tick`, `turn:ended`, `card:resolved`, `penalty:applied`, `score:updated`, `round:ended`,
@@ -488,7 +494,10 @@ que más afectan el uso:
 - **Jugadores sin equipo.** Se puede esperar el reparto en el lobby; para arrancar, o todos eligieron
   equipo o la sala usa reparto automático (D35, D49).
 - **`GET /api/decks`.** El catálogo de mazos va por HTTP porque el contrato de socket no lo expone
-  (D43).
+  (D43). Cada mazo publica su nombre, la cantidad de cartas y una `description` opcional: es la
+  descripción pública que el administrador escribió, la que ve el host al elegir el mazo. El campo
+  `category` sigue en el contrato por compatibilidad con los clientes que ya lo leen, pero el panel
+  de juego no lo muestra: la temática nunca se muestra al host.
 - **Una ruta, pantallas por estado.** El cliente no navega entre rutas: cambia de pantalla según el
   estado de la partida, así el socket y el `playerToken` sobreviven (D44). La única excepción es la
   landing pública: `/` explica el juego y **Jugar** lleva a `/jugar`. **Crear sala** usa

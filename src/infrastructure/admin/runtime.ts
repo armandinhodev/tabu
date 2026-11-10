@@ -206,6 +206,7 @@ export async function updateAdminCard(
 
 /** Crea un mazo administrable vacío. */
 export async function createAdminDeck(input: {
+  description?: string | undefined;
   rules?: string | undefined;
   allowProperNames?: boolean | undefined;
   name: string;
@@ -216,7 +217,7 @@ export async function createAdminDeck(input: {
 }
 
 /**
- * Edita el nombre y/o la temática de un mazo administrable.
+ * Edita los metadatos de un mazo administrable, incluida su descripción pública.
  *
  * La edición sólo afecta las generaciones futuras: las cartas no se
  * regeneran.
@@ -224,6 +225,7 @@ export async function createAdminDeck(input: {
 export async function updateAdminDeck(
   id: string,
   input: {
+    description?: string | undefined;
     rules?: string | undefined;
     name?: string | undefined;
     theme?: string | undefined;

@@ -564,6 +564,34 @@ describe("AdminDashboard", () => {
     expect(rules).toHaveValue("");
   });
 
+  it("creates a deck with a public description that the host reads when choosing a deck", async () => {
+    render(<AdminDashboard />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Crear mazo" }));
+    const description = screen.getByLabelText("Descripción pública");
+    expect(description.tagName).toBe("TEXTAREA");
+    expect(description).not.toBeRequired();
+    expect(description).toHaveAttribute("maxlength", "500");
+    expect(description).toHaveAccessibleDescription(/al elegir el mazo/i);
+    fireEvent.change(screen.getByLabelText("Nombre del mazo"), { target: { value: "Cocina" } });
+    fireEvent.change(screen.getByLabelText("Temática e indicaciones"), {
+      target: { value: "Comidas" },
+    });
+    fireEvent.change(description, { target: { value: "Un mazo de comida." } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear y generar" }));
+
+    await waitFor(() =>
+      expect(requests).toContainEqual({
+        url: "/api/admin/decks",
+        method: "POST",
+        body: {
+          name: "Cocina",
+          theme: "Comidas",
+          description: "Un mazo de comida.",
+        },
+      }),
+    );
+  });
+
   it("keeps catalogue entries concise while preserving the theme in deck details", async () => {
     catalog = [{ ...deck, theme: "A detailed description of this deck" }];
     render(<AdminDashboard />);

@@ -23,8 +23,11 @@ export async function GET(): Promise<NextResponse> {
       decks: decks.map((deck) => ({
         id: deck.id,
         name: deck.name,
+        // `category` sigue en el contrato público: los clientes old lo leen.
         category: deck.category,
         cardCount: deck.cards.length,
+        // La descripción es opcional: sólo aparece cuando el mazo la tiene.
+        ...(deck.description === undefined ? {} : { description: deck.description }),
       })),
     });
   } catch (error) {

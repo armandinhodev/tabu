@@ -7,6 +7,7 @@ import { AdminError } from "../../../../application/admin/errors";
 import { FakeClock, FakeIds, FakeProvider } from "../../../../application/admin/__fixtures__/fakes";
 import { connectMongo, disconnectMongo } from "../../mongoose/connection";
 import { DeckModel } from "../../mongoose/models/DeckModel";
+import { MongoDeckRepository } from "../../repositories/MongoDeckRepository";
 import { AdminDeckModel, AdminDeckProjectionModel, AdminJobModel } from "../models/AdminModels";
 import { MongoAdminDeckStore } from "./MongoAdminDeckStore";
 import { MongoAdminJobStore } from "./MongoAdminJobStore";
@@ -640,5 +641,54 @@ describe.skipIf(mongoUri === undefined)("admin deck CRUD against a real Mongo", 
     const seeded = await DeckModel.findOne({ name: "General" }).exec();
     expect(seeded?.active).toBe(true);
     expect(seeded?.cards).toHaveLength(1);
+  });
+
+  it("persists, projects and clears the public description without erasing it on a seed upsert", async () => {
+    const { service } = build();
+    const deck = await service.createDeck({
+      name: "Descrito",
+      theme: "General",
+      description: "Un mazo para todos.",
+    });
+
+    expect(await service.getDeck(deck.id)).toHaveProperty("description", "Un mazo para todos.");
+    expect((await AdminDeckModel.findById(deck.id).lean())?.description).toBe(
+      "Un mazo para todos.",
+    );
+
+    await service.updateDeck(deck.id, { description: "Otro mazo." });
+    const projection = await AdminDeckProjectionModel.findById(deck.publicDeckId).lean();
+    expect(projection?.description).toBe("Otro mazo.");
+
+    await service.updateDeck(deck.id, { description: "" });
+    const cleared = await AdminDeckProjectionModel.findById(deck.publicDeckId).lean();
+    expect(cleared?.description).toBeUndefined();
+
+    // El seed no borra una descripción que ya estaba.
+    await DeckModel.create({
+      name: "Sembrado",
+      category: "Sembrado",
+      language: "es",
+      active: true,
+      cards: [],
+      description: "La descripción del mazo sembrado.",
+      createdAt: new Date(NOW),
+    });
+    await new MongoDeckRepository().upsertByName({
+      name: "Sembrado",
+      category: "Sembrado",
+      language: "es",
+      active: true,
+      cards: [],
+    });
+    expect((await DeckModel.findOne({ name: "Sembrado" }).lean())?.description).toBe(
+      "La descripción del mazo sembrado.",
+    );
+
+    // La tumba de la eliminación tampoco deja la descripción pública.
+    await service.archiveDeck(deck.id);
+    await service.deleteDeckPermanently(deck.id);
+    const barrier = await AdminDeckProjectionModel.findById(deck.publicDeckId).lean();
+    expect(barrier?.description).toBeUndefined();
   });
 });

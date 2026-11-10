@@ -6,6 +6,7 @@ import {
   MAX_DECK_NAME_LENGTH,
   MAX_DECK_THEME_LENGTH,
   MAX_DECK_RULES_LENGTH,
+  MAX_DECK_DESCRIPTION_LENGTH,
 } from "@/application/admin/deck-limits";
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
@@ -27,6 +28,8 @@ export type AdminCardView = {
 /** Mazo administrable tal como lo ve el panel. */
 export type AdminDeckView = {
   rules?: string;
+  /** Descripción pública opcional: la ve el host al elegir el mazo. */
+  description?: string;
   allowProperNames?: boolean;
   id: string;
   name: string;
@@ -56,8 +59,8 @@ export interface DeckManagementProps {
 }
 
 /**
- * Gestión de un mazo administrable: edición de nombre y temática, archivado
- * recuperable y restauración.
+ * Gestión de un mazo administrable: edición de nombre, temática y descripción
+ * pública, archivado recuperable y restauración.
  *
  * El archivado pide confirmación en dos pasos y nunca borra nada: el mazo
  * conserva sus cartas, sus hallazgos y su historial, y se puede restaurar
@@ -74,6 +77,7 @@ export function DeckManagement({
 }: DeckManagementProps) {
   const [name, setName] = useState("");
   const [theme, setTheme] = useState("");
+  const [description, setDescription] = useState("");
   const [rules, setRules] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [confirmingDeletion, setConfirmingDeletion] = useState(false);
@@ -82,11 +86,12 @@ export function DeckManagement({
   useEffect(() => {
     setName(deck?.name ?? "");
     setTheme(deck?.theme ?? "");
+    setDescription(deck?.description ?? "");
     setRules(deck?.rules ?? "");
     setConfirming(false);
     setConfirmingDeletion(false);
     setAllowProperNames(deck?.allowProperNames ?? false);
-  }, [deck?.id, deck?.name, deck?.theme, deck?.rules, deck?.allowProperNames]);
+  }, [deck?.id, deck?.name, deck?.theme, deck?.description, deck?.rules, deck?.allowProperNames]);
 
   if (deck === null) {
     return null;
@@ -107,6 +112,9 @@ export function DeckManagement({
           body: JSON.stringify({
             name: name.trim(),
             theme: theme.trim(),
+            ...(description.trim() !== (current.description ?? "")
+              ? { description: description.trim() }
+              : {}),
             ...(rules.trim() !== (current.rules ?? "") ? { rules: rules.trim() } : {}),
             ...(allowProperNames || current.allowProperNames !== undefined
               ? { allowProperNames }
@@ -183,6 +191,20 @@ export function DeckManagement({
           />
         </label>
         <label className="space-y-2 md:col-span-2">
+          <span className="block text-body-sm text-fg-muted">Descripción pública</span>
+          <Textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            maxLength={MAX_DECK_DESCRIPTION_LENGTH}
+            disabled={locked}
+            aria-describedby="edit-deck-description-hint"
+          />
+        </label>
+        <p id="edit-deck-description-hint" className="text-body-sm text-fg-muted md:col-span-2">
+          Opcional. Hasta {MAX_DECK_DESCRIPTION_LENGTH} caracteres. Es lo que el host ve al elegir
+          el mazo para jugar: no se usa para generar las cartas. Deja el campo vacío para quitarla.
+        </p>
+        <label className="space-y-2 md:col-span-2">
           <span className="block text-body-sm text-fg-muted">Reglas para palabras prohibidas</span>
           <Textarea
             value={rules}
@@ -206,8 +228,9 @@ export function DeckManagement({
           <span>Permitir nombres propios y títulos</span>
         </label>
         <p className="text-body-sm text-fg-muted md:col-span-2">
-          Los cambios de temática y reglas se aplican a las próximas generaciones. Las cartas
-          actuales no se regeneran.
+          Los cambios de temática y reglas se aplican a las próximas generaciones. La descripción es
+          sólo información para el host: no genera ni regenera cartas. Las cartas actuales no se
+          regeneran.
         </p>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Button type="submit" size="sm" disabled={locked}>
