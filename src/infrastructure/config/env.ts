@@ -24,6 +24,8 @@ export const envSchema = z.object({
   ADMIN_PASSWORD: z.string().optional(),
   ADMIN_SESSION_SECRET: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),
+  SONIOX_VOICE_ENABLED: z.string().optional(),
+  SONIOX_API_KEY: z.string().trim().optional(),
 });
 
 export type Env = Readonly<z.infer<typeof envSchema>>;

@@ -1,6 +1,7 @@
 import { parseEnv } from "./src/infrastructure/config/env";
 import { loadEnvFileIfPresent } from "./src/infrastructure/config/load-env-file";
 import { logger } from "./src/infrastructure/config/logger";
+import { sonioxSpeechProvider } from "./src/infrastructure/voice/soniox";
 
 /**
  * Entrypoint del servidor.
@@ -34,6 +35,10 @@ async function main(): Promise<void> {
     await import("./src/infrastructure/admin/runtime");
 
   const runtime = await createGameRuntime(env);
+  const speechProvider =
+    env.SONIOX_VOICE_ENABLED === "true" && env.SONIOX_API_KEY
+      ? sonioxSpeechProvider(env.SONIOX_API_KEY)
+      : undefined;
   let adminProgress: ReturnType<typeof attachAdminProgress> | null = null;
   const appServer = await startAppServer({
     dev,
@@ -45,6 +50,7 @@ async function main(): Promise<void> {
           deps: runtime.deps,
           corsOrigin: env.SOCKET_CORS_ORIGIN,
           persist: runtime.persist,
+          ...(speechProvider === undefined ? {} : { speechProvider }),
         });
         adminProgress = attachAdminProgress(sockets.io, { getJob: getAdminJob });
         return {

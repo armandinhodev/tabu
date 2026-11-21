@@ -7,7 +7,6 @@ import { DomainError } from "../../domain/errors/DomainError";
 import type { DomainEvent } from "../../domain/events/events";
 import { reassignDescriptor } from "../../domain/services/GameStateMachine";
 import { TeamId, type PlayerId } from "../../domain/value-objects/PlayerId";
-import { toGameState } from "../../application/dto/game-state";
 import { locatePlayer, type GameDeps } from "../../application/use-cases/common";
 import { createGame } from "../../application/use-cases/create-game";
 import { joinGame } from "../../application/use-cases/join-game";
@@ -18,12 +17,15 @@ import { leaveGame, markDisconnected, reconnectPlayer } from "../../application/
 import { guessWord, startTurn, reportViolation, skipTurn } from "../../application/use-cases/turn";
 import { adjustScore } from "../../application/use-cases/score";
 import { logger } from "../config/logger";
+import type { SpeechProvider } from "../voice/soniox";
+import { VoiceCaptures } from "../voice/voice-captures";
 import {
   CLIENT_EVENTS,
   type Ack,
   type ClientToServerEvents,
   type ErrorAck,
-  type GameStatePayload,
+  type GuessAck,
+  SERVER_EVENTS,
   type ServerToClientEvents,
 } from "./events";
 import {
@@ -37,6 +39,7 @@ import {
   reconnectPayload,
   renameTeamPayload,
   reportViolationPayload,
+  type GuessRequest,
 } from "./payloads";
 import { Broadcaster, type GameServer } from "./broadcaster";
 import { SocketSessions } from "./sessions";
@@ -51,6 +54,7 @@ export interface SocketServerOptions {
   readonly persist: (game: Game) => void;
   /** Gracia antes de pasar el turno a otro descriptor (S9). */
   readonly disconnectGraceMs?: number;
+  readonly speechProvider?: SpeechProvider;
 }
 
 export interface SocketServer {
@@ -75,9 +79,51 @@ export function attachSocketServer(
     transports: ["websocket", "polling"],
   });
   const sessions = new SocketSessions();
-  const broadcaster = new Broadcaster(io, sessions);
-  const ticker = new TurnTicker(options.deps, broadcaster);
   const deps = options.deps;
+  const voice =
+    options.speechProvider === undefined
+      ? undefined
+      : new VoiceCaptures(
+          options.speechProvider,
+          (socketId) => {
+            const binding = sessions.bindingOf(socketId);
+            if (
+              binding === null ||
+              sessions.socketFor(binding.gameId, binding.playerId) !== socketId
+            ) {
+              return null;
+            }
+            const game = deps.registry.findById(binding.gameId);
+            const turn = game?.currentTurn;
+            if (
+              game?.status !== "playing" ||
+              turn?.status !== "active" ||
+              deps.clock.now().getTime() >= turn.deadlineAt.getTime() ||
+              turn.descriptorId === binding.playerId
+            )
+              return null;
+            const player = locatePlayer(game, binding.playerId)?.player;
+            return player?.connected === true && player.teamId === turn.teamId
+              ? { gameId: game.id, turn }
+              : null;
+          },
+          (socketId, status) => io.to(socketId).emit(SERVER_EVENTS.voiceStatus, status),
+          (socketId, guess, reply) => {
+            const binding = sessions.bindingOf(socketId);
+            if (binding === null) throw new Error("SOCKET_NOT_BOUND");
+            submitGuess(
+              binding.gameId,
+              binding.playerId,
+              parsePayload(guessPayload, { guess }),
+              reply,
+            );
+          },
+          () => deps.clock.now().getTime(),
+        );
+  const broadcaster = new Broadcaster(io, sessions, voice !== undefined, (gameId) =>
+    voice?.sync(gameId),
+  );
+  const ticker = new TurnTicker(deps, broadcaster);
   const graceMs = options.disconnectGraceMs ?? DISCONNECT_GRACE_MS;
   const pendingTimers = new Set<ReturnType<typeof setTimeout>>();
 
@@ -86,6 +132,9 @@ export function attachSocketServer(
   };
 
   const bind = (socket: GameSocket, game: Game, playerId: PlayerId): void => {
+    const previous = sessions.socketFor(game.id, playerId);
+    if (previous !== null && previous !== socket.id) voice?.forget(previous);
+    voice?.forget(socket.id);
     sessions.bind(socket.id, game.id, playerId);
     void socket.join(game.id);
     broadcaster.emitStateTo(game, playerId);
@@ -148,7 +197,7 @@ export function attachSocketServer(
         snapshot(game);
         broadcaster.emitState(game);
 
-        return { state: requireState(game, playerId) };
+        return { state: broadcaster.statePayload(game, playerId) };
       });
     });
 
@@ -206,6 +255,7 @@ export function attachSocketServer(
         const { gameId, playerId } = requireBinding(socket);
         const left = leaveGame(deps, gameId, playerId);
 
+        voice?.forget(socket.id);
         sessions.unbind(socket.id);
         void socket.leave(gameId);
 
@@ -256,28 +306,19 @@ export function attachSocketServer(
       void run(socket, ack, () => {
         const input = parsePayload(guessPayload, payload);
         const { gameId, playerId } = requireBinding(socket);
-        const result = guessWord(deps, gameId, playerId, input);
-
-        // Lo que escribió el jugador es público: la sala lo ve con su autor.
-        broadcaster.emitGuessWritten(gameId, {
-          turnId: result.turnId,
-          playerId,
-          guess: input.guess,
-          correct: result.correct,
-        });
-
-        if (result.correct) {
-          afterTurn(result.game, result.events);
-        }
-
-        return {
-          correct: result.correct,
-          pointsAwarded: result.pointsDelta,
-          teamScore: result.teamScore,
-          ...(result.acceptedWithTypo === true ? { acceptedWithTypo: true } : {}),
-        };
+        return submitGuess(gameId, playerId, input);
       });
     });
+
+    if (voice !== undefined) {
+      socket.on(CLIENT_EVENTS.voiceStart, (payload) => {
+        if (socket.conn.transport.name === "websocket") voice.start(socket.id, payload);
+      });
+      socket.on(CLIENT_EVENTS.voiceAudio, (id, epoch, audio) => {
+        voice.audio(socket.id, id, epoch, audio);
+      });
+      socket.on(CLIENT_EVENTS.voiceStop, (id) => voice.cancel(socket.id, id));
+    }
 
     socket.on(CLIENT_EVENTS.turnReportViolation, (payload, ack) => {
       void run(socket, ack, () => {
@@ -310,9 +351,35 @@ export function attachSocketServer(
     });
 
     socket.on("disconnect", () => {
+      voice?.forget(socket.id);
       handleDisconnect(socket.id);
     });
   });
+
+  function submitGuess(
+    gameId: string,
+    playerId: PlayerId,
+    input: GuessRequest,
+    replyToVoice?: (result: GuessAck) => void,
+  ): GuessAck {
+    const result = guessWord(deps, gameId, playerId, input);
+    broadcaster.emitGuessWritten(gameId, {
+      turnId: result.turnId,
+      playerId,
+      guess: input.guess,
+      correct: result.correct,
+      ...(replyToVoice === undefined ? {} : { source: "voice" }),
+    });
+    const response = {
+      correct: result.correct,
+      pointsAwarded: result.pointsDelta,
+      teamScore: result.teamScore,
+      ...(result.acceptedWithTypo === true ? { acceptedWithTypo: true as const } : {}),
+    };
+    replyToVoice?.(response);
+    if (result.correct) afterTurn(result.game, result.events);
+    return response;
+  }
 
   function afterTurn(game: Game, events: readonly DomainEvent[]): void {
     ticker.ensure(game.id);
@@ -327,6 +394,8 @@ export function attachSocketServer(
     if (binding === null) {
       return;
     }
+
+    if (sessions.socketFor(binding.gameId, binding.playerId) !== null) return;
 
     const game = markDisconnected(deps, binding.gameId, binding.playerId);
 
@@ -402,6 +471,7 @@ export function attachSocketServer(
   }
 
   async function close(): Promise<void> {
+    voice?.close();
     ticker.stopAll();
 
     for (const timer of pendingTimers) {
@@ -420,10 +490,6 @@ function respond<T>(ack: Ack<T> | undefined, payload: T | ErrorAck): void {
   if (ack !== undefined) {
     ack(payload);
   }
-}
-
-function requireState(game: Game, playerId: PlayerId): GameStatePayload {
-  return { ...toGameState(game, playerId), serverNow: Date.now() };
 }
 
 export function toErrorPayload(error: unknown): { code: string; message: string } {

@@ -21,6 +21,9 @@ export const CLIENT_EVENTS = {
   turnReportViolation: "turn:reportViolation",
   turnSkip: "turn:skip",
   turnStart: "turn:start",
+  voiceStart: "voice:start",
+  voiceAudio: "voice:audio",
+  voiceStop: "voice:stop",
 } as const;
 
 export const SERVER_EVENTS = {
@@ -38,6 +41,7 @@ export const SERVER_EVENTS = {
   scoreAdjusted: "score:adjusted",
   roundEnded: "round:ended",
   gameError: "game:error",
+  voiceStatus: "voice:status",
 } as const;
 
 export interface ErrorPayload {
@@ -77,6 +81,11 @@ export interface GuessAck {
   /** The answer was accepted despite a single typing mistake. */
   readonly acceptedWithTypo?: boolean;
 }
+
+export type VoiceStatus =
+  | { readonly id: string; readonly kind: "ready" | "rotating"; readonly epoch: number }
+  | { readonly id: string; readonly kind: "result"; readonly guess: GuessAck }
+  | { readonly id: string; readonly kind: "invalid" | "closed" | "unavailable" };
 
 export interface ReportViolationAck {
   readonly pointsDelta: number;
@@ -140,6 +149,7 @@ export interface GuessWrittenView {
   readonly guess: string;
   /** `true` cuando la respuesta acertó la carta activa. */
   readonly correct: boolean;
+  readonly source?: "voice";
 }
 
 export interface PenaltyAppliedView {
@@ -193,6 +203,7 @@ export interface RoundEndedView {
  */
 export interface GameStatePayload extends GameStateView {
   readonly serverNow: number;
+  readonly voiceEnabled?: true;
 }
 
 export interface ServerToClientEvents {
@@ -210,6 +221,7 @@ export interface ServerToClientEvents {
   "score:adjusted": (payload: ScoreAdjustedView) => void;
   "round:ended": (payload: RoundEndedView) => void;
   "game:error": (payload: ErrorPayload) => void;
+  "voice:status": (payload: VoiceStatus) => void;
 }
 
 export interface ClientToServerEvents {
@@ -226,4 +238,7 @@ export interface ClientToServerEvents {
   "turn:reportViolation": (payload: unknown, ack: Ack<ReportViolationAck>) => void;
   "turn:skip": (ack: Ack<void>) => void;
   "turn:start": (ack: Ack<void>) => void;
+  "voice:start": (payload: { id: string; turnId: string; sampleRate: number }) => void;
+  "voice:audio": (id: string, epoch: number, audio: ArrayBuffer) => void;
+  "voice:stop": (id: string) => void;
 }

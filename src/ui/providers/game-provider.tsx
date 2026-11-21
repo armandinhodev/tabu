@@ -56,7 +56,7 @@ interface GameContextValue {
   readonly view: AppView;
   readonly goTo: (view: AppView) => void;
   readonly connection: ConnectionState;
-  readonly state: GameStateView | null;
+  readonly state: (GameStateView & Pick<GameStatePayload, "voiceEnabled">) | null;
   /** Diferencia entre el reloj del servidor y el del dispositivo, en ms. */
   readonly serverClockOffsetMs: number;
   readonly playerName: string;
@@ -93,7 +93,7 @@ function isError(response: unknown): response is ErrorAck {
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [view, setView] = useState<AppView>("home");
   const [connection, setConnection] = useState<ConnectionState>("connecting");
-  const [state, setState] = useState<GameStateView | null>(null);
+  const [state, setState] = useState<GameContextValue["state"]>(null);
   /** Diferencia entre el reloj del servidor y el del dispositivo, en ms. */
   const [serverClockOffset, setServerClockOffset] = useState(0);
   const [playerName, setPlayerNameState] = useState("");
@@ -112,6 +112,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       kind: GuessMessageKind,
       outcome?: GuessMessage["outcome"],
       author?: string,
+      source?: GuessMessage["source"],
     ): void => {
       guessMessageId.current += 1;
       const message: GuessMessage = {
@@ -120,6 +121,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         kind,
         ...(outcome ? { outcome } : {}),
         ...(author ? { author } : {}),
+        ...(source ? { source } : {}),
       };
 
       setGuessMessages((current) => [...current, message]);
@@ -268,6 +270,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         "written",
         payload.correct ? "correct" : "incorrect",
         author,
+        payload.source,
       );
     };
 
