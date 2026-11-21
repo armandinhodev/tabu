@@ -14,7 +14,7 @@ import { GameId, PlayerId, TeamId, TurnId } from "../../domain/value-objects/Pla
 import { InMemoryDeckRepository } from "../db/repositories/InMemoryDeckRepository";
 import { InMemoryGameRepository } from "../db/repositories/InMemoryGameRepository";
 import type { ClientToServerEvents, ServerToClientEvents } from "./events";
-import { attachSocketServer, type SocketServer } from "./server";
+import { attachSocketServer, type SocketServer, type SocketServerOptions } from "./server";
 
 export type TestClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>;
 export type AnyClient = ClientSocket;
@@ -47,6 +47,7 @@ export interface SocketHarnessOptions {
   readonly cards?: readonly Card[];
   /** Palabras que el diccionario del test reconoce como español real. */
   readonly knownWords?: readonly string[];
+  readonly speechProvider?: SocketServerOptions["speechProvider"];
 }
 
 export async function makeSocketHarness(
@@ -118,6 +119,7 @@ export async function makeSocketHarness(
     deps,
     corsOrigin: "*",
     persist: () => undefined,
+    ...(options.speechProvider === undefined ? {} : { speechProvider: options.speechProvider }),
     ...(options.disconnectGraceMs === undefined
       ? {}
       : { disconnectGraceMs: options.disconnectGraceMs }),

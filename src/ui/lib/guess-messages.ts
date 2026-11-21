@@ -13,6 +13,7 @@ export interface GuessMessage {
   readonly outcome?: "correct" | "incorrect";
   /** Nombre de quien escribió el mensaje. */
   readonly author?: string;
+  readonly source?: "voice";
 }
 
 export function isPublicMessage(message: GuessMessage): boolean {

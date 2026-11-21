@@ -20,6 +20,7 @@ import { DescribingView } from "./game/describing-view";
 import { GuessChat } from "./game/guess-chat";
 import { RivalView } from "./game/rival-view";
 import { WaitingTurnView } from "./game/waiting-turn-view";
+import { VoiceGuess } from "./game/voice-guess";
 import type { RoleViewProps } from "./game/role-view-props";
 
 /**
@@ -171,6 +172,16 @@ export function GameScreen({ rules }: { readonly rules: HouseRules }) {
             disabled={busy}
             messages={guessMessages}
             onGuess={guess}
+            voice={
+              state.voiceEnabled && isGuesser && turn.status === "active" ? (
+                <VoiceGuess
+                  key={`${state.code}:${state.me.playerId}:${turn.turnId}`}
+                  turnId={turn.turnId}
+                  deadlineAt={turn.deadlineAt}
+                  clockOffsetMs={serverClockOffsetMs}
+                />
+              ) : null
+            }
           />
         </div>
       </div>

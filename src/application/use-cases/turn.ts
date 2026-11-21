@@ -12,6 +12,7 @@ import { validateReport } from "../../domain/policies/PenaltyPolicy";
 import { effectiveSkipLimit } from "../../domain/policies/SkipLimitPolicy";
 import {
   activateTurn,
+  isTurnExpired,
   resolveTurn,
   skipCard,
   type TurnOutcome,
@@ -109,6 +110,9 @@ export function guessWord(
 
   if (player.teamId === null || player.teamId !== turn.teamId || turn.descriptorId === playerId) {
     throw new NotAllowedError("Only a guessing teammate can submit an answer");
+  }
+  if (isTurnExpired(turn, deps.clock.now())) {
+    throw new TurnNotActiveError();
   }
 
   const expected = normalizeWord(turn.card.word);

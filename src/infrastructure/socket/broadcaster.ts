@@ -8,6 +8,7 @@ import {
   SERVER_EVENTS,
   type ClientToServerEvents,
   type GameStatePayload,
+  type GuessWrittenView,
   type PenaltyAppliedView,
   type ServerToClientEvents,
 } from "./events";
@@ -29,6 +30,8 @@ export class Broadcaster {
   constructor(
     private readonly io: GameServer,
     private readonly sessions: SocketSessions,
+    private readonly voiceEnabled = false,
+    private readonly onState?: (gameId: string) => void,
   ) {}
 
   emitEvents(game: Game, events: readonly DomainEvent[]): void {
@@ -38,8 +41,9 @@ export class Broadcaster {
   }
 
   emitState(game: Game): void {
+    this.onState?.(game.id);
     for (const { socketId, playerId } of this.sessions.playersOf(game.id)) {
-      this.io.to(socketId).emit(SERVER_EVENTS.gameState, statePayload(game, playerId));
+      this.io.to(socketId).emit(SERVER_EVENTS.gameState, this.statePayload(game, playerId));
     }
   }
 
@@ -48,15 +52,7 @@ export class Broadcaster {
   }
 
   /** Lo que escribe un jugador lo ve toda la sala, con su autor. */
-  emitGuessWritten(
-    gameId: string,
-    payload: {
-      readonly turnId: string;
-      readonly playerId: string;
-      readonly guess: string;
-      readonly correct: boolean;
-    },
-  ): void {
+  emitGuessWritten(gameId: string, payload: GuessWrittenView): void {
     this.io.to(gameId).emit(SERVER_EVENTS.turnGuessWritten, payload);
   }
 
@@ -68,8 +64,16 @@ export class Broadcaster {
     const socketId = this.sessions.socketFor(game.id, playerId);
 
     if (socketId !== null) {
-      this.io.to(socketId).emit(SERVER_EVENTS.gameState, statePayload(game, playerId));
+      this.io.to(socketId).emit(SERVER_EVENTS.gameState, this.statePayload(game, playerId));
     }
+  }
+
+  statePayload(game: Game, playerId: PlayerId): GameStatePayload {
+    return {
+      ...toGameState(game, playerId),
+      serverNow: Date.now(),
+      ...(this.voiceEnabled ? { voiceEnabled: true } : {}),
+    };
   }
 
   private emitEvent(game: Game, event: DomainEvent): void {
@@ -177,11 +181,6 @@ export class Broadcaster {
       }
     }
   }
-}
-
-/** El estado viaja con la hora del servidor: el timer del cliente la usa. */
-function statePayload(game: Game, playerId: PlayerId): GameStatePayload {
-  return { ...toGameState(game, playerId), serverNow: Date.now() };
 }
 
 function penaltyView(event: Extract<DomainEvent, { type: "PenaltyApplied" }>): PenaltyAppliedView {

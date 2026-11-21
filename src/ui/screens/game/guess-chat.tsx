@@ -13,7 +13,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/ui/components/ui/button";
 import { Input } from "@/ui/components/ui/input";
@@ -27,6 +27,7 @@ export interface GuessChatProps {
   readonly onGuess: (answer: string) => void;
   /** `true` mientras hay una respuesta en vuelo. */
   readonly disabled?: boolean;
+  readonly voice?: ReactNode;
 }
 
 interface MessageAppearance {
@@ -103,14 +104,14 @@ function appearanceFor(message: GuessMessage): MessageAppearance {
     // Lo que escribió un jugador se anuncia con su nombre: "Mika escribió:".
     if (message.outcome === "correct") {
       return {
-        label: `${message.author ?? "Alguien"} escribió:`,
+        label: `${message.author ?? "Alguien"} ${message.source === "voice" ? "respondió" : "escribió"}:`,
         icon: CheckCircle2,
         surface: "border-success/30 bg-success-soft",
         accent: "text-success",
       };
     }
     return {
-      label: `${message.author ?? "Alguien"} escribió:`,
+      label: `${message.author ?? "Alguien"} ${message.source === "voice" ? "respondió" : "escribió"}:`,
       icon: XCircle,
       surface: "border-warning/30 bg-warning-soft",
       accent: "text-warning",
@@ -120,7 +121,7 @@ function appearanceFor(message: GuessMessage): MessageAppearance {
 }
 
 /** Private answers and public activity share one panel, but not one audience. */
-export function GuessChat({ active, messages, onGuess, disabled = false }: GuessChatProps) {
+export function GuessChat({ active, messages, onGuess, disabled = false, voice }: GuessChatProps) {
   const [answer, setAnswer] = useState("");
   const logRef = useRef<HTMLUListElement>(null);
   const answerRef = useRef<HTMLInputElement>(null);
@@ -166,7 +167,7 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
           </h2>
           <p className="mt-1 text-body-sm text-fg-muted">
             {active
-              ? "Lo que escribís lo ve toda la sala; la confirmación es tuya."
+              ? "Tus respuestas las ve toda la sala; la confirmación es tuya."
               : "Respuestas, aciertos, cartas saltadas y penalizaciones."}
           </p>
         </div>
@@ -199,6 +200,7 @@ export function GuessChat({ active, messages, onGuess, disabled = false }: Guess
             <Send aria-hidden="true" className="size-4" />
             Enviar
           </Button>
+          {voice}
         </div>
       ) : null}
 

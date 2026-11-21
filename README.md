@@ -17,8 +17,9 @@ todo el mundo: el descriptor y el equipo rival las ven, el resto de su equipo ad
 - **Quien describe**: ve _Comenzar turno_ antes de que arranque el reloj. Durante el turno ve la
   palabra, los chips informativos y _Saltar esta carta_, a la derecha de la palabra objetivo.
   En móvil, el botón muestra el ícono de salto. No hay botón para saltar el turno.
-- **Equipo que adivina**: ve la carta en blanco y escribe la respuesta; el servidor la verifica
-  contra la carta activa, le confirma el acierto y **el texto que escribió lo ve toda la sala**.
+- **Equipo que adivina**: ve la carta en blanco y puede escribir la respuesta o, si está habilitado,
+  decirla por micrófono. El servidor la verifica contra la carta activa y confirma el acierto en
+  privado; **toda la sala ve el texto enviado y su autor**.
 - **Equipos rivales**: ven la palabra y los chips **reportables** al toque durante el turno activo.
 
 **Cartas.** En el modo por rondas ninguna carta se repite: toda carta que sale del mazo se consume
@@ -94,6 +95,15 @@ intercambiadas. Una respuesta que es una palabra real del diccionario español s
 para que `santo` no valga por `canto`; la comprobación corre en el servidor y la palabra objetivo
 nunca se envía a quien adivina. Por eso un error que forma otra palabra válida, como `fugo`, se
 rechaza: la corrección automática nunca inventa el acierto.
+
+**Respuestas por voz (opcional).** Durante un turno activo, cada persona que adivina puede tocar
+**Activar micrófono**. La escucha sigue hasta apagarla o hasta que termine el turno, se pierda el
+rol o se corte la conexión. No se reactiva sola. Cada frase final detectada en español se envía
+como un intento; cuando cambia la carta se descarta el audio pendiente. El indicador avisa
+cuándo vuelve a escuchar después de una pausa; las frases dichas mientras retoma no se envían.
+Si el ruido de fondo impide detectar la pausa, se puede seguir escribiendo sin apagar el micrófono.
+Tabú retransmite el audio en vivo a Soniox y no guarda audio ni transcripciones descartadas.
+Toda la sala ve únicamente el texto de cada intento evaluado por el servidor.
 
 ## Levantarlo
 
@@ -385,6 +395,13 @@ Los saltos se configuran de 0 a 5 por turno: saltar no resta puntos y 0 desactiv
 | `MAX_TEAMS`            | `4`                     | Tope de equipos                                     |
 | `MIN_PLAYERS_PER_TEAM` | `2`                     | Mínimo por equipo para arrancar                     |
 | `GAME_TTL_HOURS`       | `24`                    | TTL de las partidas terminadas                      |
+| `SONIOX_VOICE_ENABLED` | `false`                 | `true` habilita respuestas por voz si hay una clave  |
+| `SONIOX_API_KEY`       | — (opcional)            | Clave Soniox, exclusivamente en el servidor         |
+
+La voz requiere HTTPS (o `localhost`), permiso de micrófono, AudioWorklet y transporte WebSocket;
+el teclado funciona también sin ellos. El servidor abre una captura por jugador como máximo y
+admite hasta 24 simultáneas por proceso. Para desactivar la voz, deshabilitá la bandera y reiniciá
+el proceso. El servidor propio retransmite por WSS a Soniox sin pasar la clave al navegador.
 
 Si falta `MONGODB_URI` el servidor no arranca y dice cuál falta. Si Mongo no responde al arrancar,
 el servidor igual levanta en modo memoria (las partidas se juegan, los snapshots se pierden).
@@ -453,6 +470,13 @@ y adivina el resto de su equipo. Una penalización descarta la carta y resta un 
 reinicia el reloj ni cambia al descriptor. Si no quedan cartas disponibles, se pasa al rival si
 tiene cartas pendientes, o termina la partida. La palabra objetivo viaja solo en
 el `game:state` de quien tiene rol `DESCRIBER` o `RIVAL`.
+
+Si la voz está configurada, `game:state` incluye `voiceEnabled: true`. La sesión vinculada inicia
+`voice:start { id, turnId, sampleRate }`. El servidor responde solo a ese socket con `voice:status`
+(`ready` o `rotating` con `epoch`, `result` con el ack normal, `invalid`, `closed` o `unavailable`). Solo tras
+`ready` se aceptan fragmentos binarios PCM mono de 16 bits por `voice:audio(id, epoch, audio)`;
+un cambio de carta invalida el `epoch` anterior sin cancelar la escucha. `voice:stop(id)` la cancela.
+La publicación de una respuesta por voz usa `turn:guessWritten` con `source: "voice"`.
 
 Todo error de acción viaja en el ack (`{ error: { code, message } }`) **y** como `game:error` al
 mismo socket. Los códigos son estables (`INVALID_TABOO_WORD`, `NOT_ALLOWED`, `INVALID_STATE`,
