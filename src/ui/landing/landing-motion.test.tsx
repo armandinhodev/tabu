@@ -96,4 +96,14 @@ describe("landing motion", () => {
     expect(css).not.toContain(".landing-reveal.is-visible");
     expect(css).not.toContain(".landing-float.is-paused");
   });
+
+  it("cada bloque que el script marca declara que React no maneja ese atributo", () => {
+    const source = readFileSync(join(process.cwd(), "src/ui/landing/landing-page.tsx"), "utf8");
+    const tags = source.match(/<[a-zA-Z][^>]*landing-reveal[^>]*>/g) ?? [];
+
+    expect(tags.length).toBeGreaterThan(0);
+    for (const tag of tags) {
+      expect(tag).toContain("suppressHydrationWarning");
+    }
+  });
 });
