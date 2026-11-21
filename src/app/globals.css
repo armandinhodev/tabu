@@ -185,7 +185,11 @@
   /* La landing se revela cuando el bloque entra en la ventana: el movimiento
      ocurre donde está mirando la persona y no cuando carga la página. Sin
      JavaScript (o sin soporte para `scripting`) el contenido se ve igual: la
-     mejora es progresiva y la página nunca queda en blanco. */
+     mejora es progresiva y la página nunca queda en blanco.
+
+     El estado se lee de un atributo y no de una clase porque el script que lo
+     escribe corre antes de la hidratación: si tocara una clase, React la
+     reescribiría y el bloque quedaría invisible. */
   @media (scripting: enabled) {
     .landing-reveal {
       opacity: 0;
@@ -195,7 +199,7 @@
         transform var(--dur-panel) var(--ease-standard);
     }
 
-    .landing-reveal.is-visible {
+    .landing-reveal[data-reveal="visible"] {
       opacity: 1;
       transform: none;
     }
@@ -207,7 +211,7 @@
 
   /* La flotación se detiene cuando el bloque no está a la vista o la pestaña
      está en segundo plano: no hay razón para gastar cuadro si nadie mira. */
-  .landing-float.is-paused {
+  .landing-float[data-float="paused"] {
     animation-play-state: paused;
   }
 

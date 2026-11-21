@@ -10,6 +10,12 @@
  *   pestaña está en segundo plano.
  *
  * Sin JavaScript el contenido se ve igual: la mejora es progresiva.
+ *
+ * Marca con atributos `data-*` y **no con clases**: el script corre durante el
+ * parseo del HTML, antes de que React hidrate. Si tocara una clase que React
+ * controla, la hidratación fallaría y React reescribiría el `className` sin
+ * ella, dejando el bloque en `opacity: 0` para siempre. Los atributos que
+ * React no renderiza no se comparan, así que no hay nada que discrepe.
  */
 export function LandingMotion() {
   return (
@@ -31,7 +37,7 @@ export function LandingMotion() {
         if (!entry.isIntersecting) {
           return;
         }
-        entry.target.classList.add("is-visible");
+        entry.target.setAttribute("data-reveal", "visible");
         observer.unobserve(entry.target);
       });
     }, { rootMargin: "0px 0px -10% 0px" });
@@ -40,7 +46,7 @@ export function LandingMotion() {
     });
   } else {
     reveal.forEach(function (element) {
-      element.classList.add("is-visible");
+      element.setAttribute("data-reveal", "visible");
     });
   }
 
@@ -50,7 +56,11 @@ export function LandingMotion() {
 
   var inView = true;
   var update = function () {
-    float.classList.toggle("is-paused", !inView || document.hidden);
+    if (!inView || document.hidden) {
+      float.setAttribute("data-float", "paused");
+    } else {
+      float.removeAttribute("data-float");
+    }
   };
 
   if (hasObserver) {
