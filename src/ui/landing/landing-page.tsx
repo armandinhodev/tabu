@@ -61,7 +61,12 @@ export function LandingPage() {
   return (
     <div className={styles.landing}>
       <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-12 px-5 pt-5 pb-10 md:gap-16 md:px-8">
+        {/* Los bloques con `landing-reveal` los marca el script de la landing con
+            un atributo que React no renderiza (ver `landing-motion.tsx`). Por eso
+            declaran `suppressHydrationWarning`: sin eso, la hidratación se queja
+            de esa diferencia y React deja el bloque sin revelar. */}
         <header
+          suppressHydrationWarning
           className={cn("landing-reveal flex items-center justify-between gap-4", styles.header)}
         >
           <span className={cn("flex items-center gap-2.5", styles.brand)}>
@@ -93,7 +98,10 @@ export function LandingPage() {
         </header>
 
         <section aria-label="El juego de palabras para tu grupo" className={styles.hero}>
-          <div className="landing-reveal relative z-10 flex min-w-0 flex-col gap-6">
+          <div
+            suppressHydrationWarning
+            className="landing-reveal relative z-10 flex min-w-0 flex-col gap-6"
+          >
             <p className="flex items-center gap-2 font-display text-caption font-extrabold tracking-wider text-gold uppercase">
               <Sparkles aria-hidden="true" className="size-5 shrink-0" /> El juego de palabras para
               tu grupo
@@ -157,6 +165,7 @@ export function LandingPage() {
 
         <ul
           aria-label="Opciones de la partida"
+          suppressHydrationWarning
           className="landing-reveal grid gap-4 border-y border-line py-5 text-body-sm font-semibold text-fg sm:grid-cols-3 sm:gap-0"
         >
           {FEATURES.map(({ label, icon: Icon }) => (
@@ -173,6 +182,7 @@ export function LandingPage() {
         <section
           id="como-se-juega"
           tabIndex={-1}
+          suppressHydrationWarning
           className="landing-reveal flex scroll-mt-24 flex-col gap-7 outline-none"
         >
           <h2
@@ -207,6 +217,7 @@ export function LandingPage() {
         </section>
 
         <section
+          suppressHydrationWarning
           className={cn(
             "landing-reveal flex flex-col items-center gap-6 rounded-xl border border-accent/50 px-5 py-10 text-center md:py-12",
             styles.finalCta,
