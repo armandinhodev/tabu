@@ -465,6 +465,12 @@ ranking global por encima del botón de salida, junto a un segundo ranking,
 `descriptorRanking`, con **quienes describieron** ordenados por las cartas que su equipo adivinó
 mientras ellos describían; quien nunca describió no aparece.
 
+## Workflow de desarrollo con OpenCode
+
+Las reglas del agente están en [`AGENTS.md`](AGENTS.md). La guía de uso, revisión y
+verificación está en [`doc/opencode-workflow.md`](doc/opencode-workflow.md).
+La configuración local del proyecto vive en `.opencode/`; no modifica las integraciones globales.
+
 ## Calidad
 
 ```bash
